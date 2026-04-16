@@ -1,17 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Summary } from '@prisma/client';
 import { Badge } from '@/components/ui/badge';
-import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, Search, Copy, Download, Check, X, ShieldAlert } from 'lucide-react';
+import { ArrowDown, ArrowUp, Info, AlertTriangle, BarChart, Briefcase, Calendar, DollarSign, FileText, TrendingUp, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { coldarkDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { JSONTree } from 'react-json-tree';
-import CopyToClipboard from 'react-copy-to-clipboard';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { SummaryErrorState } from './summary-error-state';
@@ -32,7 +25,7 @@ function sanitizeDisplayContent(content: string): string {
       .substring(0, 50000); // Limit content size
   }
 
-  // Client-side: full DOMPurify sanitization  
+  // Client-side: full DOMPurify sanitization
   const sanitized = DOMPurify.sanitize(content, {
     ALLOWED_TAGS: [], // Remove all HTML tags
     ALLOWED_ATTR: [], // Remove all attributes
@@ -87,12 +80,6 @@ interface SummaryContentProps {
 }
 
 export function SummaryContent({ summary }: SummaryContentProps) {
-  const [activeTab, setActiveTab] = useState('formatted');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [copied, setCopied] = useState(false);
-  const rawTextRef = useRef<HTMLDivElement>(null);
-  const jsonRef = useRef<HTMLDivElement>(null);
-
   // Check if the summary is redacted due to access restrictions
   if ('isRedacted' in summary && summary.isRedacted) {
     return (
@@ -105,7 +92,7 @@ export function SummaryContent({ summary }: SummaryContentProps) {
         <p className="text-sm text-gray-500">{summary.accessDeniedReason}</p>
         <div className="mt-4">
           <Link href="/dashboard/settings">
-            <Button 
+            <Button
               className="focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               aria-label="Add this company to your watchlist to gain access"
             >
@@ -116,9 +103,9 @@ export function SummaryContent({ summary }: SummaryContentProps) {
       </div>
     );
   }
-  
+
   // Check if the summary generation failed
-  if ('processingStatus' in summary && summary.processingStatus === 'FAILED' || 
+  if ('processingStatus' in summary && summary.processingStatus === 'FAILED' ||
       ('processingError' in summary && summary.processingError) ||
       summary.summaryText === '' || summary.summaryText.length < 10) {
     return (
@@ -135,7 +122,7 @@ export function SummaryContent({ summary }: SummaryContentProps) {
       />
     );
   }
-  
+
   // Parse the JSON summary if available
   let parsedSummary = null;
   try {
@@ -148,313 +135,20 @@ export function SummaryContent({ summary }: SummaryContentProps) {
     console.error('Error parsing summary JSON:', error);
   }
 
-  // Copy success handler
-  const handleCopy = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Download function
-  const downloadContent = (content: string, filename: string, contentType: string) => {
-    const blob = new Blob([content], { type: contentType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-
-  // JSON search handler
-  const handleSearchInJson = () => {
-    if (!jsonRef.current || !searchQuery) return;
-    
-    const allElements = jsonRef.current.querySelectorAll('span');
-    let foundMatch = false;
-    
-    // Remove previous highlights
-    allElements.forEach(el => {
-      el.classList.remove('bg-yellow-200', 'text-black', 'font-medium');
-    });
-    
-    // Add new highlights
-    allElements.forEach(el => {
-      if (el.textContent?.toLowerCase().includes(searchQuery.toLowerCase())) {
-        el.classList.add('bg-yellow-200', 'text-black', 'font-medium');
-        if (!foundMatch) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          foundMatch = true;
-        }
-      }
-    });
-  };
-
-  // Raw text search handler
-  const handleSearchInRaw = () => {
-    if (!rawTextRef.current || !searchQuery) return;
-    
-    const textContent = rawTextRef.current.textContent || '';
-    const index = textContent.toLowerCase().indexOf(searchQuery.toLowerCase());
-    
-    if (index !== -1) {
-      const lineHeight = 20; // Approximate line height in pixels
-      const linesBeforeTarget = textContent.substring(0, index).split('\n').length - 1;
-      const scrollPosition = linesBeforeTarget * lineHeight;
-      
-      rawTextRef.current.scrollTop = scrollPosition;
-    }
-  };
-
-  // Handle search when user presses Enter
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      if (activeTab === 'raw') {
-        handleSearchInRaw();
-      } else if (activeTab === 'json') {
-        handleSearchInJson();
-      }
-    }
-  };
-
-  // Clear search
-  const clearSearch = () => {
-    setSearchQuery('');
-    if (jsonRef.current) {
-      const allElements = jsonRef.current.querySelectorAll('span');
-      allElements.forEach(el => {
-        el.classList.remove('bg-yellow-200', 'text-black', 'font-medium');
-      });
-    }
-  };
-
-  // Custom JSON theme that matches the UI
-  const jsonTheme = {
-    scheme: 'atelierDune',
-    base00: 'hsl(var(--muted))',
-    base01: '#292e34',
-    base02: '#3e4451',
-    base03: '#565c64',
-    base04: '#9196a1',
-    base05: '#abb2bf',
-    base06: '#c8ccd4',
-    base07: '#e6e6e6',
-    base08: 'hsl(var(--destructive))',
-    base09: '#e5c07b',
-    base0A: '#e5c07b',
-    base0B: 'hsl(var(--primary))',
-    base0C: '#56b6c2',
-    base0D: '#61afef',
-    base0E: '#c678dd',
-    base0F: '#be5046',
-  };
-
-  // Update this section only:
-  // Fix the ref type issue in the SyntaxHighlighter
-  const customSyntaxHighlighterRef = (el: HTMLElement | null) => {
-    if (rawTextRef.current && el) {
-      // @ts-expect-error - We're just using this ref to get access to the DOM node
-      rawTextRef.current = el;
-    }
-  };
+  if (parsedSummary) {
+    return (
+      <FormattedSummary
+        summaryData={parsedSummary}
+        filingType={summary.filingType}
+        summaryText={summary.summaryText}
+        ticker={summary.ticker}
+        filingDate={summary.filingDate}
+      />
+    );
+  }
 
   return (
-    <Tabs defaultValue="formatted" onValueChange={setActiveTab}>
-      <TabsList className="mb-4" aria-label="Summary display format options">
-        <TabsTrigger value="formatted" aria-label="View formatted summary">Formatted</TabsTrigger>
-        <TabsTrigger value="raw" aria-label="View raw text content">Raw Text</TabsTrigger>
-        {parsedSummary && <TabsTrigger value="json" aria-label="View JSON structure">JSON</TabsTrigger>}
-      </TabsList>
-
-      <TabsContent value="formatted">
-        {parsedSummary ? (
-          <FormattedSummary
-            summaryData={parsedSummary}
-            filingType={summary.filingType}
-            summaryText={summary.summaryText}
-            ticker={summary.ticker}
-            filingDate={summary.filingDate}
-          />
-        ) : (
-          <div className="whitespace-pre-wrap">{sanitizeDisplayContent(summary.summaryText || '')}</div>
-        )}
-      </TabsContent>
-
-      <TabsContent value="raw">
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-              <CardTitle className="text-xl">Raw Filing Text</CardTitle>
-              <div className="flex items-center gap-2">
-                <div className="relative w-full md:w-64">
-                  <Input
-                    type="text"
-                    placeholder="Search in text..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={handleSearchKeyDown}
-                    className="pr-8"
-                    aria-label="Search in raw text content"
-                    aria-describedby="search-instructions"
-                  />
-                  <div id="search-instructions" className="sr-only">
-                    Press Enter to search, or use the search button
-                  </div>
-                  {searchQuery && (
-                    <button 
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
-                      onClick={clearSearch}
-                      aria-label="Clear search query"
-                      type="button"
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  onClick={handleSearchInRaw}
-                  disabled={!searchQuery}
-                  aria-label="Search in raw text"
-                >
-                  <Search className="h-4 w-4" aria-hidden="true" />
-                </Button>
-                <CopyToClipboard text={summary.summaryText} onCopy={handleCopy}>
-                  <Button 
-                    variant="outline" 
-                    size="icon"
-                    aria-label={copied ? "Text copied to clipboard" : "Copy raw text to clipboard"}
-                  >
-                    {copied ? 
-                      <Check className="h-4 w-4" aria-hidden="true" /> : 
-                      <Copy className="h-4 w-4" aria-hidden="true" />
-                    }
-                  </Button>
-                </CopyToClipboard>
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  onClick={() => downloadContent(
-                    summary.summaryText, 
-                    `${summary.ticker.symbol}_${summary.filingType}_raw.txt`, 
-                    'text/plain'
-                  )}
-                  aria-label="Download raw text as file"
-                >
-                  <Download className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="relative">
-              <SyntaxHighlighter
-                language="plaintext"
-                style={coldarkDark}
-                showLineNumbers={true}
-                wrapLines={true}
-                customStyle={{
-                  maxHeight: '500px',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.875rem',
-                  lineHeight: '1.5',
-                }}
-                ref={customSyntaxHighlighterRef}
-              >
-                {sanitizeDisplayContent(summary.summaryText || '')}
-              </SyntaxHighlighter>
-            </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      {parsedSummary && (
-        <TabsContent value="json">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                <CardTitle className="text-xl">JSON Structure</CardTitle>
-                <div className="flex items-center gap-2">
-                  <div className="relative w-full md:w-64">
-                    <Input
-                      type="text"
-                      placeholder="Search in JSON..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={handleSearchKeyDown}
-                      className="pr-8"
-                      aria-label="Search in JSON structure"
-                      aria-describedby="json-search-instructions"
-                    />
-                    <div id="json-search-instructions" className="sr-only">
-                      Press Enter to search, or use the search button
-                    </div>
-                    {searchQuery && (
-                      <button 
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
-                        onClick={clearSearch}
-                        aria-label="Clear search query"
-                        type="button"
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    onClick={handleSearchInJson}
-                    disabled={!searchQuery}
-                    aria-label="Search in JSON structure"
-                  >
-                    <Search className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  <CopyToClipboard text={JSON.stringify(parsedSummary, null, 2)} onCopy={handleCopy}>
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      aria-label={copied ? "JSON copied to clipboard" : "Copy JSON to clipboard"}
-                    >
-                      {copied ? 
-                        <Check className="h-4 w-4" aria-hidden="true" /> : 
-                        <Copy className="h-4 w-4" aria-hidden="true" />
-                      }
-                    </Button>
-                  </CopyToClipboard>
-                  <Button 
-                    variant="outline" 
-                    size="icon"
-                    onClick={() => downloadContent(
-                      JSON.stringify(parsedSummary, null, 2), 
-                      `${summary.ticker.symbol}_${summary.filingType}.json`, 
-                      'application/json'
-                    )}
-                    aria-label="Download JSON as file"
-                  >
-                    <Download className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div 
-                className="bg-muted rounded-lg p-4 overflow-auto max-h-[500px]" 
-                ref={jsonRef}
-              >
-                <JSONTree 
-                  data={parsedSummary} 
-                  theme={jsonTheme}
-                  invertTheme={false}
-                  hideRoot={false}
-                  shouldExpandNodeInitially={() => false}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      )}
-    </Tabs>
+    <div className="whitespace-pre-wrap">{sanitizeDisplayContent(summary.summaryText || '')}</div>
   );
 }
 
@@ -534,7 +228,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="border-0 shadow-none">
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start">
             <div>
@@ -548,7 +242,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
             </Badge>
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           {/* Key Financials Section */}
           {financials.length > 0 && (
@@ -557,7 +251,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
                 <BarChart className="h-5 w-5 text-primary" />
                 <h3 className="text-lg font-semibold">Key Financials</h3>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {financials.map((item: { label: string; value: string | number }, index: number) => (
                   <div key={index} className="bg-muted/50 p-4 rounded-lg">
@@ -580,7 +274,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
               </div>
             </section>
           )}
-          
+
           {/* Key Insights Section */}
           {insights.length > 0 && (
             <section>
@@ -588,7 +282,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
                 <Info className="h-5 w-5 text-primary" />
                 <h3 className="text-lg font-semibold">Key Insights</h3>
               </div>
-              
+
               <div className="bg-muted/30 rounded-lg p-4">
                 <ul className="list-disc pl-5 space-y-2">
                   {insights.map((insight: string, index: number) => (
@@ -598,7 +292,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
               </div>
             </section>
           )}
-          
+
           {/* Risk Factors Section */}
           {risks.length > 0 && (
             <section>
@@ -606,7 +300,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
                 <AlertTriangle className="h-5 w-5 text-warning" />
                 <h3 className="text-lg font-semibold">Risk Factors</h3>
               </div>
-              
+
               <div className="bg-muted/30 rounded-lg p-4">
                 <ul className="list-disc pl-5 space-y-2">
                   {risks.map((risk: string, index: number) => (
@@ -616,7 +310,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
               </div>
             </section>
           )}
-          
+
           {/* Outlook Section - optional */}
           {summaryData.outlook && (
             <section>
@@ -624,7 +318,7 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
                 <TrendingUp className="h-5 w-5 text-primary" />
                 <h3 className="text-lg font-semibold">Future Outlook</h3>
               </div>
-              
+
               <div className="bg-muted/30 rounded-lg p-4">
                 <p>{summaryData.outlook}</p>
               </div>
@@ -639,10 +333,10 @@ function FinancialReportSummary({ summaryData, filingType, ticker, filingDate }:
 // Specialized component for 8-K reports
 function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<FormattedSummaryProps, 'filingType' | 'summaryText'>) {
   const eventType = summaryData.eventType || 'Material Event';
-  
+
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="border-0 shadow-none">
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start">
             <div>
@@ -656,7 +350,7 @@ function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<Formatte
             </Badge>
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           {/* Summary Section */}
           <section>
@@ -664,12 +358,12 @@ function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<Formatte
               <FileText className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-semibold">Event Summary</h3>
             </div>
-            
+
             <div className="bg-muted/30 rounded-lg p-4">
               <p>{summaryData.summary || summaryData.description || 'No summary available'}</p>
             </div>
           </section>
-          
+
           {/* Positive Developments Section - optional */}
           {summaryData.positiveDevelopments && (
             <section>
@@ -677,13 +371,13 @@ function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<Formatte
                 <ArrowUp className="h-5 w-5 text-green-500" />
                 <h3 className="text-lg font-semibold">Positive Developments</h3>
               </div>
-              
+
               <div className="bg-green-50 border-l-4 border-green-500 rounded-r-lg p-4">
                 <p>{summaryData.positiveDevelopments}</p>
               </div>
             </section>
           )}
-          
+
           {/* Potential Concerns Section - optional */}
           {summaryData.potentialConcerns && (
             <section>
@@ -691,13 +385,13 @@ function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<Formatte
                 <AlertTriangle className="h-5 w-5 text-destructive" />
                 <h3 className="text-lg font-semibold">Potential Concerns</h3>
               </div>
-              
+
               <div className="bg-red-50 border-l-4 border-red-500 rounded-r-lg p-4">
                 <p>{summaryData.potentialConcerns}</p>
               </div>
             </section>
           )}
-          
+
           {/* Structural Changes Section - optional */}
           {summaryData.structuralChanges && (
             <section>
@@ -705,13 +399,13 @@ function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<Formatte
                 <Briefcase className="h-5 w-5 text-amber-500" />
                 <h3 className="text-lg font-semibold">Structural Changes</h3>
               </div>
-              
+
               <div className="bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg p-4">
                 <p>{summaryData.structuralChanges}</p>
               </div>
             </section>
           )}
-          
+
           {/* Additional Notes Section - optional */}
           {summaryData.additionalNotes && (
             <section>
@@ -719,7 +413,7 @@ function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<Formatte
                 <Info className="h-5 w-5 text-muted-foreground" />
                 <h3 className="text-lg font-semibold">Additional Notes</h3>
               </div>
-              
+
               <div className="bg-muted/30 rounded-lg p-4">
                 <p>{summaryData.additionalNotes}</p>
               </div>
@@ -735,7 +429,7 @@ function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<Formatte
 function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<FormattedSummaryProps, 'filingType' | 'summaryText'>) {
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="border-0 shadow-none">
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start">
             <div>
@@ -749,7 +443,7 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
             </Badge>
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           {/* Insider Information Section */}
           <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -758,32 +452,32 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
                 <Briefcase className="h-5 w-5 text-primary" />
                 <h3 className="text-lg font-semibold">Insider</h3>
               </div>
-              
+
               <div className="bg-muted/30 rounded-lg p-4">
                 <div className="mb-3">
                   <span className="text-sm text-muted-foreground">Name</span>
                   <p className="text-lg font-medium">{summaryData.filerName}</p>
                 </div>
-                
+
                 <div>
                   <span className="text-sm text-muted-foreground">Position</span>
                   <p>{summaryData.relationship}</p>
                 </div>
               </div>
             </div>
-            
+
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="h-5 w-5 text-primary" />
                 <h3 className="text-lg font-semibold">Transaction Details</h3>
               </div>
-              
+
               <div className="bg-muted/30 rounded-lg p-4">
                 <div className="mb-3">
                   <span className="text-sm text-muted-foreground">Ownership Type</span>
                   <p className="font-medium">{summaryData.ownershipType}</p>
                 </div>
-                
+
                 <div>
                   <span className="text-sm text-muted-foreground">Transaction Date</span>
                   <p>{summaryData.transactionDate || format(new Date(filingDate), 'PPP')}</p>
@@ -791,20 +485,20 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
               </div>
             </div>
           </section>
-          
+
           {/* Transaction Value Section */}
           <section>
             <div className="flex items-center gap-2 mb-4">
               <DollarSign className="h-5 w-5 text-green-500" />
               <h3 className="text-lg font-semibold">Transaction Value</h3>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-muted/50 p-4 rounded-lg">
                 <div className="text-sm text-muted-foreground">Total Value</div>
                 <div className="text-2xl font-bold">{summaryData.totalValue}</div>
               </div>
-              
+
               <div className="bg-muted/50 p-4 rounded-lg">
                 <div className="text-sm text-muted-foreground">Percentage Change</div>
                 <div className={`text-2xl font-bold flex items-center ${summaryData.percentageChange?.startsWith('-') ? 'text-destructive' : 'text-green-500'}`}>
@@ -818,21 +512,21 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
               </div>
             </div>
           </section>
-          
+
           {/* Stake Changes Section */}
           <section>
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-semibold">Ownership Changes</h3>
             </div>
-            
+
             <div className="bg-muted/30 rounded-lg p-4">
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <span className="text-sm text-muted-foreground">Previous Stake</span>
                   <p className="text-lg font-medium">{summaryData.previousStake}</p>
                 </div>
-                
+
                 <div>
                   <span className="text-sm text-muted-foreground">New Stake</span>
                   <p className="text-lg font-medium">{summaryData.newStake}</p>
@@ -840,14 +534,14 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
               </div>
             </div>
           </section>
-          
+
           {/* Summary Section */}
           <section>
             <div className="flex items-center gap-2 mb-4">
               <Info className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-semibold">Summary</h3>
             </div>
-            
+
             <div className="bg-muted/30 rounded-lg p-4">
               <p>{summaryData.summary}</p>
             </div>
@@ -856,4 +550,4 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
       </Card>
     </div>
   );
-} 
+}
