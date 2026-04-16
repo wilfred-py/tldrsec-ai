@@ -1,22 +1,15 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
 
 /**
- * Suspense fallback matching EmailStatsWidget dimensions.
+ * Suspense fallback matching the inline stats row dimensions
+ * (icon + time-saved counter + filings-summarized text).
  * Fixed height prevents CLS when the real content streams in.
  */
 export function StatsSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-4 w-28" />
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-1">
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-4 w-48" />
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-3">
+      <Skeleton className="h-4 w-4 rounded-full" />
+      <Skeleton className="h-5 w-48" />
+    </div>
   );
 }

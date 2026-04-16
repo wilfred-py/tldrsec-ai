@@ -7,17 +7,12 @@ import { Company } from "@/lib/api/types";
  */
 export async function fetchDashboardStats(tickerIds: string[]) {
   if (tickerIds.length === 0) {
-    return { summaryCountThisMonth: 0, summaryCountTotal: 0, totalTimeSavedMinutes: 0 };
+    return { summaryCountTotal: 0, totalTimeSavedMinutes: 0 };
   }
 
   const prisma = getPrismaClient();
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [countThisMonth, countTotal, tokenAgg] = await Promise.all([
-    prisma.summary.count({
-      where: { tickerId: { in: tickerIds }, filingDate: { gte: startOfMonth } },
-    }),
+  const [countTotal, tokenAgg] = await Promise.all([
     prisma.summary.count({
       where: { tickerId: { in: tickerIds } },
     }),
@@ -31,7 +26,7 @@ export async function fetchDashboardStats(tickerIds: string[]) {
   const totalOutput = tokenAgg._sum.outputTokens ?? 0;
   const totalTimeSavedMinutes = Math.round(Math.max(0, ((totalInput - totalOutput) * 0.75) / 250) * 10) / 10;
 
-  return { summaryCountThisMonth: countThisMonth, summaryCountTotal: countTotal, totalTimeSavedMinutes };
+  return { summaryCountTotal: countTotal, totalTimeSavedMinutes };
 }
 
 /**
