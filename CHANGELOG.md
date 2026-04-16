@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.19.0] - 2026-04-16
+
+### Changed
+- Dashboard loads progressively with React Suspense streaming. The page shell, tab structure, and tickers panel render in under 1 second. Stats and activity feed stream in independently as their database queries resolve. Previously everything blocked on a sequential data waterfall (4-5 seconds before any content appeared).
+- Dashboard decomposed from a single 597-line client component into focused pieces: `TickersPanel` (ticker CRUD), `DashboardOnboarding` (confetti, subscription toasts), and async server components for stats and activity. Each section has its own error boundary so one failure doesn't crash the whole page.
+- Summaries list page (`/dashboard/summaries`) now fetches real user data server-side instead of returning hardcoded mock summaries. Data streams via Suspense with a skeleton fallback.
+
+### Added
+- `SectionErrorBoundary` component for per-section error isolation on the dashboard.
+- `forceMount` on Radix Tabs content panels to prevent hydration mismatches with streamed Suspense content.
+
 ## [0.0.18.0] - 2026-04-16
 
 ### Fixed
