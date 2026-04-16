@@ -44,7 +44,7 @@ export const MINUTES_SAVED_STORAGE_KEY = 'dashboard-minutes-saved';
  * Exported for testing.
  */
 export function useAnimatedMinutes(target: number): { displayed: number; isAnimating: boolean } {
-  const [displayed, setDisplayed] = useState<number>(target);
+  const [displayed, setDisplayed] = useState<number>(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
