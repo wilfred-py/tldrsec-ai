@@ -73,7 +73,7 @@ export function LandingNavbar({ heroRef }: LandingNavbarProps) {
   const ctaButton = (
     <Link href={ctaHref} onClick={() => setIsNavigating(true)}>
       <Button
-        className="brand-button-primary"
+        className="brand-button-gradient"
         disabled={isNavigating}
       >
         {isNavigating ? (

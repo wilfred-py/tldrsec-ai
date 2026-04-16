@@ -213,11 +213,11 @@ describe('PricingCard', () => {
       expect(style).toContain('z-index: 10');
     });
 
-    it('uses brand-button-primary on CTA when card is selected', () => {
+    it('uses brand-button-gradient on CTA when card is selected', () => {
       render(<PricingCard {...defaultProps} selectedCard="PRO" />);
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('brand-button-primary');
+      expect(button.className).toContain('brand-button-gradient');
     });
 
     it('keeps brand-button-secondary on CTA when checkoutLoading even if selected', () => {
@@ -262,13 +262,13 @@ describe('PricingCard', () => {
       expect(onSelect).toHaveBeenCalledTimes(1);
     });
 
-    it('uses brand-button-primary when card is hovered but not selected', () => {
+    it('uses brand-button-gradient when card is hovered but not selected', () => {
       render(
         <PricingCard {...defaultProps} plan={maxPlan} hoveredCard="MAX" selectedCard="PRO" />
       );
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('brand-button-primary');
+      expect(button.className).toContain('brand-button-gradient');
     });
 
     it('uses brand-button-secondary when hovered but checkoutLoading is true', () => {

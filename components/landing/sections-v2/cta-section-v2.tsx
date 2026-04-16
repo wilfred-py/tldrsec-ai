@@ -61,7 +61,7 @@ export function CTASectionV2() {
 
           {/* CTA Button */}
           <div className="mb-8">
-            <Button asChild className="brand-button-primary">
+            <Button asChild className="brand-button-gradient">
               <Link href="/onboarding">
                 Get Started
                 <ArrowRight className="w-5 h-5 ml-2" />

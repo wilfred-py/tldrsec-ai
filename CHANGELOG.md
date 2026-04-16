@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [0.0.19.4] - 2026-04-17
 
 ### Fixed
+- Inconsistent CTA button colors on landing page. Navbar, pricing cards, and pre-footer CTA now use the same blue-to-purple gradient as the hero section instead of solid blue.
 - CTA button text now renders white regardless of theme. The shadcn Button default variant applied `text-primary-foreground` which resolved to near-black in dark mode, fighting the brand button CSS. Added `text-white` Tailwind class and `!important` to both `brand-button-primary` and `brand-button-gradient`.
 
 ## [0.0.19.3] - 2026-04-16
