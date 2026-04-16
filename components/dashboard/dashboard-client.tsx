@@ -33,6 +33,88 @@ import {
 } from "@/components/dashboard/tickers-table";
 import type { ActivitySummary } from "@/components/dashboard/activity-feed";
 
+export const MINUTES_SAVED_STORAGE_KEY = 'dashboard-minutes-saved';
+
+/**
+ * Animates from the previously stored value to `target` on mount.
+ * First ever visit (no stored value) → animates from 0.
+ * Subsequent visits → animates only the delta.
+ * Uses localStorage so persistence survives tab closures.
+ * Skips animation when target is 0.
+ * Exported for testing.
+ */
+export function useAnimatedMinutes(target: number): { displayed: number; isAnimating: boolean } {
+  const [displayed, setDisplayed] = useState<number>(target);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Skip animation if target is 0 (nothing to show).
+    if (target === 0) {
+      setDisplayed(0);
+      return;
+    }
+
+    // Read starting value from localStorage. 0 on first visit or incognito.
+    let startValue = 0;
+    try {
+      const stored = localStorage.getItem(MINUTES_SAVED_STORAGE_KEY);
+      if (stored !== null) {
+        const parsed = parseInt(stored, 10);
+        if (Number.isFinite(parsed) && parsed >= 0) startValue = parsed;
+      }
+    } catch {
+      // localStorage unavailable (incognito / Safari private). Fall through with startValue=0.
+    }
+
+    // Already at target: no animation needed, just persist.
+    if (startValue === target) {
+      setDisplayed(target);
+      try { localStorage.setItem(MINUTES_SAVED_STORAGE_KEY, String(target)); } catch {}
+      return;
+    }
+
+    // Step-based animation matching DigitRoller's 400ms transition cadence.
+    // Each step must be >= 500ms to let exit+enter animations complete.
+    const STEP_INTERVAL = 500;
+    const delta = target - startValue;
+    const totalSteps = Math.max(2, Math.min(Math.abs(delta), 8));
+    let currentStep = 0;
+
+    setIsAnimating(true);
+    setDisplayed(startValue);
+
+    const runStep = () => {
+      currentStep++;
+      const progress = Math.min(currentStep / totalSteps, 1);
+      // easeOutQuad for natural deceleration.
+      const eased = 1 - (1 - progress) * (1 - progress);
+      const next = Math.round(startValue + delta * eased);
+      setDisplayed(next);
+
+      if (progress < 1) {
+        timeoutRef.current = setTimeout(runStep, STEP_INTERVAL);
+      } else {
+        setDisplayed(target);
+        setIsAnimating(false);
+        timeoutRef.current = null;
+        try { localStorage.setItem(MINUTES_SAVED_STORAGE_KEY, String(target)); } catch {}
+      }
+    };
+
+    timeoutRef.current = setTimeout(runStep, STEP_INTERVAL);
+
+    return () => {
+      if (timeoutRef.current !== null) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [target]);
+
+  return { displayed, isAnimating };
+}
+
 interface DashboardClientProps {
   showWelcome?: boolean;
   shouldMergePending?: boolean;
@@ -49,6 +131,10 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ showWelcome: _showWelcome = false, shouldMergePending: _shouldMergePending = false, subscriptionSuccess = false, sessionId, initialCompanies = [], tutorialCompleted = false, subscriptionTier = 'FREE', tickerLimit = 3, summaryCountTotal = 0, totalTimeSavedMinutes = 0, recentSummaries = [], featuredSummaries = [] }: DashboardClientProps) {
+  // Minutes-saved counter: guard against NaN/undefined before rendering.
+  const safeMinutes = Number.isFinite(totalTimeSavedMinutes) ? Math.round(totalTimeSavedMinutes as number) : 0;
+  const { displayed: displayedMinutes, isAnimating: minutesAnimating } = useAnimatedMinutes(safeMinutes);
+
   // State for tracked companies
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
@@ -396,12 +482,18 @@ export function DashboardClient({ showWelcome: _showWelcome = false, shouldMerge
     <div className="space-y-6 animate-fade-in">
       <h1 className="sr-only">Dashboard</h1>
       {/* Time Saved Counter */}
-      {(totalTimeSavedMinutes >= 1 || summaryCountTotal > 0) && (
-        <div className="flex items-center gap-3 text-sm text-[var(--brand-text-muted)]" role="status" aria-label={`${totalTimeSavedMinutes >= 1 ? `${Math.round(totalTimeSavedMinutes)} minutes saved` : ""}${totalTimeSavedMinutes >= 1 && summaryCountTotal > 0 ? ", " : ""}${summaryCountTotal > 0 ? `${summaryCountTotal} filings summarized` : ""}`}>
+      {(safeMinutes >= 1 || summaryCountTotal > 0) && (
+        <div className="flex items-center gap-2 text-sm text-[var(--brand-text-muted)]" role="status" aria-label={`${safeMinutes >= 1 ? `${safeMinutes} minutes saved` : ""}${safeMinutes >= 1 && summaryCountTotal > 0 ? ", " : ""}${summaryCountTotal > 0 ? `${summaryCountTotal} filings summarized` : ""}`}>
           <Clock className="h-4 w-4 text-[var(--brand-primary)]" aria-hidden="true" />
-          {totalTimeSavedMinutes >= 1 && (
+          {safeMinutes >= 1 && (
             <span className="flex items-center gap-1" aria-hidden="true">
-              <CounterDisplay count={Math.round(totalTimeSavedMinutes)} className="text-lg font-bold text-[var(--brand-secondary)]" />
+              <CounterDisplay
+                count={displayedMinutes}
+                isAnimating={minutesAnimating}
+                className="text-lg font-bold text-[var(--brand-secondary)]"
+                srLabel=""
+                suppressLiveRegion
+              />
               <span>minutes saved</span>
             </span>
           )}
