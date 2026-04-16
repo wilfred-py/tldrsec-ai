@@ -35,6 +35,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logging';
 import { getPrismaClient as getDeploymentPrisma } from '@/lib/db/prisma';
+import { isEdgarOpen } from '@/lib/cron/edgar-schedule';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -175,6 +176,7 @@ interface PipelineHealthResponse {
   };
   lastCompletion: string | null;
   minutesSinceLastCompletion: number | null;
+  edgarOpen: boolean;
   issues: string[];
   warnings?: string[];
   recommendations: string[];
@@ -590,15 +592,16 @@ export async function GET(request: NextRequest) {
     let status: 'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'ERROR' = 'HEALTHY';
 
     // CRITICAL conditions - pipeline is stalled or severely impacted
+    // During EDGAR quiet hours (22:15-05:45 ET), suppress time-sensitive conditions
+    // that are expected-zero overnight: no completions, no cron activity, empty TickerMonitoring.
+    const edgarOpen = isEdgarOpen();
     if (
       lockMetrics.healthStatus === 'CRITICAL' ||
-      (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 180) ||
-      exhaustedRetryingCount > 0 ||  // NEW: Jobs stuck forever without intervention
-      invalidJobTypeCount > 0 ||     // NEW: Jobs that can never complete
-      // Phase 5: Cron execution gap >20 minutes (Cloudflare Worker likely failed)
-      (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_CRITICAL_MINUTES) ||
-      // NEW: Empty TickerMonitoring with active user tickers - discovery will fail completely
-      (tickerMonitoringActive === 0 && userSymbols.length > 0)
+      (edgarOpen && minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 180) ||
+      exhaustedRetryingCount > 0 ||
+      invalidJobTypeCount > 0 ||
+      (edgarOpen && minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_CRITICAL_MINUTES) ||
+      (edgarOpen && tickerMonitoringActive === 0 && userSymbols.length > 0)
     ) {
       status = 'CRITICAL';
     }
@@ -606,12 +609,10 @@ export async function GET(request: NextRequest) {
     else if (
       lockMetrics.healthStatus === 'WARNING' ||
       issues.length > 0 ||
-      (minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 60) ||
-      staleProcessingCount > 0 ||  // NEW: Jobs might be hung
-      // Phase 5: Orphaned filings exist
+      (edgarOpen && minutesSinceLastCompletion !== null && minutesSinceLastCompletion > 60) ||
+      staleProcessingCount > 0 ||
       orphanedFilingCount > 0 ||
-      // Phase 5: Cron execution gap 15-20 minutes
-      (minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_DEGRADED_MINUTES)
+      (edgarOpen && minutesSinceLastCron !== null && minutesSinceLastCron > CRON_GAP_DEGRADED_MINUTES)
     ) {
       status = 'DEGRADED';
     }
@@ -659,6 +660,7 @@ export async function GET(request: NextRequest) {
       },
       lastCompletion: lastCompletionTime?.toISOString() || null,
       minutesSinceLastCompletion,
+      edgarOpen,
       issues,
       warnings: warnings.length > 0 ? warnings : undefined,
       recommendations,
