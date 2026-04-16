@@ -25,7 +25,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   const params = await searchParams;
-  const showWelcome = params.welcome === "true";
   const subscriptionSuccess = params.subscription_success === "true";
   const sessionId = typeof params.session_id === "string" ? params.session_id : undefined;
 

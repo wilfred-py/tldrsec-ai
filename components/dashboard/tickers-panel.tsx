@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { TickerSearchResult } from "@/lib/api/types";
 import { Company, FilingPreferences } from "@/lib/api/types";
 import {
-  getTrackedCompanies,
   addTrackedCompany,
   deleteTrackedCompany,
   updateCompanyPreferences,
@@ -54,27 +53,9 @@ export function TickersPanel({
   const [companiesLoaded, setCompaniesLoaded] = useState(false);
   const [emptyStateResults, setEmptyStateResults] = useState<TickerSearchResult[]>([]);
 
-  const {
-    execute: executeGetCompanies,
-    isLoading: isLoadingCompanies,
-    error: companiesError,
-  } = useAsync([]);
+  const { isLoading: isLoadingCompanies, error: companiesError } = useAsync([]);
   const { execute: executeDeleteTicker, isLoading: isDeletingTicker } = useAsync();
   const { execute: executeUpdatePreferences } = useAsync();
-
-  const loadCompanies = useCallback(async () => {
-    try {
-      const response = await executeGetCompanies(() => getTrackedCompanies());
-      if (response && "data" in response && Array.isArray(response.data)) {
-        setCompanies(response.data);
-      } else {
-        setCompanies([]);
-      }
-    } catch (error) {
-      console.error("Error loading companies:", error);
-      toast.error("Failed to load tracked companies");
-    }
-  }, [executeGetCompanies]);
 
   const loadCompaniesForSearch = useCallback(async () => {
     if (companiesLoaded) return;
