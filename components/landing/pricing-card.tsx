@@ -38,7 +38,6 @@ interface PricingCardProps {
   getMonthlyEquivalent: (plan: PricingPlan) => number | null;
   getSavings: (plan: PricingPlan) => number | null;
   // Optional props for /subscribe route
-  forceHighlight?: boolean;
   onDowngrade?: (planKey: string) => void;
   isDowngrading?: boolean;
 }
@@ -60,15 +59,13 @@ export function PricingCard({
   getPrice,
   getMonthlyEquivalent,
   getSavings,
-  forceHighlight,
   onDowngrade,
   isDowngrading,
 }: PricingCardProps) {
   const savings = getSavings(plan);
   const monthlyEquiv = getMonthlyEquivalent(plan);
 
-  const isSelected = forceHighlight ?? (selectedCard === plan.key);
-  const isHighlighted = isSelected;
+  const isSelected = selectedCard === plan.key;
   const isCardHovered = hoveredCard === plan.key;
 
   const dynamicStyles: React.CSSProperties = {
@@ -90,7 +87,7 @@ export function PricingCard({
       aria-label={`${plan.name} pricing plan`}
       tabIndex={0}
       aria-selected={isSelected}
-      data-highlighted={isHighlighted}
+      data-highlighted={isSelected}
       data-hovered={isCardHovered || undefined}
       onClick={onSelect}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}

@@ -338,17 +338,36 @@ describe('PricingCard', () => {
       expect(screen.getByTestId('loader-icon')).toBeInTheDocument();
     });
 
-    it('highlights non-popular card when forceHighlight is true', () => {
-      const { container } = render(
-        <PricingCard
-          {...defaultProps}
-          plan={maxPlan}
-          hoveredCard={null}
-          forceHighlight={true}
-        />
+  });
+
+  describe('card selection switching', () => {
+    it('switches highlight when selectedCard changes', () => {
+      const { container, rerender } = render(
+        <PricingCard {...defaultProps} plan={proPlanFixture} selectedCard="PRO" />
       );
 
       const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('true');
+
+      rerender(
+        <PricingCard {...defaultProps} plan={proPlanFixture} selectedCard="MAX" />
+      );
+
+      expect(card.getAttribute('data-highlighted')).toBe('false');
+    });
+
+    it('highlights Max card when selection switches from PRO to MAX', () => {
+      const { container, rerender } = render(
+        <PricingCard {...defaultProps} plan={maxPlan} selectedCard="PRO" />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('false');
+
+      rerender(
+        <PricingCard {...defaultProps} plan={maxPlan} selectedCard="MAX" />
+      );
+
       expect(card.getAttribute('data-highlighted')).toBe('true');
     });
   });
