@@ -318,6 +318,21 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'For M&A filings (Item 1.01, 2.01): Who is the counterparty, what do they do, and why does this deal matter to shareholders',
         maxLength: 300
+      },
+      governanceContext: {
+        type: 'string',
+        description: 'For governance filings (Item 5.02, 5.07): Who are the directors involved, their background, and why the change matters to shareholders',
+        maxLength: 300
+      },
+      headline: {
+        type: 'string',
+        description: 'One compelling sentence (max 200 chars) summarizing the most material fact for email display. Be specific with names and numbers. Never start with "This filing..." or generic prefixes.',
+        maxLength: 200
+      },
+      emailSubject: {
+        type: 'string',
+        description: 'Email subject line, 40-80 chars, starting with ticker symbol. Format: "TICKER: [key fact]". Must be compelling enough to open.',
+        maxLength: 80
       }
     }
   },
@@ -1240,7 +1255,10 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - Lead keyHighlights with the most investor-relevant fact
 - If management provides a quote, include it in managementCommentary
 - Sentiment: Set to "positive" for beats/good news, "negative" for misses/concerns, "neutral" for informational filings, "mixed" if both
-- COUNTERPARTY CONTEXT: If a "COUNTERPARTY CONTEXT" section appears in the content, use it to populate the counterpartyContext field. Weave the counterparty's identity and strategic rationale into the summary and keyHighlights to explain WHO the counterparty is and WHY the deal matters.`,
+- COUNTERPARTY CONTEXT: If a "COUNTERPARTY CONTEXT" section appears in the content, use it to populate the counterpartyContext field. Weave the counterparty's identity and strategic rationale into the summary and keyHighlights to explain WHO the counterparty is and WHY the deal matters.
+- GOVERNANCE CONTEXT: If a "GOVERNANCE CONTEXT" section appears in the content, use it to populate the governanceContext field. Weave the directors' backgrounds and the significance of the governance change into the summary and keyHighlights to explain WHO the directors are and WHY the change matters.
+- HEADLINE: Write ONE compelling sentence (max 200 chars) summarizing the most material fact. This appears as the email's bold lead sentence. Be specific — include names, numbers, and the key action. NEVER start with "This filing...", "This 8-K...", "This document...", or similar generic prefixes. Example: "AMZN entered a definitive merger agreement to acquire Globalstar, Inc. for $1.2B in cash."
+- EMAIL SUBJECT: Write a 40-80 char email subject line starting with the ticker symbol. Format: "TICKER: [key fact]". Must be compelling enough to open. Example: "AMZN: $1.2B acquisition of Globalstar announced"`,
 
   '144': `FORM 144 EXTRACTION RULES:
 - COMPANY FIELD IS REQUIRED: The "company" field must contain the ISSUER name (the company whose stock is being sold, e.g., "Tesla, Inc."). Extract from "Name of Issuer" or "Issuer Name" on the form. This is NOT the filer — it is the company whose securities are being sold. NEVER leave blank.
