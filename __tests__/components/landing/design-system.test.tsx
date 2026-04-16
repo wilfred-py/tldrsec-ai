@@ -44,6 +44,23 @@ describe('Design System - Colors', () => {
       expect(globalsContent).toContain(`${token}:`);
     });
   });
+
+  it('should use raw HSL channel values, not oklch (Tailwind v3 compatibility)', () => {
+    // Tailwind v3 wraps variables in hsl(). If globals.css uses oklch() values,
+    // the compiled CSS produces invalid hsl(oklch(...)) — breaking all theme colors.
+    // This guard catches regressions from shadcn CLI updates that generate oklch format.
+    const themeVars = [
+      '--background', '--foreground', '--card', '--popover', '--primary',
+      '--secondary', '--muted', '--accent', '--destructive', '--border',
+      '--input', '--ring', '--sidebar',
+      '--fintech-primary', '--fintech-secondary', '--fintech-accent',
+      '--fintech-success', '--fintech-bg-subtle', '--fintech-text-primary', '--fintech-text-secondary',
+    ];
+    for (const token of themeVars) {
+      const regex = new RegExp(`${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*oklch`);
+      expect(globalsContent).not.toMatch(regex);
+    }
+  });
 });
 
 // Test 2: Animation primitives work correctly

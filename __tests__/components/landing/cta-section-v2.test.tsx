@@ -9,20 +9,23 @@ jest.mock('framer-motion', () => ({
   },
 }));
 
+jest.mock('next/link', () => {
+  return ({ children, href, ...props }: React.PropsWithChildren<{ href: string }>) => (
+    <a href={href} {...props}>{children}</a>
+  );
+});
+
 describe('CTASectionV2', () => {
   it('should render headline', () => {
     render(<CTASectionV2 />);
     expect(screen.getByText(/Start Monitoring/i)).toBeInTheDocument();
   });
 
-  it('should have email input field', () => {
+  it('should render Get Started CTA link to /onboarding', () => {
     render(<CTASectionV2 />);
-    expect(screen.getByPlaceholderText(/email/i)).toBeInTheDocument();
-  });
-
-  it('should have submit button', () => {
-    render(<CTASectionV2 />);
-    expect(screen.getByRole('button', { name: /Join|Start|Get/i })).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Get Started/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/onboarding');
   });
 
   it('should display trust signals', () => {
@@ -36,11 +39,5 @@ describe('CTASectionV2', () => {
     const section = container.querySelector('section');
     // Should not have dark gradient classes
     expect(section).not.toHaveClass('from-slate-900');
-  });
-
-  it('should validate email format', () => {
-    render(<CTASectionV2 />);
-    const input = screen.getByPlaceholderText(/email/i);
-    expect(input).toHaveAttribute('type', 'email');
   });
 });

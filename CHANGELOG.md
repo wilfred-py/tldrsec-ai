@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.18.0] - 2026-04-15
+## [0.0.19.0] - 2026-04-16
 
 ### Changed
 - Dashboard loads progressively with React Suspense streaming. The page shell, tab structure, and tickers panel render in under 1 second. Stats and activity feed stream in independently as their database queries resolve. Previously everything blocked on a sequential data waterfall (4-5 seconds before any content appeared).
@@ -12,6 +12,27 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `SectionErrorBoundary` component for per-section error isolation on the dashboard.
 - `forceMount` on Radix Tabs content panels to prevent hydration mismatches with streamed Suspense content.
+
+## [0.0.18.0] - 2026-04-16
+
+### Fixed
+- Pricing card mobile highlight: tapping a different plan card now switches the blue highlight correctly on both the landing page and /subscribe route.
+- Removed `forceHighlight` prop that permanently locked the pre-selected card's highlight, preventing users from switching plans on /subscribe.
+- Wrapped `.brand-card:hover` CSS in `@media (hover: hover)` to prevent sticky hover states on mobile touch devices.
+
+### Changed
+- Replaced email input form in CTA section below pricing with a single "Get Started" button linking to /onboarding, reducing signup friction.
+
+## [0.0.17.1] - 2026-04-16
+
+### Fixed
+- Mobile hamburger menu now opens with a visible background instead of just borders.
+- All 384 theme color usages across 98 files now render correctly (were producing invalid `hsl(oklch(...))` CSS).
+- Dark mode borders and inputs use solid composited colors instead of broken semi-transparent oklch values.
+- Fintech brand color tokens unified to HSL format, matching the rest of the design system.
+
+### Added
+- Regression test guard preventing future shadcn CLI updates from regenerating oklch-format CSS variables.
 
 ## [0.0.17.0] - 2026-04-15
 

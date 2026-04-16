@@ -4,46 +4,46 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  
+  --background: 0 0% 100%;
+  --foreground: 0 0% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 3.9%;
+  --primary: 0 0% 9.1%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 96.1%;
+  --secondary-foreground: 0 0% 9.1%;
+  --muted: 0 0% 96.1%;
+  --muted-foreground: 0 0% 45.2%;
+  --accent: 0 0% 96.1%;
+  --accent-foreground: 0 0% 9.1%;
+  --destructive: 357.2 100% 45.3%;
+  --border: 0 0% 89.8%;
+  --input: 0 0% 89.8%;
+  --ring: 0 0% 63%;
+  --chart-1: 18 100% 48%;
+  --chart-2: 174.7 100% 29.5%;
+  --chart-3: 195.8 72.1% 22.9%;
+  --chart-4: 43.6 100% 50%;
+  --chart-5: 36.3 100% 49.7%;
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 0 0% 3.9%;
+  --sidebar-primary: 0 0% 9.1%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 0 0% 96.1%;
+  --sidebar-accent-foreground: 0 0% 9.1%;
+  --sidebar-border: 0 0% 89.8%;
+  --sidebar-ring: 0 0% 63%;
+
   /* Fintech brand colors */
-  --fintech-primary: oklch(0.45 0.15 232); /* Professional blue */
-  --fintech-secondary: oklch(0.35 0.12 190); /* Deep trust blue */
-  --fintech-accent: oklch(0.55 0.18 160); /* Subtle teal accent */
-  --fintech-success: oklch(0.45 0.15 145); /* Professional green */
-  --fintech-bg-subtle: oklch(0.99 0.002 232); /* Ultra-light blue bg */
-  --fintech-text-primary: oklch(0.15 0.01 232); /* Near black with blue hint */
-  --fintech-text-secondary: oklch(0.45 0.05 232); /* Professional gray-blue */
+  --fintech-primary: 202.7 100% 29.9%; /* Professional blue */
+  --fintech-secondary: 177.2 100% 14.9%; /* Deep trust blue */
+  --fintech-accent: 151.2 100% 28%; /* Subtle teal accent */
+  --fintech-success: 129.5 100% 20.6%; /* Professional green */
+  --fintech-bg-subtle: 201.7 35.5% 98.7%; /* Ultra-light blue bg */
+  --fintech-text-primary: 201.9 34.1% 4.3%; /* Near black with blue hint */
+  --fintech-text-secondary: 200.5 32.3% 32.1%; /* Professional gray-blue */
 
   /* Brand Design System - Light Theme */
   --brand-primary: #0079F2;           /* Stripe-inspired blue */
@@ -62,46 +62,46 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-  
+  --background: 0 0% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 9.1%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 9.1%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 89.8%;
+  --primary-foreground: 0 0% 9.1%;
+  --secondary: 0 0% 14.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 14.9%;
+  --muted-foreground: 0 0% 63%;
+  --accent: 0 0% 14.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 358.7 100% 69.6%;
+  --border: 0 0% 13.5%;
+  --input: 0 0% 18.3%;
+  --ring: 0 0% 45.2%;
+  --chart-1: 225.3 84.1% 49%;
+  --chart-2: 159.7 100% 36.9%;
+  --chart-3: 36.3 100% 49.7%;
+  --chart-4: 273.3 100% 63.8%;
+  --chart-5: 345.3 100% 56.2%;
+  --sidebar: 0 0% 9.1%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-primary: 225.3 84.1% 49%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 0 0% 14.9%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 0 0% 13.5%;
+  --sidebar-ring: 0 0% 45.2%;
+
   /* Fintech brand colors (dark mode) */
-  --fintech-primary: oklch(0.55 0.18 232); /* Lighter professional blue */
-  --fintech-secondary: oklch(0.45 0.15 190); /* Lighter deep trust blue */
-  --fintech-accent: oklch(0.65 0.20 160); /* Lighter subtle teal accent */
-  --fintech-success: oklch(0.55 0.18 145); /* Lighter professional green */
-  --fintech-bg-subtle: oklch(0.18 0.008 232); /* Dark blue bg */
-  --fintech-text-primary: oklch(0.95 0.005 232); /* Near white with blue hint */
-  --fintech-text-secondary: oklch(0.65 0.08 232); /* Lighter gray-blue */
+  --fintech-primary: 201.9 100% 39%; /* Lighter professional blue */
+  --fintech-secondary: 177.3 100% 21.3%; /* Lighter deep trust blue */
+  --fintech-accent: 153.2 100% 34.8%; /* Lighter subtle teal accent */
+  --fintech-success: 132.5 100% 27.2%; /* Lighter professional green */
+  --fintech-bg-subtle: 201.3 18.4% 6.8%; /* Dark blue bg */
+  --fintech-text-primary: 201.7 17.7% 93.4%; /* Near white with blue hint */
+  --fintech-text-secondary: 200.2 39.8% 53.6%; /* Lighter gray-blue */
 }
 
 @layer base {
@@ -319,9 +319,11 @@
     transition: all 0.3s ease;
   }
 
-  .brand-card:hover {
-    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
-    border-color: var(--brand-primary-light);
+  @media (hover: hover) {
+    .brand-card:hover {
+      box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+      border-color: var(--brand-primary-light);
+    }
   }
 
   /* Badge styles */
