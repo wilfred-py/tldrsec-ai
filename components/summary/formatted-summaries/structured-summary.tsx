@@ -200,7 +200,7 @@ export function StructuredSummary({
   // If fewer than 3 meaningful fields, fall back to summaryText
   if (meaningfulFields.length < 3) {
     return (
-      <Card>
+      <Card className="border-0 shadow-none">
         <CardHeader>
           <CardTitle>{ticker.companyName} ({ticker.symbol})</CardTitle>
           <CardDescription>
@@ -240,7 +240,7 @@ export function StructuredSummary({
   const company = typeof summaryData.company === 'string' ? summaryData.company : ticker.companyName;
 
   return (
-    <Card>
+    <Card className="border-0 shadow-none">
       <CardHeader>
         <div className="flex items-center gap-2 flex-wrap">
           <CardTitle>{company} ({ticker.symbol})</CardTitle>

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.18.1] - 2026-04-16
+## [0.0.19.2] - 2026-04-16
 
 ### Added
 - `headline` and `emailSubject` fields added to AI schema for ALL filing types via `BASE_SCHEMA_PROPERTIES`. Every form type (10-K, 10-Q, Form 4, DEF 14A, Form 144, S-1, S-3, 11-K, Generic) now gets AI-generated headlines and subject lines.
@@ -14,6 +14,32 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - All 9 non-8-K email templates now prefer AI-provided `headline` over regex-parsed prose, with zero-risk fallback to existing extraction logic.
 - `subject-service.ts` uses AI `emailSubject` (30-120 chars) as first priority for all form types, falling back to existing smart extraction.
+
+## [0.0.19.1] - 2026-04-16
+
+### Changed
+- Summary detail page (`/summary/[id]`) now shows only the formatted view. Removed the "Raw Text" and "JSON" tabs that exposed internal data representations to end users.
+- Removed the visible card border on summary pages so the layout matches the borderless dashboard redesign.
+- Removed double padding around summary content (the outer `p-6` wrapper was duplicating the card's internal padding).
+
+### Removed
+- 3 npm packages no longer needed: `react-syntax-highlighter`, `react-json-tree`, `react-copy-to-clipboard` (and their `@types/` counterparts). Smaller bundle.
+- ~310 lines of dead code from `SummaryContent` (search handlers, copy/download buttons, JSON theme config, refs that only served the removed tabs).
+
+### Fixed
+- Test coverage gaps on the summary fallback path: added regression tests for XSS sanitization and invalid-JSON fallback rendering.
+- Stale references to uninstalled packages in `jest.config.mjs` cleaned up.
+
+## [0.0.19.0] - 2026-04-16
+
+### Changed
+- Dashboard loads progressively with React Suspense streaming. The page shell, tab structure, and tickers panel render in under 1 second. Stats and activity feed stream in independently as their database queries resolve. Previously everything blocked on a sequential data waterfall (4-5 seconds before any content appeared).
+- Dashboard decomposed from a single 597-line client component into focused pieces: `TickersPanel` (ticker CRUD), `DashboardOnboarding` (confetti, subscription toasts), and async server components for stats and activity. Each section has its own error boundary so one failure doesn't crash the whole page.
+- Summaries list page (`/dashboard/summaries`) now fetches real user data server-side instead of returning hardcoded mock summaries. Data streams via Suspense with a skeleton fallback.
+
+### Added
+- `SectionErrorBoundary` component for per-section error isolation on the dashboard.
+- `forceMount` on Radix Tabs content panels to prevent hydration mismatches with streamed Suspense content.
 
 ## [0.0.18.0] - 2026-04-16
 
