@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `edgarOpen` field in `/api/health` response so monitoring integrations can distinguish quiet-hours from real outages.
 
+## [0.0.19.4] - 2026-04-17
+
+### Fixed
+- CTA button text now renders white regardless of theme. The shadcn Button default variant applied `text-primary-foreground` which resolved to near-black in dark mode, fighting the brand button CSS. Added `text-white` Tailwind class and `!important` to both `brand-button-primary` and `brand-button-gradient`.
+
 ## [0.0.19.3] - 2026-04-16
 
 ### Fixed
