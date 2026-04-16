@@ -87,3 +87,19 @@ describe('Extraction guidance coverage', () => {
     expect(result.userPrompt).toContain('COMPANY FIELD IS REQUIRED');
   });
 });
+
+describe('headline and emailSubject in base schema', () => {
+  const allTypes = [
+    '10-K', '10-Q', '8-K', '4', '144', '3',
+    'SC 13G', 'SC 13D', 'DEF 14A', 'DEFA14A', 'FWP',
+    'S-1', 'S-3', '11-K', '424B2',
+  ];
+
+  for (const type of allTypes) {
+    it(`${type} schema includes headline and emailSubject`, () => {
+      const schema = getSchemaForFormType(type);
+      expect(schema.properties).toHaveProperty('headline');
+      expect(schema.properties).toHaveProperty('emailSubject');
+    });
+  }
+});

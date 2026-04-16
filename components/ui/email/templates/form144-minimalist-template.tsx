@@ -146,15 +146,21 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   // Determine if we have meaningful transaction data
   const hasTransactionData = shares || estimatedValue || percentOfHoldings;
 
-  // Extract first sentence as the headline
-  let headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
-  if (headline.length < 30 && summaryText && summaryText.length > headline.length) {
-    headline = summaryText;
+  // Prefer AI-provided headline, fall back to sentence extraction
+  const aiHeadline = typeof data?.headline === 'string' ? data.headline : '';
+  let headline = aiHeadline;
+  if (!headline) {
+    headline = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+    if (headline.length < 30 && summaryText && summaryText.length > headline.length) {
+      headline = summaryText;
+    }
   }
 
-  // Remaining summary after the headline
-  const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
-    ? summaryText.slice(headline.length).trim()
+  // Remaining summary after the headline.
+  // Only slice when summaryText actually starts with headline (sentence-extraction path);
+  // when AI provided an independent headline, show the full summaryText as remaining.
+  const remainingSummary = summaryText && headline && summaryText !== headline
+    ? (summaryText.startsWith(headline) ? summaryText.slice(headline.length).trim() : summaryText)
     : '';
 
   // Build preheader text for inbox preview

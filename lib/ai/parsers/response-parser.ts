@@ -115,6 +115,28 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
     }
   }
 
+  // Normalize headline field (all form types)
+  if (normalized.headline && typeof normalized.headline === 'string') {
+    // Strip ticker prefixes (e.g., "AAPL: Revenue surged..." -> "Revenue surged...")
+    normalized.headline = normalized.headline.replace(/^[A-Z]{1,5}:\s*/, '');
+    // Strip form type prefixes (e.g., "8-K: Company announced..." -> "Company announced...")
+    normalized.headline = normalized.headline.replace(/^(?:Form\s*)?\d+-[A-Z](?:\/A)?:\s*/i, '');
+    normalized.headline = normalized.headline.trim().substring(0, 120);
+    // Quality gate: delete generic/useless headlines so templates use their fallback
+    const genericPatterns = /^(this|the company|a new|an? )/i;
+    if (normalized.headline.length < 20 || genericPatterns.test(normalized.headline)) {
+      delete normalized.headline;
+    }
+  }
+
+  // Normalize emailSubject field (all form types)
+  if (normalized.emailSubject && typeof normalized.emailSubject === 'string') {
+    normalized.emailSubject = normalized.emailSubject.trim().substring(0, 100);
+    if (normalized.emailSubject.length < 15) {
+      delete normalized.emailSubject;
+    }
+  }
+
   // Canonicalize form type: '10-K/A' -> '10-K', 'SCHEDULE 13G' -> 'SC 13G', etc.
   // This ensures amendments and alternate names route to the correct normalization branch.
   const { type: canonicalType } = canonicalizeFormType(filingType);

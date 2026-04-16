@@ -90,6 +90,16 @@ const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
     type: 'string',
     description: 'How important is this filing to a shareholder? Rate based on materiality: "critical" = CEO change, acquisition, earnings miss >10%, large insider sell >$5M; "high" = material event, new risk factors, insider transactions >$1M; "medium" = routine quarterly update, standard vesting grant; "low" = administrative amendment, minor update.',
     enum: ['critical', 'high', 'medium', 'low']
+  },
+  headline: {
+    type: 'string',
+    description: 'A single compelling sentence (50-90 chars) summarizing the most important takeaway for a shareholder. No ticker prefix. No form type prefix. Just the news. Example: "Revenue surged 23% to $94.8B driven by AI infrastructure demand"',
+    maxLength: 120
+  },
+  emailSubject: {
+    type: 'string',
+    description: 'Email subject line (40-70 chars). Format: "[TICKER] [FormType]: [key insight]". Must include the ticker symbol. Example: "NVDA 10-K: Revenue surged 23% to $94.8B"',
+    maxLength: 100
   }
 };
 

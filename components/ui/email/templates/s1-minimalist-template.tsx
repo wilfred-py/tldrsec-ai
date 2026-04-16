@@ -57,15 +57,21 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
   // Build preheader text
   const preheaderText = `IPO FILING: ${companyName} (${displayTicker}) -- ${businessDescription || (summaryText || '').substring(0, 80)}`;
 
-  // Extract first sentence as the headline
-  const leadText = businessDescription || summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+  // Prefer AI-provided headline, fall back to businessDescription or sentence extraction
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
+  const leadText = aiHeadline || businessDescription || summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
 
-  // Remaining summary after the headline
-  const remainingSummary = summaryText && leadText && summaryText.length > leadText.length && !businessDescription
-    ? summaryText.slice(leadText.length).trim()
-    : summaryText && businessDescription
-      ? summaryText
-      : '';
+  // Remaining summary after the headline.
+  // When businessDescription is the lead, show full summaryText below.
+  // Otherwise only slice when summaryText actually starts with leadText; when AI provided
+  // an independent headline, show full summaryText to avoid chopping arbitrary characters.
+  const remainingSummary = summaryText && leadText && summaryText !== leadText
+    ? (businessDescription
+        ? summaryText
+        : summaryText.startsWith(leadText)
+          ? summaryText.slice(leadText.length).trim()
+          : summaryText)
+    : '';
 
   // Build data snapshot rows
   const dataRows: { label: string; value: string; color?: string }[] = [];

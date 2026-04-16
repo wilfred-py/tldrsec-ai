@@ -66,16 +66,19 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
     (riskFactors && riskFactors.length > 0) ||
     (quarterlyTrends && quarterlyTrends.length > 0);
 
-  // Build lead sentence: first key point, first financial highlight, or first sentence of summaryText
-  let leadSentence = '';
-  if (keyPoints && keyPoints.length > 0) {
-    leadSentence = keyPoints[0];
-  } else if (financialHighlights && financialHighlights.length > 0) {
-    const h = financialHighlights[0];
-    const changeStr = h.change ? ` (${getChangeArrow(h.change)}${h.change} YoY)` : '';
-    leadSentence = `${h.label}: ${h.value}${changeStr}`;
-  } else if (summaryText) {
-    leadSentence = summaryText.split(/(?<=[.!?])\s+/)[0] || summaryText;
+  // Prefer AI-provided headline, fall back to structured extraction
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
+  let leadSentence = aiHeadline;
+  if (!leadSentence) {
+    if (keyPoints && keyPoints.length > 0) {
+      leadSentence = keyPoints[0];
+    } else if (financialHighlights && financialHighlights.length > 0) {
+      const h = financialHighlights[0];
+      const changeStr = h.change ? ` (${getChangeArrow(h.change)}${h.change} YoY)` : '';
+      leadSentence = `${h.label}: ${h.value}${changeStr}`;
+    } else if (summaryText) {
+      leadSentence = summaryText.split(/(?<=[.!?])\s+/)[0] || summaryText;
+    }
   }
 
   // Build "Why it matters" context from QoQ/YoY data
