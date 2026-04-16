@@ -30,7 +30,6 @@ export type JobType =
   | 'CHECK_FORM4_FILINGS'
   | 'SUMMARIZE_FILING'
   | 'SEND_FILING_NOTIFICATION'
-  | 'COMPILE_DAILY_DIGEST'
   // Phase 2: Async processing job types
   | 'ASYNC_SUMMARIZE_FILING'
   | 'ASYNC_EMAIL_DIGEST'
@@ -101,24 +100,6 @@ interface RawJobQueueRow {
 }
 
 /**
- * Process a job based on its type
- */
-export async function processJobCallback(job: any, digestService?: any) {
-  switch (job.jobType) {
-    case 'COMPILE_DAILY_DIGEST':
-      if (!digestService) {
-        throw new Error('Digest service is required for COMPILE_DAILY_DIGEST job');
-      }
-      await digestService.compileAndSendDigests();
-      break;
-    // Other job types handled elsewhere
-    default:
-      // This function can be extended to handle other job types
-      break;
-  }
-}
-
-/**
  * Job queue service for managing background tasks
  */
 export class JobQueueService {
@@ -147,7 +128,7 @@ export class JobQueueService {
       const validJobTypes: JobType[] = [
         'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
         'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
-        'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
+        'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION',
         'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION',
         'ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'
       ];
@@ -282,7 +263,7 @@ export class JobQueueService {
         const validJobTypes: JobType[] = [
           'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
           'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
-          'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
+          'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION',
           'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION'
         ];
 
@@ -352,7 +333,7 @@ export class JobQueueService {
       const validJobTypes: JobType[] = [
         'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
         'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
-        'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION', 'COMPILE_DAILY_DIGEST',
+        'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION',
         'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION',
         'ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'
       ];
