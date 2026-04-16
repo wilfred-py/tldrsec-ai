@@ -64,9 +64,11 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
   const leadText = summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
   const headline = aiHeadline || (leadText.length >= 30 ? leadText : summaryText || '');
 
-  // Remaining summary after headline
-  const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
-    ? summaryText.slice(headline.length).trim()
+  // Remaining summary after headline.
+  // Only slice when summaryText actually starts with headline (sentence-extraction path);
+  // when AI provided an independent headline, show the full summaryText as remaining.
+  const remainingSummary = summaryText && headline && summaryText !== headline
+    ? (summaryText.startsWith(headline) ? summaryText.slice(headline.length).trim() : summaryText)
     : '';
 
   // Build data snapshot rows

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.19.3] - 2026-04-16
+
+### Fixed
+- Garbled email body in 5 minimalist templates (Form 4, Form 144, S-1, S-3, Generic) when AI-provided `headline` did not match the first sentence of `summaryText`. The code unconditionally sliced `summaryText.slice(headline.length)`, chopping an arbitrary number of characters off the remaining summary. Now guarded with `summaryText.startsWith(headline)` — matches the pattern already used in the 11-K template.
+- Weak quality gate test in `response-parser-normalization.test.ts` that only checked static schema metadata. Replaced with 8 new tests that actually call `parseResponse` with ticker-prefixed, form-type-prefixed, too-short, over-length, and generic-pattern headlines/emailSubjects, verifying the quality gate normalizes or drops them at runtime.
+
 ## [0.0.19.2] - 2026-04-16
 
 ### Added

@@ -156,9 +156,11 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
     }
   }
 
-  // Remaining summary after the headline
-  const remainingSummary = (headline && summaryText && summaryText.length > headline.length)
-    ? summaryText.slice(headline.length).trim()
+  // Remaining summary after the headline.
+  // Only slice when summaryText actually starts with headline (sentence-extraction path);
+  // when AI provided an independent headline, show the full summaryText as remaining.
+  const remainingSummary = summaryText && headline && summaryText !== headline
+    ? (summaryText.startsWith(headline) ? summaryText.slice(headline.length).trim() : summaryText)
     : '';
 
   // Build preheader text for inbox preview
