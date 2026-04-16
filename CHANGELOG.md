@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.19.4] - 2026-04-17
+
+### Fixed
+- Inconsistent CTA button colors on landing page. Navbar, pricing cards, and pre-footer CTA now use the same blue-to-purple gradient as the hero section instead of solid blue.
+
 ## [0.0.19.3] - 2026-04-16
 
 ### Fixed
