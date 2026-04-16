@@ -239,9 +239,9 @@
 
   /* Primary button style */
   .brand-button-primary {
-    @apply h-12 px-8 text-base font-semibold rounded-lg;
+    @apply h-12 px-8 text-base font-semibold rounded-lg text-white;
     background-color: var(--brand-primary);
-    color: white;
+    color: white !important;
     box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);
     transition: all 0.2s ease;
   }
@@ -273,13 +273,13 @@
 
   /* Gradient button style - matches brand-gradient-text colors */
   .brand-button-gradient {
-    @apply h-12 px-8 text-base font-semibold rounded-lg;
+    @apply h-12 px-8 text-base font-semibold rounded-lg text-white;
     background: linear-gradient(
       135deg,
       var(--brand-primary) 0%,
       var(--brand-accent) 100%
     );
-    color: white;
+    color: white !important;
     box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);
     transition: all 0.2s ease;
   }
