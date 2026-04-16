@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.19.1] - 2026-04-16
+
+### Changed
+- Summary detail page (`/summary/[id]`) now shows only the formatted view. Removed the "Raw Text" and "JSON" tabs that exposed internal data representations to end users.
+- Removed the visible card border on summary pages so the layout matches the borderless dashboard redesign.
+- Removed double padding around summary content (the outer `p-6` wrapper was duplicating the card's internal padding).
+
+### Removed
+- 3 npm packages no longer needed: `react-syntax-highlighter`, `react-json-tree`, `react-copy-to-clipboard` (and their `@types/` counterparts). Smaller bundle.
+- ~310 lines of dead code from `SummaryContent` (search handlers, copy/download buttons, JSON theme config, refs that only served the removed tabs).
+
+### Fixed
+- Test coverage gaps on the summary fallback path: added regression tests for XSS sanitization and invalid-JSON fallback rendering.
+- Stale references to uninstalled packages in `jest.config.mjs` cleaned up.
+
 ## [0.0.19.0] - 2026-04-16
 
 ### Changed
