@@ -106,4 +106,59 @@ describe('PricingSectionV2', () => {
     );
     expect(buttons.length).toBe(2);
   });
+
+  describe('hover toggle between cards', () => {
+    it('highlights Max and un-highlights Pro when hovering Max', () => {
+      render(<PricingSectionV2 />);
+      const cards = screen.getAllByRole('article');
+      const proCard = cards[0];
+      const maxCard = cards[1];
+
+      // Pro is highlighted by default (popular)
+      expect(proCard.getAttribute('data-highlighted')).toBe('true');
+      expect(maxCard.getAttribute('data-highlighted')).toBe('false');
+
+      // Hover Max
+      fireEvent.mouseEnter(maxCard);
+      expect(maxCard.getAttribute('data-highlighted')).toBe('true');
+      expect(proCard.getAttribute('data-highlighted')).toBe('false');
+    });
+
+    it('reverts to clicked state when hover ends', () => {
+      render(<PricingSectionV2 />);
+      const cards = screen.getAllByRole('article');
+      const proCard = cards[0];
+      const maxCard = cards[1];
+
+      // Hover Max, then leave
+      fireEvent.mouseEnter(maxCard);
+      fireEvent.mouseLeave(maxCard);
+
+      // Pro should be highlighted again (default click selection)
+      expect(proCard.getAttribute('data-highlighted')).toBe('true');
+      expect(maxCard.getAttribute('data-highlighted')).toBe('false');
+    });
+
+    it('click and hover are independent — hover temporarily overrides, click persists', () => {
+      render(<PricingSectionV2 />);
+      const cards = screen.getAllByRole('article');
+      const proCard = cards[0];
+      const maxCard = cards[1];
+
+      // Click Max to select it
+      fireEvent.click(maxCard);
+      expect(maxCard.getAttribute('data-highlighted')).toBe('true');
+      expect(proCard.getAttribute('data-highlighted')).toBe('false');
+
+      // Hover Pro — temporarily overrides
+      fireEvent.mouseEnter(proCard);
+      expect(proCard.getAttribute('data-highlighted')).toBe('true');
+      expect(maxCard.getAttribute('data-highlighted')).toBe('false');
+
+      // Leave hover — Max is still the clicked selection
+      fireEvent.mouseLeave(proCard);
+      expect(maxCard.getAttribute('data-highlighted')).toBe('true');
+      expect(proCard.getAttribute('data-highlighted')).toBe('false');
+    });
+  });
 });

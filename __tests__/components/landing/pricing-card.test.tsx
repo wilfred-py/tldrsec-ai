@@ -262,27 +262,13 @@ describe('PricingCard', () => {
       expect(onSelect).toHaveBeenCalledTimes(1);
     });
 
-    it('uses brand-button-gradient when card is hovered but not selected', () => {
+    it('uses brand-button-secondary when not selected (even if hovered)', () => {
       render(
         <PricingCard {...defaultProps} plan={maxPlan} hoveredCard="MAX" selectedCard="PRO" />
       );
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('brand-button-gradient');
-    });
-
-    it('uses brand-button-secondary when hovered but checkoutLoading is true', () => {
-      render(
-        <PricingCard
-          {...defaultProps}
-          plan={maxPlan}
-          hoveredCard="MAX"
-          selectedCard="PRO"
-          checkoutLoading={true}
-        />
-      );
-
-      const button = screen.getByRole('button');
+      // Hover alone no longer triggers gradient button — parent overrides selectedCard via hoveredCard ?? selectedCard
       expect(button.className).toContain('brand-button-secondary');
     });
 
