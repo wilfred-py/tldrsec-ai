@@ -14,8 +14,16 @@ All notable changes to this project will be documented in this file.
 ## [0.0.19.4] - 2026-04-17
 
 ### Fixed
+- Dashboard "minutes saved" counter typography too spaced apart. Removed redundant `letterSpacing: 0.02em` from CounterDisplay, changed DigitRoller width from `minWidth: 0.6em` to `width: 1ch` for exact tabular-nums fit, tightened container gap from `gap-3` to `gap-2`.
+- Hardcoded "Current waitlist count: X investors" screen reader text in CounterDisplay now configurable via `srLabel` prop. Dashboard passes contextual SR text; waitlist page unchanged.
+- Nested `role="status"` live regions between dashboard container and CounterDisplay caused double screen reader announcements. Added `suppressLiveRegion` prop to CounterDisplay.
 - Inconsistent CTA button colors on landing page. Navbar, pricing cards, and pre-footer CTA now use the same blue-to-purple gradient as the hero section instead of solid blue.
 - CTA button text now renders white regardless of theme. The shadcn Button default variant applied `text-primary-foreground` which resolved to near-black in dark mode, fighting the brand button CSS. Added `text-white` Tailwind class and `!important` to both `brand-button-primary` and `brand-button-gradient`.
+
+### Added
+- Animated "minutes saved" counter on dashboard. First visit animates from 0 to actual value; subsequent visits animate only the delta. Uses localStorage persistence, setTimeout-based stepping (500ms intervals matching DigitRoller's animation cadence), and easeOutQuad easing.
+- NaN/undefined guard on `totalTimeSavedMinutes` prevents the counter from displaying fallback value "147" if upstream data is malformed.
+- Tests for CounterDisplay props (`srLabel`, `suppressLiveRegion`) and `useAnimatedMinutes` hook (first visit, return visit, target=0, cleanup, corrupt localStorage).
 
 ## [0.0.19.3] - 2026-04-16
 
