@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.20.0] - 2026-04-17
+
+### Fixed
+- Health endpoint false-CRITICAL during EDGAR quiet hours (22:15-05:45 ET). Three time-sensitive conditions now suppressed overnight via `isEdgarOpen()`: no completions, cron execution gaps, and empty TickerMonitoring. Real CRITICAL conditions (stuck locks, exhausted retries, invalid job types) remain hot 24/7.
+- E2E pipeline recovery test suite pointed at deleted routes (`/api/health/pipeline`, `/api/cron/auto-recover`). Updated to current consolidated routes (`/api/health`, `/api/cron?action=auto-recover`). Test suite was dead since PR #371 route consolidation.
+
+### Added
+- `edgarOpen` field in `/api/health` response so monitoring integrations can distinguish quiet-hours from real outages.
+
 ## [0.0.19.4] - 2026-04-17
 
 ### Fixed

@@ -247,11 +247,11 @@ export async function getHealthStatus(): Promise<{
 }> {
   const baseUrl = process.env.PUBLIC_URL || process.env.TEST_URL || 'http://localhost:3000';
 
-  const response = await fetch(`${baseUrl}/api/health/pipeline`, {
+  const response = await fetch(`${baseUrl}/api/health`, {
     headers: { 'Cache-Control': 'no-cache' },
   });
 
-  if (!response.ok) {
+  if (!response.ok && response.status !== 503) {
     throw new Error(`Health check failed: ${response.status}`);
   }
 
@@ -270,7 +270,7 @@ export async function triggerAutoRecovery(): Promise<{
   const baseUrl = process.env.PUBLIC_URL || process.env.TEST_URL || 'http://localhost:3000';
   const cronSecret = process.env.CRON_SECRET || 'test-cron-secret';
 
-  const response = await fetch(`${baseUrl}/api/cron/auto-recover`, {
+  const response = await fetch(`${baseUrl}/api/cron?action=auto-recover`, {
     headers: {
       'x-cron-secret': cronSecret,
       'Cache-Control': 'no-cache'
