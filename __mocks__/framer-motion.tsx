@@ -45,5 +45,9 @@ function AnimatePresence({ children }: React.PropsWithChildren<Record<string, un
   return <>{children}</>;
 }
 
-export { motion, AnimatePresence };
-export default { motion, AnimatePresence };
+function useReducedMotion() {
+  return false;
+}
+
+export { motion, AnimatePresence, useReducedMotion };
+export default { motion, AnimatePresence, useReducedMotion };

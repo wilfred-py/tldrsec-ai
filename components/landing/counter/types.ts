@@ -13,6 +13,10 @@ export interface CounterDisplayProps {
   className?: string;
   /** Test ID for Playwright testing */
   'data-testid'?: string;
+  /** Custom screen reader text. Defaults to "Current waitlist count: {count} investors" */
+  srLabel?: string;
+  /** When true, omits role="status" / aria-live on the wrapper. Use when parent already has a live region. */
+  suppressLiveRegion?: boolean;
 }
 
 export interface DigitRollerProps {
