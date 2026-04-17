@@ -244,7 +244,7 @@ export function PricingSectionV2() {
               loading={false}
               checkoutLoading={loadingPlan === plan.key}
               hoveredCard={hoveredCard}
-              selectedCard={selectedCard}
+              selectedCard={hoveredCard ?? selectedCard}
               onMouseEnter={() => setHoveredCard(plan.key)}
               onMouseLeave={() => setHoveredCard(null)}
               onSelect={() => setSelectedCard(plan.key)}

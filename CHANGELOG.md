@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.20.1] - 2026-04-17
+
+### Changed
+- Pricing cards on the landing page now toggle their visual state on hover, not just on click. Hovering one card makes it look selected (blue border, slightly larger) while the other card reverts to unselected (gray border, normal size). The two cards are never both selected or both unselected at the same time, making the comparison clearer at a glance.
+
 ## [0.0.20.0] - 2026-04-17
 
 ### Fixed
