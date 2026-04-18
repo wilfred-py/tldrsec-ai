@@ -200,6 +200,15 @@
     color: var(--brand-secondary);
   }
 
+  /* Hero headline — cursor.com-style: semibold (not bold), tighter tracking, centered */
+  .brand-hero-display {
+    @apply text-[2.75rem] sm:text-6xl lg:text-[5.5rem] font-semibold leading-[1.05];
+    letter-spacing: -0.03em;
+    color: var(--brand-secondary);
+    max-width: 24ch;
+    margin-inline: auto;
+  }
+
   .brand-heading {
     @apply text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight;
     color: var(--brand-secondary);
