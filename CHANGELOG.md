@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.22.1] - 2026-04-18
+
+### Fixed
+- `useAnalytics` hook no longer calls Clerk's `useUser()` at the hook level. That broke SSG prerender of the landing page (PricingSectionV2 and HeroSectionV2 call the hook, and the landing page is built without a ClerkProvider). `identifyUser` now takes user info as an argument so callers with Clerk context pass it in themselves.
+- Unescaped apostrophes in `/companies/[ticker]` and `/filings/[type]` pages escaped to `&apos;` per `react/no-unescaped-entities`.
+- `__tests__/app/subscribe/page.test.tsx` now mocks `useAnalytics` (subscribe page imports it for `checkout_initiated` tracking) and the `next/navigation` mock exposes `usePathname` + `searchParams.entries()` that the hook uses.
+
 ## [0.0.22.0] - 2026-04-18
 
 ### Added
@@ -18,6 +25,13 @@ All notable changes to this project will be documented in this file.
 - Sitemap grows from 8 URLs to 16+ with explicit priorities: homepage 1.0, company hubs 0.8, filing-type guides and /companies directory 0.7, /s preview pages 0.6. Growth note in the sitemap for the sub-sitemap index split at 45k URLs.
 - PostHog provider now enables session recording globally with aggressive DOM masking (data-sensitive selector convention), person_profiles: 'identified_only' to save quota, and a referrer-derived traffic_source super-property.
 - /s/[ticker]/[filingType]/[accession] preview pages now fetch related filings for the same company and the matching filing-type guide slug for internal linking.
+
+## [0.0.21.1] - 2026-04-18
+
+### Changed
+- Pre-footer "Get Started" CTA now routes unauthenticated visitors to the sign-up form first, instead of hitting `/onboarding` and bouncing through a redirect. Aligns with the hero, navbar, and footer CTAs which all send anonymous users to `/sign-up`. Signed-in users continue to be routed to `/onboarding` or `/dashboard` by existing middleware.
+
+## [0.0.21.0] - 2026-04-18
 
 ### Changed
 - Landing hero redesigned to a cursor.com-style stacked layout: a bold one-liner headline, two CTAs, trust metrics row, and a large centered Gmail demo widget below. Replaces the cramped 50/50 split that made the demo too small to read.
