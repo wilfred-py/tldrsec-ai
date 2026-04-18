@@ -11,6 +11,8 @@ import {
 } from '@/lib/animations/landing-animations';
 import { HeroFilingCard } from './hero-filing-card';
 import { useAuth } from '@/contexts/auth-context';
+import { useAnalytics } from '@/lib/hooks/use-analytics';
+import { EVENTS } from '@/lib/analytics/events';
 
 /**
  * Trust metrics displayed in the hero section
@@ -33,10 +35,19 @@ const trustMetrics = [
  */
 export function HeroSectionV2() {
   const { isSignedIn, isOnboarded } = useAuth();
+  const { trackEvent } = useAnalytics();
 
   // Unauthenticated: go to sign-up. Signed in but not onboarded: go to onboarding. Onboarded: go to dashboard.
   const ctaHref = !isSignedIn ? '/sign-up' : !isOnboarded ? '/onboarding' : '/dashboard';
   const ctaLabel = !isSignedIn ? 'Start Free Trial' : !isOnboarded ? 'Complete Setup' : 'Go to Dashboard';
+
+  const handlePrimaryCtaClick = () => {
+    trackEvent(EVENTS.LANDING_CTA_CLICK, {
+      cta_location: 'hero',
+      cta_text: ctaLabel,
+      variant: !isSignedIn ? 'signed_out' : !isOnboarded ? 'onboarding' : 'dashboard',
+    });
+  };
 
   return (
     <section
@@ -123,7 +134,7 @@ export function HeroSectionV2() {
               variants={staggerItem}
               className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-6"
             >
-              <Link href={ctaHref}>
+              <Link href={ctaHref} onClick={handlePrimaryCtaClick}>
                 <Button className="brand-button-primary">
                   {ctaLabel}
                   <ArrowRight className="w-5 h-5 ml-2" />

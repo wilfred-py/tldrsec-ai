@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatDistanceToNow } from "date-fns";
+import { useAnalytics } from "@/lib/hooks/use-analytics";
+import { EVENTS } from "@/lib/analytics/events";
 
 export interface ActivitySummary {
   id: string;
@@ -243,10 +245,20 @@ function FeedCard({ summary, showEmailBadge = true }: { summary: ActivitySummary
   const relativeDate = formatDistanceToNow(new Date(summary.filingDate), {
     addSuffix: true,
   });
+  const { trackEvent } = useAnalytics();
+
+  const handleSummaryClick = () => {
+    trackEvent(EVENTS.SUMMARY_VIEWED, {
+      filing_type: summary.filingType,
+      ticker: summary.ticker,
+      source: 'dashboard',
+    });
+  };
 
   return (
     <Link
       href={`/summary/${summary.id}`}
+      onClick={handleSummaryClick}
       className={`block border-b border-[var(--brand-border)] px-3 py-3 transition-colors hover:bg-[var(--brand-bg-subtle)] ${borderClass}`}
     >
       <div className="flex items-start justify-between gap-2">

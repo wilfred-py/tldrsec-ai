@@ -22,6 +22,10 @@ import { ProfileStep } from "@/components/onboarding/profile-step";
 import type { CompanyItem } from "./types";
 import type { UserRole, AumBracket } from "@/components/onboarding/profile-step";
 import { TOTAL_STEPS } from "./types";
+import { useAnalytics } from "@/lib/hooks/use-analytics";
+import { EVENTS } from "@/lib/analytics/events";
+
+const STEP_NAMES = ["sectors", "companies", "profile"] as const;
 
 export default function OnboardingPage() {
   const { isLoading } = useAuthContext();
@@ -39,6 +43,11 @@ export default function OnboardingPage() {
   const equityNamesRef = useRef<Map<string, string>>(new Map());
   const submittingRef = useRef(false);
   const lastProfileRef = useRef<{ role: UserRole; aumBracket?: AumBracket; customRoleText?: string } | null>(null);
+
+  // Track onboarding funnel timing.
+  const onboardingStartRef = useRef<number>(Date.now());
+  const stepStartRef = useRef<number>(Date.now());
+  const { trackEvent } = useAnalytics();
 
   // Default preferences
   const [emailFrequency] = useState<NotificationPreference>(
@@ -91,6 +100,18 @@ export default function OnboardingPage() {
   // -----------------------------------------------------------------------
   const handleNext = () => {
     if (currentStep < TOTAL_STEPS) {
+      // Fire onboarding_step_completed for the step being left behind.
+      const now = Date.now();
+      const stepName = STEP_NAMES[currentStep - 1];
+      if (stepName) {
+        trackEvent(EVENTS.ONBOARDING_STEP_COMPLETED, {
+          step_name: stepName,
+          step_index: currentStep,
+          duration_ms: now - stepStartRef.current,
+        });
+      }
+      stepStartRef.current = now;
+
       setIsTransitioning(true);
       setTimeout(() => {
         setCurrentStep((s) => s + 1);
@@ -153,6 +174,19 @@ export default function OnboardingPage() {
       if (!result.success) {
         throw new Error(result.error || "Failed to complete onboarding");
       }
+
+      // Fire step_completed for profile step and onboarding_completed for funnel.
+      const now = Date.now();
+      trackEvent(EVENTS.ONBOARDING_STEP_COMPLETED, {
+        step_name: "profile",
+        step_index: TOTAL_STEPS,
+        duration_ms: now - stepStartRef.current,
+      });
+      trackEvent(EVENTS.ONBOARDING_COMPLETED, {
+        total_duration_ms: now - onboardingStartRef.current,
+        companies_count: formattedTickers.length,
+        sectors_count: selectedSectors.length,
+      });
 
       setShowTransition(true);
 

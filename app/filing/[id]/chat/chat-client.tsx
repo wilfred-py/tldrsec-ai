@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { useAnalytics } from '@/lib/hooks/use-analytics';
+import { EVENTS } from '@/lib/analytics/events';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -65,6 +67,7 @@ export function ChatClient({
   const [questionsUsed, setQuestionsUsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { trackEvent } = useAnalytics();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -89,6 +92,11 @@ export function ChatClient({
   const sendMessage = async () => {
     const trimmed = input.trim();
     if (!trimmed || isLoading || questionsUsed >= RATE_LIMIT) return;
+
+    trackEvent(EVENTS.FILING_CHAT_MESSAGE_SENT, {
+      filing_id: summaryId,
+      message_length: trimmed.length,
+    });
 
     const userMessage: ChatMessage = { role: 'user', content: trimmed };
     setMessages((prev) => [...prev, userMessage]);

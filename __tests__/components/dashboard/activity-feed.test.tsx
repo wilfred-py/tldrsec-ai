@@ -8,6 +8,16 @@ jest.mock('date-fns', () => ({
   formatDistanceToNow: () => '2 hours ago',
 }));
 
+// activity-feed now tracks summary_viewed via useAnalytics (which uses Clerk)
+jest.mock('@/lib/hooks/use-analytics', () => ({
+  useAnalytics: () => ({
+    trackEvent: jest.fn(),
+    trackRaw: jest.fn(),
+    trackPageView: jest.fn(),
+    identifyUser: jest.fn(),
+  }),
+}));
+
 function makeSummary(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
     id: 'test-id-1',

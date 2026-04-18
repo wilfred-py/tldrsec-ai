@@ -18,6 +18,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { useSubscriptionContext } from '@/contexts/subscription-context';
 import { PricingCard } from '@/components/landing/pricing-card';
 import { BillingToggle } from '@/components/billing/billing-toggle';
+import { useAnalytics } from '@/lib/hooks/use-analytics';
+import { EVENTS, type PlanTier } from '@/lib/analytics/events';
 
 /**
  * Pricing plans configuration
@@ -78,6 +80,7 @@ export function PricingSectionV2() {
 
   // Auth context
   const { isSignedIn, isLoaded, isOnboarded } = useAuth();
+  const { trackEvent } = useAnalytics();
 
   // Subscription context (with SWR caching + SSE)
   const { subscription, loading: subscriptionLoading, error } = useSubscriptionContext();
@@ -125,6 +128,13 @@ export function PricingSectionV2() {
   // Handle checkout/signup flow
   const handleCheckout = async (planKey: string) => {
     setLoadingPlan(planKey);
+
+    // Fire pricing_plan_selected for every click, regardless of auth state —
+    // the click is the interesting signal for the landing-page funnel.
+    trackEvent(EVENTS.PRICING_PLAN_SELECTED, {
+      plan: planKey.toLowerCase() as PlanTier,
+      billing_period: billingInterval,
+    });
 
     try {
       // Unauthenticated: redirect to sign-up with plan params
