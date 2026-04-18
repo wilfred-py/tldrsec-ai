@@ -21,11 +21,11 @@ describe('CTASectionV2', () => {
     expect(screen.getByText(/Start Monitoring/i)).toBeInTheDocument();
   });
 
-  it('should render Get Started CTA link to /onboarding', () => {
+  it('should render Get Started CTA link to /sign-up', () => {
     render(<CTASectionV2 />);
     const link = screen.getByRole('link', { name: /Get Started/i });
     expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', '/onboarding');
+    expect(link).toHaveAttribute('href', '/sign-up');
   });
 
   it('should display trust signals', () => {
