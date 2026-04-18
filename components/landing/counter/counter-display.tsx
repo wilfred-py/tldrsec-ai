@@ -17,7 +17,9 @@ export function CounterDisplay({
   isAnimating = false,
   onAnimationComplete,
   className = '',
-  'data-testid': testId = 'counter-display'
+  'data-testid': testId = 'counter-display',
+  srLabel,
+  suppressLiveRegion = false
 }: CounterDisplayProps) {
   // Sanitize and memoize count
   const safeCount = useMemo(() => sanitizeCount(count), [count]);
@@ -74,22 +76,23 @@ export function CounterDisplay({
     [digits.length, separatorPositions]
   );
 
+  const liveRegionProps = suppressLiveRegion
+    ? {}
+    : { role: 'status' as const, 'aria-live': 'polite' as const, 'aria-atomic': 'true' as const };
+
   return (
     <span
       className={`inline-flex items-center ${className}`}
       data-testid={testId}
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
+      {...liveRegionProps}
       style={{
         // Fixed font properties for consistent digit width
         fontVariantNumeric: 'tabular-nums',
-        fontWeight: 600,
-        letterSpacing: '0.02em'
+        fontWeight: 600
       }}
     >
       {/* Screen reader only text */}
-      <span className="sr-only">Current waitlist count: {safeCount.toLocaleString()} investors</span>
+      <span className="sr-only">{srLabel ?? `Current waitlist count: ${safeCount.toLocaleString()} investors`}</span>
 
       {/* Visual digit animation */}
       <span aria-hidden="true" className="inline-flex items-center">

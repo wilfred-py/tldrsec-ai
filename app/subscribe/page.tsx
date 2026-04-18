@@ -426,7 +426,6 @@ function SubscribePageContent() {
                 getPrice={getPrice}
                 getMonthlyEquivalent={getMonthlyEquivalent}
                 getSavings={getSavings}
-                forceHighlight={planKey === preSelectedPlan || undefined}
                 onDowngrade={buttonType === 'downgrade' ? () => setShowDowngradeConfirm(planKey) : undefined}
                 isDowngrading={downgradingTo === planKey}
               />

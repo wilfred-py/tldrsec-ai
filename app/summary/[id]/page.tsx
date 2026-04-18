@@ -122,9 +122,7 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
                 </div>
               </div>
 
-            <div className="rounded-lg p-6">
-              <SummaryContent summary={summary} />
-            </div>
+            <SummaryContent summary={summary} />
           </div>
         </main>
       </div>

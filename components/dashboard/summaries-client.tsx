@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
+import { useState } from "react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
 } from "@/components/ui/tabs";
 import { EmptyPlaceholder } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,105 +19,66 @@ import {
 } from "@/components/ui/select";
 import { SearchIcon, RefreshCw, FileTextIcon } from "lucide-react";
 import { SummaryCard } from "@/components/summary/summary-card";
-import { useAsync } from "@/lib/hooks/use-async";
-import { getRecentSummaries, SummaryWithTicker as ApiSummaryWithTicker } from "@/lib/api/summary-service";
 import { useRouter } from "next/navigation";
 
-// Use the API type directly to avoid type mismatches
-type SummaryWithTicker = ApiSummaryWithTicker;
+interface SummaryItem {
+  id: string;
+  filingType: string;
+  filingDate: string;
+  filingUrl: string;
+  summaryText: string;
+  importance: string | null;
+  smartSubject: string | null;
+  ticker: {
+    symbol: string;
+    companyName: string;
+  };
+}
 
-export function SummariesClient() {
+interface SummariesClientProps {
+  initialSummaries: SummaryItem[];
+}
+
+export function SummariesClient({ initialSummaries }: SummariesClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date-desc");
-  const [summaries, setSummaries] = useState<SummaryWithTicker[]>([]);
 
-  // Use the useAsync hook
-  const { isLoading, execute } = useAsync<SummaryWithTicker[]>(null);
-
-  // Load summaries on mount
-  useEffect(() => {
-    const fetchSummaries = async () => {
-      const result = await execute(async () => {
-        try {
-          const response = await getRecentSummaries();
-          // Ensure response is always an array
-          return { data: Array.isArray(response) ? response : [] };
-        } catch (error) {
-          console.error("Error fetching summaries:", error);
-          return { error: { status: 500, message: "Failed to fetch summaries" } };
-        }
-      });
-      
-      if (result.success && result.data) {
-        // Ensure we always set an array to summaries
-        setSummaries(Array.isArray(result.data) ? result.data : []);
-      }
-    };
-    
-    fetchSummaries();
-  }, [execute]);
-
-  // Function to handle search input changes
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   };
 
-  // Function to refresh summaries
   const handleRefresh = () => {
-    execute(async () => {
-      try {
-        const response = await getRecentSummaries();
-        // Ensure response is always an array
-        const data = Array.isArray(response) ? response : [];
-        setSummaries(data);
-        return { data };
-      } catch (error) {
-        console.error("Error fetching summaries:", error);
-        return { error: { status: 500, message: "Failed to fetch summaries" } };
-      }
-    });
     router.refresh();
   };
 
-  // Filter and sort summaries with better type safety
-  const filteredSummaries = (() => {
-    // Ensure summaries is an array before filtering
-    const summariesArray = Array.isArray(summaries) ? summaries : [];
-    
-    return summariesArray
-      .filter(summary => {
-        if (!summary) return false;
-        
-        // Apply search filter
-        const matchesSearch = searchTerm === "" || 
-          (summary.ticker?.symbol?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
-          (summary.ticker?.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
-          (summary.summaryText?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
-        
-        // Apply tab filter
-        const matchesFilter = 
-          filter === "all" || 
-          (filter === "10k" && summary.filingType === "10-K") ||
-          (filter === "10q" && summary.filingType === "10-Q") ||
-          (filter === "8k" && summary.filingType === "8-K");
-        
-        return matchesSearch && matchesFilter;
-      })
-      .sort((a, b) => {
-        // Apply sorting
-        if (sortBy === "date-desc") {
-          return new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime();
-        } else if (sortBy === "date-asc") {
-          return new Date(a.filingDate).getTime() - new Date(b.filingDate).getTime();
-        } else if (sortBy === "ticker") {
-          return a.ticker.symbol.localeCompare(b.ticker.symbol);
-        } else {
-          return 0;
-        }
-      });
-  })();
+  const filteredSummaries = initialSummaries
+    .filter((summary) => {
+      const matchesSearch =
+        searchTerm === "" ||
+        summary.ticker.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        summary.ticker.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        summary.summaryText?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "10k" && summary.filingType === "10-K") ||
+        (filter === "10q" && summary.filingType === "10-Q") ||
+        (filter === "8k" && summary.filingType === "8-K");
+
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      if (sortBy === "date-desc") {
+        return new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime();
+      } else if (sortBy === "date-asc") {
+        return new Date(a.filingDate).getTime() - new Date(b.filingDate).getTime();
+      } else if (sortBy === "ticker") {
+        return a.ticker.symbol.localeCompare(b.ticker.symbol);
+      }
+      return 0;
+    });
 
   return (
     <div className="space-y-6">
@@ -163,38 +124,24 @@ export function SummariesClient() {
           <TabsTrigger value="8k">8-K</TabsTrigger>
         </TabsList>
         <TabsContent value="all" className="mt-6">
-          {renderSummaryList(filteredSummaries, isLoading)}
+          {renderSummaryList(filteredSummaries)}
         </TabsContent>
         <TabsContent value="10k" className="mt-6">
-          {renderSummaryList(filteredSummaries, isLoading)}
+          {renderSummaryList(filteredSummaries)}
         </TabsContent>
         <TabsContent value="10q" className="mt-6">
-          {renderSummaryList(filteredSummaries, isLoading)}
+          {renderSummaryList(filteredSummaries)}
         </TabsContent>
         <TabsContent value="8k" className="mt-6">
-          {renderSummaryList(filteredSummaries, isLoading)}
+          {renderSummaryList(filteredSummaries)}
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function renderSummaryList(
-  summaries: SummaryWithTicker[],
-  isLoading: boolean
-) {
-  if (isLoading) {
-    return (
-      <div className="flex justify-center p-8">
-        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  // Extra safety check to ensure summaries is an array
-  const summariesArray = Array.isArray(summaries) ? summaries : [];
-  
-  if (summariesArray.length === 0) {
+function renderSummaryList(summaries: SummaryItem[]) {
+  if (summaries.length === 0) {
     return (
       <EmptyPlaceholder
         title="No summaries found"
@@ -206,9 +153,10 @@ function renderSummaryList(
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {summariesArray.map((summary) => (
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      {summaries.map((summary: any) => (
         <SummaryCard key={summary.id} summary={summary} />
       ))}
     </div>
   );
-} 
+}

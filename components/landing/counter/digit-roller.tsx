@@ -65,8 +65,8 @@ export function DigitRoller({
     <span
       className={`inline-block relative overflow-hidden ${className}`}
       style={{
-        // Fixed width prevents layout shift during animations
-        minWidth: '0.6em',
+        // 1ch = width of the "0" glyph in the current font, exact fit for tabular-nums
+        width: '1ch',
         minHeight: '1.2em', // ✅ FIX: Prevent container collapse during animations
         lineHeight: '1.2', // ✅ FIX: Consistent vertical rhythm
         textAlign: 'center',

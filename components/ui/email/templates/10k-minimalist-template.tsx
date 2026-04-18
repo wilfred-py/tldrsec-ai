@@ -65,15 +65,18 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
     (keyPoints && keyPoints.length > 0)
   );
 
-  // Lead sentence: first key point, or first financial highlight, or first sentence of summaryText
-  let leadSentence = '';
-  if (keyPoints && keyPoints.length > 0) {
-    leadSentence = keyPoints[0];
-  } else if (financialHighlights && financialHighlights.length > 0) {
-    const first = financialHighlights[0];
-    leadSentence = `${first.label}: ${first.value}${first.change ? ` (${first.change} YoY)` : ''}`;
-  } else if (summaryText) {
-    leadSentence = summaryText.split(/(?<=[.!?])\s+/)[0] || summaryText;
+  // Prefer AI-provided headline, fall back to structured extraction
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
+  let leadSentence = aiHeadline;
+  if (!leadSentence) {
+    if (keyPoints && keyPoints.length > 0) {
+      leadSentence = keyPoints[0];
+    } else if (financialHighlights && financialHighlights.length > 0) {
+      const first = financialHighlights[0];
+      leadSentence = `${first.label}: ${first.value}${first.change ? ` (${first.change} YoY)` : ''}`;
+    } else if (summaryText) {
+      leadSentence = summaryText.split(/(?<=[.!?])\s+/)[0] || summaryText;
+    }
   }
 
   // "Why it matters" context — pull revenue/earnings highlights or second key point

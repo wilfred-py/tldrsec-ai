@@ -213,11 +213,11 @@ describe('PricingCard', () => {
       expect(style).toContain('z-index: 10');
     });
 
-    it('uses brand-button-primary on CTA when card is selected', () => {
+    it('uses brand-button-gradient on CTA when card is selected', () => {
       render(<PricingCard {...defaultProps} selectedCard="PRO" />);
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('brand-button-primary');
+      expect(button.className).toContain('brand-button-gradient');
     });
 
     it('keeps brand-button-secondary on CTA when checkoutLoading even if selected', () => {
@@ -262,27 +262,13 @@ describe('PricingCard', () => {
       expect(onSelect).toHaveBeenCalledTimes(1);
     });
 
-    it('uses brand-button-primary when card is hovered but not selected', () => {
+    it('uses brand-button-secondary when not selected (even if hovered)', () => {
       render(
         <PricingCard {...defaultProps} plan={maxPlan} hoveredCard="MAX" selectedCard="PRO" />
       );
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('brand-button-primary');
-    });
-
-    it('uses brand-button-secondary when hovered but checkoutLoading is true', () => {
-      render(
-        <PricingCard
-          {...defaultProps}
-          plan={maxPlan}
-          hoveredCard="MAX"
-          selectedCard="PRO"
-          checkoutLoading={true}
-        />
-      );
-
-      const button = screen.getByRole('button');
+      // Hover alone no longer triggers gradient button — parent overrides selectedCard via hoveredCard ?? selectedCard
       expect(button.className).toContain('brand-button-secondary');
     });
 
@@ -338,17 +324,36 @@ describe('PricingCard', () => {
       expect(screen.getByTestId('loader-icon')).toBeInTheDocument();
     });
 
-    it('highlights non-popular card when forceHighlight is true', () => {
-      const { container } = render(
-        <PricingCard
-          {...defaultProps}
-          plan={maxPlan}
-          hoveredCard={null}
-          forceHighlight={true}
-        />
+  });
+
+  describe('card selection switching', () => {
+    it('switches highlight when selectedCard changes', () => {
+      const { container, rerender } = render(
+        <PricingCard {...defaultProps} plan={proPlanFixture} selectedCard="PRO" />
       );
 
       const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('true');
+
+      rerender(
+        <PricingCard {...defaultProps} plan={proPlanFixture} selectedCard="MAX" />
+      );
+
+      expect(card.getAttribute('data-highlighted')).toBe('false');
+    });
+
+    it('highlights Max card when selection switches from PRO to MAX', () => {
+      const { container, rerender } = render(
+        <PricingCard {...defaultProps} plan={maxPlan} selectedCard="PRO" />
+      );
+
+      const card = container.querySelector('[role="article"]') as HTMLElement;
+      expect(card.getAttribute('data-highlighted')).toBe('false');
+
+      rerender(
+        <PricingCard {...defaultProps} plan={maxPlan} selectedCard="MAX" />
+      );
+
       expect(card.getAttribute('data-highlighted')).toBe('true');
     });
   });

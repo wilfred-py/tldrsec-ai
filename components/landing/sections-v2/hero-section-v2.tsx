@@ -135,7 +135,7 @@ export function HeroSectionV2() {
               className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-6"
             >
               <Link href={ctaHref} onClick={handlePrimaryCtaClick}>
-                <Button className="brand-button-primary">
+                <Button className="brand-button-gradient">
                   {ctaLabel}
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>

@@ -2,6 +2,119 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.21.0] - 2026-04-18
+
+### Changed
+- Landing hero redesigned to a cursor.com-style stacked layout: a bold one-liner headline, two CTAs, trust metrics row, and a large centered Gmail demo widget below. Replaces the cramped 50/50 split that made the demo too small to read.
+- New headline copy: "SEC filings, read in 10 minutes instead of 10 hours." with the time comparison phrase in the brand gradient. Subhead names every filing type (10-K, 10-Q, 8-K, Form 4) so visitors understand scope in one scan.
+- Email detail drawer widths now scale responsively (88% mobile, 85% tablet, 75% small desktop, 65% large desktop), so the inbox stays visible alongside the detail panel on every screen size instead of being covered.
+- Email rows are now keyboard-focusable buttons with visible focus rings, fixing a pre-existing accessibility gap. Escape key closes the drawer and returns focus to the triggering row.
+
+### Added
+- Widget skeleton Suspense fallback on the landing page, so visitors on slow connections see something that looks like the real widget instead of a generic spinner during hydration.
+- `.brand-hero-display` CSS class for cursor-style headline typography (semibold weight, tighter letter-spacing, 24ch max-width).
+- First unit tests for the Gmail inbox hero component (11 tests covering render, keyboard nav, drawer behavior, focus return, responsive classes, and accessibility attributes). This file previously had zero test coverage.
+- `prefers-reduced-motion` gate on the email delivery animation: users with reduced-motion enabled see emails fade in instead of dropping from above.
+
+### Fixed
+- Mobile detail panel no longer traps users: previously it covered the entire inbox (users had to close it to see other emails). Now the inbox peeks from the left with a WCAG-compliant 44px tap handle.
+- Largest Contentful Paint improved by ~700ms on the landing page: the initial 6 email rows now render statically instead of staggering in with opacity:0, which was inflating LCP measurements.
+- Removed the dead expand-to-fullscreen mode and two decorative floating orbs from the hero, reducing visual accent conflict in the new centered layout.
+
+## [0.0.20.1] - 2026-04-17
+
+### Changed
+- Pricing cards on the landing page now toggle their visual state on hover, not just on click. Hovering one card makes it look selected (blue border, slightly larger) while the other card reverts to unselected (gray border, normal size). The two cards are never both selected or both unselected at the same time, making the comparison clearer at a glance.
+
+## [0.0.20.0] - 2026-04-17
+
+### Fixed
+- Health endpoint false-CRITICAL during EDGAR quiet hours (22:15-05:45 ET). Three time-sensitive conditions now suppressed overnight via `isEdgarOpen()`: no completions, cron execution gaps, and empty TickerMonitoring. Real CRITICAL conditions (stuck locks, exhausted retries, invalid job types) remain hot 24/7.
+- E2E pipeline recovery test suite pointed at deleted routes (`/api/health/pipeline`, `/api/cron/auto-recover`). Updated to current consolidated routes (`/api/health`, `/api/cron?action=auto-recover`). Test suite was dead since PR #371 route consolidation.
+
+### Added
+- `edgarOpen` field in `/api/health` response so monitoring integrations can distinguish quiet-hours from real outages.
+
+## [0.0.19.4] - 2026-04-17
+
+### Fixed
+- Dashboard "minutes saved" counter typography too spaced apart. Removed redundant `letterSpacing: 0.02em` from CounterDisplay, changed DigitRoller width from `minWidth: 0.6em` to `width: 1ch` for exact tabular-nums fit, tightened container gap from `gap-3` to `gap-2`.
+- Hardcoded "Current waitlist count: X investors" screen reader text in CounterDisplay now configurable via `srLabel` prop. Dashboard passes contextual SR text; waitlist page unchanged.
+- Nested `role="status"` live regions between dashboard container and CounterDisplay caused double screen reader announcements. Added `suppressLiveRegion` prop to CounterDisplay.
+- Inconsistent CTA button colors on landing page. Navbar, pricing cards, and pre-footer CTA now use the same blue-to-purple gradient as the hero section instead of solid blue.
+- CTA button text now renders white regardless of theme. The shadcn Button default variant applied `text-primary-foreground` which resolved to near-black in dark mode, fighting the brand button CSS. Added `text-white` Tailwind class and `!important` to both `brand-button-primary` and `brand-button-gradient`.
+
+### Added
+- Animated "minutes saved" counter on dashboard. First visit animates from 0 to actual value; subsequent visits animate only the delta. Uses localStorage persistence, setTimeout-based stepping (500ms intervals matching DigitRoller's animation cadence), and easeOutQuad easing.
+- NaN/undefined guard on `totalTimeSavedMinutes` prevents the counter from displaying fallback value "147" if upstream data is malformed.
+- Tests for CounterDisplay props (`srLabel`, `suppressLiveRegion`) and `useAnimatedMinutes` hook (first visit, return visit, target=0, cleanup, corrupt localStorage).
+
+## [0.0.19.3] - 2026-04-16
+
+### Fixed
+- Garbled email body in 5 minimalist templates (Form 4, Form 144, S-1, S-3, Generic) when AI-provided `headline` did not match the first sentence of `summaryText`. The code unconditionally sliced `summaryText.slice(headline.length)`, chopping an arbitrary number of characters off the remaining summary. Now guarded with `summaryText.startsWith(headline)` — matches the pattern already used in the 11-K template.
+- Weak quality gate test in `response-parser-normalization.test.ts` that only checked static schema metadata. Replaced with 8 new tests that actually call `parseResponse` with ticker-prefixed, form-type-prefixed, too-short, over-length, and generic-pattern headlines/emailSubjects, verifying the quality gate normalizes or drops them at runtime.
+
+## [0.0.19.2] - 2026-04-16
+
+### Added
+- `headline` and `emailSubject` fields added to AI schema for ALL filing types via `BASE_SCHEMA_PROPERTIES`. Every form type (10-K, 10-Q, Form 4, DEF 14A, Form 144, S-1, S-3, 11-K, Generic) now gets AI-generated headlines and subject lines.
+- Headline quality gate in `response-parser.ts`: strips ticker/form-type prefixes, rejects generic headlines (< 20 chars or starting with "this", "the company"), forcing templates to use existing fallback logic.
+- `emailSubject` quality gate: rejects subjects < 15 chars.
+- Zod validation for `headline` (max 120 chars) and `emailSubject` (max 100 chars) in all schema validators.
+- 18 new tests: schema coverage for headline/emailSubject across all 15 form types, headline normalization quality gate.
+
+### Changed
+- All 9 non-8-K email templates now prefer AI-provided `headline` over regex-parsed prose, with zero-risk fallback to existing extraction logic.
+- `subject-service.ts` uses AI `emailSubject` (30-120 chars) as first priority for all form types, falling back to existing smart extraction.
+
+## [0.0.19.1] - 2026-04-16
+
+### Changed
+- Summary detail page (`/summary/[id]`) now shows only the formatted view. Removed the "Raw Text" and "JSON" tabs that exposed internal data representations to end users.
+- Removed the visible card border on summary pages so the layout matches the borderless dashboard redesign.
+- Removed double padding around summary content (the outer `p-6` wrapper was duplicating the card's internal padding).
+
+### Removed
+- 3 npm packages no longer needed: `react-syntax-highlighter`, `react-json-tree`, `react-copy-to-clipboard` (and their `@types/` counterparts). Smaller bundle.
+- ~310 lines of dead code from `SummaryContent` (search handlers, copy/download buttons, JSON theme config, refs that only served the removed tabs).
+
+### Fixed
+- Test coverage gaps on the summary fallback path: added regression tests for XSS sanitization and invalid-JSON fallback rendering.
+- Stale references to uninstalled packages in `jest.config.mjs` cleaned up.
+
+## [0.0.19.0] - 2026-04-16
+
+### Changed
+- Dashboard loads progressively with React Suspense streaming. The page shell, tab structure, and tickers panel render in under 1 second. Stats and activity feed stream in independently as their database queries resolve. Previously everything blocked on a sequential data waterfall (4-5 seconds before any content appeared).
+- Dashboard decomposed from a single 597-line client component into focused pieces: `TickersPanel` (ticker CRUD), `DashboardOnboarding` (confetti, subscription toasts), and async server components for stats and activity. Each section has its own error boundary so one failure doesn't crash the whole page.
+- Summaries list page (`/dashboard/summaries`) now fetches real user data server-side instead of returning hardcoded mock summaries. Data streams via Suspense with a skeleton fallback.
+
+### Added
+- `SectionErrorBoundary` component for per-section error isolation on the dashboard.
+- `forceMount` on Radix Tabs content panels to prevent hydration mismatches with streamed Suspense content.
+
+## [0.0.18.0] - 2026-04-16
+
+### Fixed
+- Pricing card mobile highlight: tapping a different plan card now switches the blue highlight correctly on both the landing page and /subscribe route.
+- Removed `forceHighlight` prop that permanently locked the pre-selected card's highlight, preventing users from switching plans on /subscribe.
+- Wrapped `.brand-card:hover` CSS in `@media (hover: hover)` to prevent sticky hover states on mobile touch devices.
+
+### Changed
+- Replaced email input form in CTA section below pricing with a single "Get Started" button linking to /onboarding, reducing signup friction.
+
+## [0.0.17.1] - 2026-04-16
+
+### Fixed
+- Mobile hamburger menu now opens with a visible background instead of just borders.
+- All 384 theme color usages across 98 files now render correctly (were producing invalid `hsl(oklch(...))` CSS).
+- Dark mode borders and inputs use solid composited colors instead of broken semi-transparent oklch values.
+- Fintech brand color tokens unified to HSL format, matching the rest of the design system.
+
+### Added
+- Regression test guard preventing future shadcn CLI updates from regenerating oklch-format CSS variables.
+
 ## [0.0.17.0] - 2026-04-15
 
 ### Changed

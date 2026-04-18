@@ -57,10 +57,11 @@ export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateP
   // Build preheader text
   const preheaderText = `EMPLOYEE PLAN: ${companyName} (${displayTicker}) -- ${planName || '11-K filing'} ${planAssets ? `with ${planAssets} in assets` : ''}`;
 
-  // Build lead sentence
-  const leadText = planName
+  // Prefer AI-provided headline, fall back to structured synthesis
+  const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
+  const leadText = aiHeadline || (planName
     ? `${companyName} reported on ${planName}${planFiscalYear ? ` for fiscal year ${planFiscalYear}` : ''}.`
-    : summaryText?.split(/(?<=[.!?])\s+/)[0] || '';
+    : summaryText?.split(/(?<=[.!?])\s+/)[0] || '');
 
   // Remaining summary
   const remainingSummary = summaryText && leadText && summaryText !== leadText
