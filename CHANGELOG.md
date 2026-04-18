@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Hero headline rewording: "SEC filings, read in **minutes** instead of **hours**." (dropped the "10 minutes / 10 hours" literals since processing time varies by filing length and the generic phrasing is more honest).
 - Pricing card inactive-state CTA ("Upgrade to Pro/Max" on the card the user hasn't selected) now uses a muted treatment: soft gray fill (gray-100), readable dark text, no border. Previously the shadcn default dropped `bg-primary text-primary-foreground` on top of the brand class, making the inactive button render with invisible white text on a white card.
+- Pre-footer "Get Started" CTA now routes unauthenticated visitors to the sign-up form first, instead of hitting `/onboarding` and bouncing through a redirect. Aligns with the hero, navbar, and footer CTAs which all send anonymous users to `/sign-up`. Signed-in users continue to be routed to `/onboarding` or `/dashboard` by existing middleware.
 
 ### Fixed
 - Gradient CTA buttons: added `!important` to the `background:` declaration in `.brand-button-gradient`. Only `color: white !important` was in place, so the linear-gradient was still being overridden by Tailwind's `bg-primary` utility (shadcn's default Button variant), painting solid near-black over the gradient on navbar / hero / bottom / selected-pricing CTAs.
