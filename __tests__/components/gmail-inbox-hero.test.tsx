@@ -37,8 +37,8 @@ jest.mock('next/link', () => {
 describe('GmailInboxHero', () => {
   it('renders without crashing', () => {
     render(<GmailInboxHero />);
-    expect(screen.getByText('Summaries That')).toBeInTheDocument();
-    expect(screen.getByText('Actually Matter')).toBeInTheDocument();
+    expect(screen.getByText('minutes')).toBeInTheDocument();
+    expect(screen.getByText('hours')).toBeInTheDocument();
   });
 
   it('displays the main heading', () => {
@@ -54,14 +54,14 @@ describe('GmailInboxHero', () => {
 
   it('shows descriptive text', () => {
     render(<GmailInboxHero />);
-    expect(screen.getByText(/Transform 300\+ page SEC filings/)).toBeInTheDocument();
+    expect(screen.getByText(/AI-powered summaries/)).toBeInTheDocument();
   });
 
   it('handles empty state gracefully', () => {
     render(<GmailInboxHero />);
-    
+
     // Component should render even with no emails initially
-    expect(screen.getByText('Summaries That')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 
   it('accepts custom className prop', () => {

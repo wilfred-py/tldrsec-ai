@@ -973,7 +973,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
     <section
       ref={combinedRef}
       id="hero"
-      className={`relative min-h-[100vh] flex items-center overflow-hidden py-12 lg:py-0 ${className}`}
+      className={`relative overflow-hidden ${className}`}
       style={meshGradientStyle}
     >
       {/* Background orbs */}
@@ -996,42 +996,40 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
         />
       </div>
 
-      <div className="container mx-auto px-4 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-          {/* Left Column - Content */}
+      <div className="container mx-auto px-4 relative z-10 flex flex-col items-center">
+        {/* Hero text — centered vertically within the first ~80vh of viewport */}
+        <motion.div
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+          className="min-h-[80vh] flex flex-col justify-center text-center max-w-3xl mx-auto pt-24 pb-8 lg:pt-32"
+        >
+          <motion.h1 variants={staggerItem} className="brand-display mb-6">
+            Read SEC filings in <span className="brand-gradient-text">minutes</span>{' '}
+            instead of <span className="brand-gradient-text">hours</span>.
+          </motion.h1>
+
+          <motion.p variants={staggerItem} className="brand-body-large mb-8 max-w-xl mx-auto">
+            AI-powered summaries delivered to your inbox. Click any email to see the analysis.
+          </motion.p>
+
           <motion.div
-            variants={staggerContainer}
-            initial="initial"
-            animate="animate"
-            className="text-center lg:text-left"
+            variants={staggerItem}
+            className="flex flex-wrap justify-center gap-6 mb-8"
           >
-            <motion.h1 variants={staggerItem} className="brand-display mb-6">
-              Summaries That{' '}
-              <span className="brand-gradient-text">Actually Matter</span>
-            </motion.h1>
+            {trustMetrics.map((metric) => (
+              <div key={metric.label} className="brand-metric">
+                <CheckCircle2 className="w-5 h-5 text-[var(--brand-success)]" />
+                <span className="brand-metric-value">{metric.value}</span>
+                <span className="brand-metric-label">{metric.label}</span>
+              </div>
+            ))}
+          </motion.div>
 
-            <motion.p variants={staggerItem} className="brand-body-large mb-8 max-w-xl mx-auto lg:mx-0">
-              Transform 300+ page SEC filings into clear, actionable summaries
-              delivered to your inbox in minutes. Click any email to see the AI analysis.
-            </motion.p>
-
-            <motion.div
-              variants={staggerItem}
-              className="flex flex-wrap justify-center lg:justify-start gap-6 mb-8"
-            >
-              {trustMetrics.map((metric) => (
-                <div key={metric.label} className="brand-metric">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--brand-success)]" />
-                  <span className="brand-metric-value">{metric.value}</span>
-                  <span className="brand-metric-label">{metric.label}</span>
-                </div>
-              ))}
-            </motion.div>
-
-            <motion.div
-              variants={staggerItem}
-              className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-6"
-            >
+          <motion.div
+            variants={staggerItem}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6"
+          >
               {!isLoaded ? (
                 // Loading state - show skeleton button
                 <Skeleton className="h-11 w-48 rounded-lg" />
@@ -1067,15 +1065,15 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
             </motion.p>
           </motion.div>
 
-          {/* Right Column - Gmail Inbox */}
-          <motion.div
-            ref={containerRef}
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className={`relative ${isExpanded ? 'fixed inset-4 z-50' : ''}`}
-            layout
-          >
+        {/* Gmail Inbox — sits below hero text; top peeks above the fold, rest scrolls into view */}
+        <motion.div
+          ref={containerRef}
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className={`w-full pb-16 lg:pb-20 relative ${isExpanded ? 'fixed inset-4 z-50' : ''}`}
+          layout
+        >
             {/* Backdrop for expanded view */}
             <AnimatePresence>
               {isExpanded && (
@@ -1304,8 +1302,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                 }}
               />
             )}
-          </motion.div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

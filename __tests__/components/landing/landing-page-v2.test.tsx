@@ -67,9 +67,11 @@ describe('LandingPageV2', () => {
   it('should render all sections', () => {
     render(<LandingPageV2 />);
 
-    // Hero - verify key marketing copy renders
-    expect(screen.getByText(/Summaries That/i)).toBeInTheDocument();
-    expect(screen.getByText(/Actually Matter/i)).toBeInTheDocument();
+    // Hero - verify key marketing copy renders. The H1 splits across text nodes
+    // (gradient spans for "minutes" and "hours"), so check the heading element's
+    // accessible name rather than individual text fragments.
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1).toHaveTextContent(/Read SEC filings in minutes instead of hours/i);
 
     // Features
     expect(screen.getByText(/Built for Modern Investors/i)).toBeInTheDocument();

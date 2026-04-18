@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.21.0] - 2026-04-18
+
+### Changed
+- Landing hero rewritten: H1 is now "Read SEC filings in minutes instead of hours" with the time spans in the brand gradient. Hero text sits centered in the upper viewport; the Gmail inbox mock sits below and peeks above the fold so scrolling to see the full inbox feels intentional. Subheading tightened to one line.
+- Pricing card inactive-state CTA ("Upgrade to Pro/Max" on the card the user hasn't selected) now uses a muted treatment: soft gray fill slightly darker than the card, readable dark text, no border. Previously the shadcn default dropped `bg-primary text-primary-foreground` on top of the brand class, making the inactive button render near-black with invisible white text.
+
+### Fixed
+- Gradient CTA buttons (navbar, bottom CTA, selected pricing card) lost the CSS cascade to shadcn's default `bg-primary` utility because Tailwind's utilities layer ships after components. The gradient class now uses `!important` on its `background` declaration so the blue→purple gradient actually renders instead of falling through to solid near-black.
+
 ## [0.0.20.1] - 2026-04-17
 
 ### Changed
