@@ -41,6 +41,7 @@ jest.mock('framer-motion', () => ({
   },
   AnimatePresence: ({ children }: React.PropsWithChildren) => children,
   useInView: () => true,
+  useReducedMotion: () => false,
   useAnimation: () => ({ start: jest.fn(), stop: jest.fn() }),
   useMotionValue: () => ({ get: () => 0, set: jest.fn() }),
   useTransform: () => ({ get: () => 0 }),
@@ -68,8 +69,8 @@ describe('LandingPageV2', () => {
     render(<LandingPageV2 />);
 
     // Hero - verify key marketing copy renders
-    expect(screen.getByText(/Summaries That/i)).toBeInTheDocument();
-    expect(screen.getByText(/Actually Matter/i)).toBeInTheDocument();
+    expect(screen.getByText(/SEC filings, read/i)).toBeInTheDocument();
+    expect(screen.getByText(/in 10 minutes instead of 10 hours/i)).toBeInTheDocument();
 
     // Features
     expect(screen.getByText(/Built for Modern Investors/i)).toBeInTheDocument();

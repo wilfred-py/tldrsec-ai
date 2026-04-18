@@ -2,10 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.20.2] - 2026-04-18
+## [0.0.21.1] - 2026-04-18
 
 ### Changed
 - Pre-footer "Get Started" CTA now routes unauthenticated visitors to the sign-up form first, instead of hitting `/onboarding` and bouncing through a redirect. Aligns with the hero, navbar, and footer CTAs which all send anonymous users to `/sign-up`. Signed-in users continue to be routed to `/onboarding` or `/dashboard` by existing middleware.
+
+## [0.0.21.0] - 2026-04-18
+
+### Changed
+- Landing hero redesigned to a cursor.com-style stacked layout: a bold one-liner headline, two CTAs, trust metrics row, and a large centered Gmail demo widget below. Replaces the cramped 50/50 split that made the demo too small to read.
+- New headline copy: "SEC filings, read in 10 minutes instead of 10 hours." with the time comparison phrase in the brand gradient. Subhead names every filing type (10-K, 10-Q, 8-K, Form 4) so visitors understand scope in one scan.
+- Email detail drawer widths now scale responsively (88% mobile, 85% tablet, 75% small desktop, 65% large desktop), so the inbox stays visible alongside the detail panel on every screen size instead of being covered.
+- Email rows are now keyboard-focusable buttons with visible focus rings, fixing a pre-existing accessibility gap. Escape key closes the drawer and returns focus to the triggering row.
+
+### Added
+- Widget skeleton Suspense fallback on the landing page, so visitors on slow connections see something that looks like the real widget instead of a generic spinner during hydration.
+- `.brand-hero-display` CSS class for cursor-style headline typography (semibold weight, tighter letter-spacing, 24ch max-width).
+- First unit tests for the Gmail inbox hero component (11 tests covering render, keyboard nav, drawer behavior, focus return, responsive classes, and accessibility attributes). This file previously had zero test coverage.
+- `prefers-reduced-motion` gate on the email delivery animation: users with reduced-motion enabled see emails fade in instead of dropping from above.
+
+### Fixed
+- Mobile detail panel no longer traps users: previously it covered the entire inbox (users had to close it to see other emails). Now the inbox peeks from the left with a WCAG-compliant 44px tap handle.
+- Largest Contentful Paint improved by ~700ms on the landing page: the initial 6 email rows now render statically instead of staggering in with opacity:0, which was inflating LCP measurements.
+- Removed the dead expand-to-fullscreen mode and two decorative floating orbs from the hero, reducing visual accent conflict in the new centered layout.
 
 ## [0.0.20.1] - 2026-04-17
 
