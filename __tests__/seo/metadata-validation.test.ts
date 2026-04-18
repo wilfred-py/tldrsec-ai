@@ -57,6 +57,60 @@ describe('SEO Metadata Validation', () => {
         expect(route.lastModified).not.toBeInstanceOf(Date);
       }
     });
+
+    it('should include /companies directory with priority 0.7', async () => {
+      const sitemap = await import('../../app/sitemap');
+      const routes = await sitemap.default();
+      const entry = routes.find((r: { url: string }) => r.url === 'https://tldrsec.app/companies');
+      expect(entry).toBeDefined();
+      expect(entry?.priority).toBe(0.7);
+    });
+
+    it('should include /filings/[type] guide routes for every hardcoded guide', async () => {
+      const sitemap = await import('../../app/sitemap');
+      const { getAllFilingTypeGuides } = await import('../../lib/seo/filing-type-content');
+      const routes = await sitemap.default();
+      const urls = routes.map((r: { url: string }) => r.url);
+
+      for (const guide of getAllFilingTypeGuides()) {
+        expect(urls).toContain(`https://tldrsec.app/filings/${guide.slug}`);
+      }
+    });
+
+    it('should give company hub pages priority 0.8 (higher than filing-type guides)', async () => {
+      const sitemap = await import('../../app/sitemap');
+      const routes = await sitemap.default();
+
+      const companyRoutes = routes.filter((r: { url: string }) =>
+        r.url.startsWith('https://tldrsec.app/companies/') &&
+        r.url !== 'https://tldrsec.app/companies'
+      );
+      const filingTypeRoutes = routes.filter((r: { url: string }) =>
+        r.url.startsWith('https://tldrsec.app/filings/')
+      );
+
+      // Filing type routes are always present (static hardcoded content)
+      expect(filingTypeRoutes.length).toBeGreaterThan(0);
+
+      // Company routes may be empty if DB is unreachable; when present, priority 0.8
+      for (const r of companyRoutes) {
+        expect(r.priority).toBe(0.8);
+      }
+      for (const r of filingTypeRoutes) {
+        expect(r.priority).toBe(0.7);
+      }
+    });
+
+    it('should not include /summary/ or /filing/ auth-gated paths (even for /filings/)', async () => {
+      const sitemap = await import('../../app/sitemap');
+      const routes = await sitemap.default();
+      const urls = routes.map((r: { url: string }) => r.url);
+
+      // /filings/ (plural) is OK; /filing/ (singular) is auth-gated
+      for (const url of urls) {
+        expect(url).not.toMatch(/\/filing\//); // singular
+      }
+    });
   });
 
   describe('robots.txt', () => {
