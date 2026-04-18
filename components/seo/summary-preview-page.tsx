@@ -1,8 +1,20 @@
 import Link from 'next/link';
 import { format } from 'date-fns';
-import type { SummaryPreview } from '@/lib/seo/summary-preview';
+import type { SummaryPreview, RelatedFiling } from '@/lib/seo/summary-preview';
 
-export function SummaryPreviewPage({ preview }: { preview: SummaryPreview }) {
+interface Props {
+  preview: SummaryPreview;
+  relatedFilings?: RelatedFiling[];
+  companyHubAvailable?: boolean;
+  filingTypeGuideSlug?: string | null;
+}
+
+export function SummaryPreviewPage({
+  preview,
+  relatedFilings = [],
+  companyHubAvailable = false,
+  filingTypeGuideSlug = null,
+}: Props) {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Article',
@@ -45,7 +57,7 @@ export function SummaryPreviewPage({ preview }: { preview: SummaryPreview }) {
           <p>{preview.previewText}</p>
         </section>
 
-        <section className="bg-blue-50 rounded-lg p-6 text-center">
+        <section className="bg-blue-50 rounded-lg p-6 text-center mb-8">
           <h2 className="text-xl font-semibold mb-2">
             Read the full AI analysis
           </h2>
@@ -61,9 +73,57 @@ export function SummaryPreviewPage({ preview }: { preview: SummaryPreview }) {
           </Link>
         </section>
 
+        {/* Internal linking: help crawlers and readers discover related pages */}
+        {(relatedFilings.length > 0 || companyHubAvailable || filingTypeGuideSlug) && (
+          <section className="mb-8 border-t border-gray-100 pt-8">
+            <h2 className="text-xl font-semibold mb-4">Related</h2>
+
+            {companyHubAvailable && (
+              <p className="mb-3 text-sm">
+                <Link href={`/companies/${preview.ticker}`} className="text-blue-600 hover:underline">
+                  &rarr; All {preview.companyName} SEC filings
+                </Link>
+              </p>
+            )}
+
+            {filingTypeGuideSlug && (
+              <p className="mb-3 text-sm">
+                <Link href={`/filings/${filingTypeGuideSlug}`} className="text-blue-600 hover:underline">
+                  &rarr; What is {preview.filingType}?
+                </Link>
+              </p>
+            )}
+
+            {relatedFilings.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">
+                  More {preview.ticker} filings
+                </h3>
+                <ul className="space-y-1 text-sm">
+                  {relatedFilings.map((f) => (
+                    <li key={f.accessionNumber}>
+                      <Link
+                        href={`/s/${preview.ticker}/${f.formType}/${f.accessionNumber}`}
+                        className="text-gray-700 hover:text-blue-600 hover:underline"
+                      >
+                        {f.formType} &mdash;{' '}
+                        {format(new Date(f.filingDate), 'MMM d, yyyy')}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
+
         <nav className="mt-8 text-sm text-gray-500">
           <Link href="/" className="hover:underline">
             Home
+          </Link>
+          {' \u00b7 '}
+          <Link href="/companies" className="hover:underline">
+            Companies
           </Link>
           {' \u00b7 '}
           <Link href="/subscribe" className="hover:underline">

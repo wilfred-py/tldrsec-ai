@@ -11,6 +11,15 @@ import {
 const mockUseAuth = jest.fn();
 const mockUseSubscriptionContext = jest.fn();
 
+jest.mock('@/lib/hooks/use-analytics', () => ({
+  useAnalytics: () => ({
+    trackEvent: jest.fn(),
+    trackRaw: jest.fn(),
+    trackPageView: jest.fn(),
+    identifyUser: jest.fn(),
+  }),
+}));
+
 jest.mock('@/contexts/auth-context', () => ({
   useAuth: () => mockUseAuth(),
 }));

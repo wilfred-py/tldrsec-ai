@@ -13,6 +13,24 @@ import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
 import { validateWebhookSignature, getPlanTypeFromPriceId, stripe } from '@/lib/stripe';
 import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod } from '@/lib/stripe/sync-subscription';
 import Stripe from 'stripe';
+import { waitUntil } from '@vercel/functions';
+import { captureServerEvent, shutdownServerPostHog } from '@/lib/analytics/posthog-server';
+import { EVENTS, type PlanTier, type BillingPeriod } from '@/lib/analytics/events';
+
+function mapPlanType(planType: string | null | undefined): PlanTier {
+  const lower = (planType || 'free').toLowerCase();
+  if (lower === 'pro' || lower === 'max' || lower === 'starter') return lower;
+  return 'free';
+}
+
+function inferBillingPeriod(session: Stripe.Checkout.Session | Stripe.Subscription): BillingPeriod {
+  // Checkout session carries this on the line_items; subscription on items.data[0].price.recurring.interval
+  if ('items' in session) {
+    const interval = session.items?.data?.[0]?.price?.recurring?.interval;
+    return interval === 'year' ? 'annual' : 'monthly';
+  }
+  return 'monthly';
+}
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -183,9 +201,14 @@ async function handleStripeWebhook(request: Request) {
         console.log(`Unhandled event type: ${event.type}`);
     }
 
+    // Flush any queued PostHog server events before the serverless fn terminates.
+    // Non-blocking for the HTTP response; Vercel keeps the fn alive until the promise settles.
+    waitUntil(shutdownServerPostHog());
+
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error('Webhook processing error:', error);
+    waitUntil(shutdownServerPostHog());
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }
@@ -280,6 +303,24 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
     await syncUserSubscriptionTier(userId, planType);
     console.log(`Subscription activated for user ${userId}, plan: ${planType}`);
+
+    // Server-side analytics: the *real* checkout_completed event (client-side
+    // checkout_initiated fires before the Stripe redirect, so this is the
+    // ground-truth conversion).
+    try {
+      const amountCents = typeof session.amount_total === 'number' ? session.amount_total : 0;
+      const currency = session.currency?.toUpperCase() || 'USD';
+      captureServerEvent(userId, EVENTS.CHECKOUT_COMPLETED, {
+        plan: mapPlanType(planType),
+        // Checkout session doesn't always carry interval explicitly; default to monthly.
+        // (handleSubscriptionCreated below has the recurring.interval and will fire TRIAL_STARTED if needed.)
+        billing_period: 'monthly',
+        amount_cents: amountCents,
+        currency,
+      });
+    } catch (analyticsErr) {
+      console.error('[webhook] PostHog capture failed (non-fatal):', analyticsErr);
+    }
   } catch (error) {
     console.error('Failed to process checkout completion:', error);
   }
@@ -333,6 +374,19 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       },
     });
     await syncUserSubscriptionTier(userSubscription.userId, planType);
+
+    // Server-side analytics: TRIAL_STARTED fires when the subscription enters
+    // trialing status (Stripe creates subscription with status=trialing when
+    // checkout uses trial_period_days).
+    try {
+      if (subscription.status === 'trialing') {
+        captureServerEvent(userSubscription.userId, EVENTS.TRIAL_STARTED, {
+          plan: mapPlanType(planType),
+        });
+      }
+    } catch (analyticsErr) {
+      console.error('[webhook] PostHog capture failed (non-fatal):', analyticsErr);
+    }
   } catch (error) {
     console.error('Failed to process subscription creation:', error);
   }
@@ -352,6 +406,12 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     const priceId = subscription.items.data[0]?.price.id;
     const planType = getPlanTypeFromPriceId(priceId);
     const period = getSubscriptionPeriod(subscription);
+
+    // Detect trial -> paid conversion: prior status was trialing, new is active.
+    const wasTrialing = userSubscription.isActive && userSubscription.planType !== 'FREE';
+    const nowActive = subscription.status === 'active';
+    const shouldFireTrialConverted = nowActive && wasTrialing;
+
     await prisma.userSubscription.update({
       where: { userId: userSubscription.userId },
       data: {
@@ -365,6 +425,17 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       },
     });
     await syncUserSubscriptionTier(userSubscription.userId, planType);
+
+    try {
+      if (shouldFireTrialConverted) {
+        captureServerEvent(userSubscription.userId, EVENTS.TRIAL_CONVERTED, {
+          plan: mapPlanType(planType),
+          billing_period: inferBillingPeriod(subscription),
+        });
+      }
+    } catch (analyticsErr) {
+      console.error('[webhook] PostHog capture failed (non-fatal):', analyticsErr);
+    }
   } catch (error) {
     console.error('Failed to process subscription update:', error);
   }

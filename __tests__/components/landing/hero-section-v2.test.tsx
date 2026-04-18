@@ -7,6 +7,16 @@ jest.mock('@/contexts/auth-context', () => ({
   useAuth: () => ({ isSignedIn: false, isLoaded: true, user: null }),
 }));
 
+// Mock analytics (uses Clerk useUser + Next navigation hooks under the hood)
+jest.mock('@/lib/hooks/use-analytics', () => ({
+  useAnalytics: () => ({
+    trackEvent: jest.fn(),
+    trackRaw: jest.fn(),
+    trackPageView: jest.fn(),
+    identifyUser: jest.fn(),
+  }),
+}));
+
 // Mock framer-motion to avoid animation issues in tests
 jest.mock('framer-motion', () => ({
   motion: {

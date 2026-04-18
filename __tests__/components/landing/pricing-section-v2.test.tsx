@@ -21,6 +21,15 @@ jest.mock('@/contexts/subscription-context', () => ({
   }),
 }));
 
+jest.mock('@/lib/hooks/use-analytics', () => ({
+  useAnalytics: () => ({
+    trackEvent: jest.fn(),
+    trackRaw: jest.fn(),
+    trackPageView: jest.fn(),
+    identifyUser: jest.fn(),
+  }),
+}));
+
 jest.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <div {...props}>{children}</div>,

@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getSummaryPreview } from '@/lib/seo/summary-preview';
+import { getSummaryPreview, getRelatedFilings } from '@/lib/seo/summary-preview';
 import { SummaryPreviewPage } from '@/components/seo/summary-preview-page';
+import { getFilingTypeGuide } from '@/lib/seo/filing-type-content';
+import { getCompanyMeta } from '@/lib/seo/company-metadata';
 
 // Previews are immutable — revalidate once per day
 export const revalidate = 86400;
@@ -49,5 +51,35 @@ export default async function PreviewPage({ params }: Props) {
     notFound();
   }
 
-  return <SummaryPreviewPage preview={preview} />;
+  // Internal linking: related filings for same company + filing type guide + company hub.
+  const [relatedFilings, companyMeta] = await Promise.all([
+    getRelatedFilings(preview.ticker, preview.accessionNumber, 6),
+    Promise.resolve(getCompanyMeta(preview.ticker)),
+  ]);
+
+  // Map the filing type to a guide slug if we have one (e.g. "10-K" -> "10-k")
+  const guideSlug = findGuideSlugForFormType(preview.filingType);
+
+  return (
+    <SummaryPreviewPage
+      preview={preview}
+      relatedFilings={relatedFilings}
+      companyHubAvailable={companyMeta !== null}
+      filingTypeGuideSlug={guideSlug}
+    />
+  );
+}
+
+function findGuideSlugForFormType(formType: string): string | null {
+  const normalized = formType.replace(/\s+/g, '').toUpperCase();
+  // Try exact match first, then common variants.
+  const candidates = [
+    normalized.toLowerCase(),
+    normalized.replace(/-/g, '').toLowerCase(),
+    `form-${normalized.toLowerCase()}`,
+  ];
+  for (const slug of candidates) {
+    if (getFilingTypeGuide(slug)) return slug;
+  }
+  return null;
 }

@@ -16,6 +16,19 @@ jest.mock('next/navigation', () => ({
   }),
   useSearchParams: () => ({
     get: mockSearchParamsGet,
+    entries: () => [].values(),
+  }),
+  usePathname: () => '/subscribe',
+}));
+
+// subscribe page now imports useAnalytics — mock it so the page renders
+// without pulling in Clerk/Next hooks during test.
+jest.mock('@/lib/hooks/use-analytics', () => ({
+  useAnalytics: () => ({
+    trackEvent: jest.fn(),
+    trackRaw: jest.fn(),
+    trackPageView: jest.fn(),
+    identifyUser: jest.fn(),
   }),
 }));
 

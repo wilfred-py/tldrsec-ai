@@ -101,6 +101,48 @@ export async function getRecentFilingsForSitemap(limit = 500) {
 }
 
 /**
+ * Related filings for the same ticker, excluding the current accession number.
+ * Used for internal linking on `/s/[ticker]/[filingType]/[accession]` preview pages.
+ */
+export interface RelatedFiling {
+  accessionNumber: string;
+  formType: string;
+  filingDate: Date;
+}
+
+export async function getRelatedFilings(
+  ticker: string,
+  excludeAccession: string,
+  limit = 6,
+): Promise<RelatedFiling[]> {
+  try {
+    const prisma = getPrismaClient();
+
+    const rows = await prisma.secFiling.findMany({
+      where: {
+        ticker: { symbol: ticker.toUpperCase() },
+        accessionNumber: { not: excludeAccession },
+        summaries: {
+          some: { processingStatus: 'completed', summaryText: { not: '' } },
+        },
+      },
+      orderBy: { filingDate: 'desc' },
+      take: limit * 2, // over-fetch to survive distinct
+      distinct: ['accessionNumber'],
+      select: {
+        accessionNumber: true,
+        formType: true,
+        filingDate: true,
+      },
+    });
+
+    return rows.slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Truncate text to approximately N words, preferring sentence boundaries.
  */
 function truncateToWords(text: string, maxWords: number): string {

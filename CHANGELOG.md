@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.22.1] - 2026-04-18
+
+### Fixed
+- `useAnalytics` hook no longer calls Clerk's `useUser()` at the hook level. That broke SSG prerender of the landing page (PricingSectionV2 and HeroSectionV2 call the hook, and the landing page is built without a ClerkProvider). `identifyUser` now takes user info as an argument so callers with Clerk context pass it in themselves.
+- Unescaped apostrophes in `/companies/[ticker]` and `/filings/[type]` pages escaped to `&apos;` per `react/no-unescaped-entities`.
+- `__tests__/app/subscribe/page.test.tsx` now mocks `useAnalytics` (subscribe page imports it for `checkout_initiated` tracking) and the `next/navigation` mock exposes `usePathname` + `searchParams.entries()` that the hook uses.
+
+## [0.0.22.0] - 2026-04-18
+
+### Added
+- Two new indexable content hierarchies for organic search acquisition: a /companies directory grouped by sector and 15 per-company hubs (e.g., /companies/NVDA) with recent filings, filing-type breakdown, and Corporation JSON-LD.
+- 8 educational filing-type guide pages at /filings/[type] (10-K, 10-Q, 8-K, Form 4, Form 144, DEF 14A, S-1, S-3) explaining each form, who files it, and why it matters, with live examples pulled from the database.
+- Internal linking on /s/ preview pages now cross-links to the matching company hub and filing-type guide, plus a "More {ticker} filings" list to distribute crawl budget.
+- Server-side PostHog event capture for the real checkout funnel ground truth: checkout_completed, trial_started, and trial_converted fire from the Stripe webhook, flushed via Vercel's waitUntil so events survive serverless termination.
+- Client-side structured events for the landing-to-paid funnel that autocapture can't infer: landing_cta_click, pricing_plan_selected, onboarding_step_completed/completed (with duration and counts), checkout_initiated, summary_viewed, and filing_chat_message_sent.
+- Shared event taxonomy (lib/analytics/events.ts) used by both client and server via a discriminated union, so a rename on one side updates the other.
+- Traffic source classification (organic / social / direct / email / internal) stamped as a super-property on every PostHog event, with 15+ fixture tests covering search engines, social platforms, Google AMP cache, android-app schemes, and email UTMs.
+- Hardcoded sector/industry metadata for all 15 tracked companies (lib/seo/company-metadata.ts), used by the company directory and related-companies section.
+
+### Changed
+- Sitemap grows from 8 URLs to 16+ with explicit priorities: homepage 1.0, company hubs 0.8, filing-type guides and /companies directory 0.7, /s preview pages 0.6. Growth note in the sitemap for the sub-sitemap index split at 45k URLs.
+- PostHog provider now enables session recording globally with aggressive DOM masking (data-sensitive selector convention), person_profiles: 'identified_only' to save quota, and a referrer-derived traffic_source super-property.
+- /s/[ticker]/[filingType]/[accession] preview pages now fetch related filings for the same company and the matching filing-type guide slug for internal linking.
+
 ## [0.0.21.1] - 2026-04-18
 
 ### Changed

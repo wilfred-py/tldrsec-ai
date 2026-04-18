@@ -25,6 +25,8 @@ import {
 import { PricingCard } from '@/components/landing/pricing-card';
 import { BillingToggle } from '@/components/billing/billing-toggle';
 import type { UserSubscription } from '@/lib/types/subscription';
+import { useAnalytics } from '@/lib/hooks/use-analytics';
+import { EVENTS, type PlanTier } from '@/lib/analytics/events';
 
 const PLAN_ORDER: PlanType[] = ['PRO', 'MAX'];
 const PLAN_RANK: Record<PlanType, number> = { FREE: 0, PRO: 1, MAX: 2 };
@@ -62,6 +64,7 @@ function SubscribePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isLoaded } = useUser();
+  const { trackEvent } = useAnalytics();
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
@@ -230,6 +233,13 @@ function SubscribePageContent() {
       }
 
       if (data.checkoutUrl) {
+        // Track checkout intent right before redirecting to Stripe.
+        // Server-side `checkout_completed` fires from the Stripe webhook.
+        trackEvent(EVENTS.CHECKOUT_INITIATED, {
+          plan: pt.toLowerCase() as PlanTier,
+          billing_period: billingInterval,
+          source: 'subscribe_page',
+        });
         window.location.href = data.checkoutUrl;
       }
     } catch {
