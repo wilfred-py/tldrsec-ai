@@ -110,7 +110,7 @@ export default async function CompanyHubPage({ params }: Props) {
           </p>
           <p className="text-gray-700">
             We have AI-summarized {totalFilings} SEC filing{totalFilings === 1 ? '' : 's'} for {meta.name}.
-            Get new summaries delivered to your inbox as they're filed.
+            Get new summaries delivered to your inbox as they&apos;re filed.
           </p>
           <div className="mt-4">
             <Link
@@ -189,7 +189,7 @@ export default async function CompanyHubPage({ params }: Props) {
         {/* CTA */}
         <section className="bg-blue-50 rounded-lg p-6 text-center">
           <h2 className="text-xl font-semibold mb-2">
-            Don't miss a {meta.ticker} filing
+            Don&apos;t miss a {meta.ticker} filing
           </h2>
           <p className="text-gray-600 mb-4">
             Get AI-generated summaries of every new {meta.name} SEC filing in your inbox.

@@ -165,7 +165,7 @@ export default async function FilingTypeGuidePage({ params }: Props) {
             Get {guide.name} summaries in your inbox
           </h2>
           <p className="text-gray-600 mb-4">
-            Pick the companies you care about and we'll send AI summaries of every {guide.name} filing as they're posted.
+            Pick the companies you care about and we&apos;ll send AI summaries of every {guide.name} filing as they&apos;re posted.
           </p>
           <Link
             href="/sign-up"

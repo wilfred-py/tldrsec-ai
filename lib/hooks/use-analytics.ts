@@ -3,22 +3,19 @@
 import { useCallback } from 'react';
 import posthog from 'posthog-js';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
 import type { EventName, EventProps } from '@/lib/analytics/events';
 
 export type EventProperties = Record<string, unknown>;
 
 /**
- * Custom hook for tracking events and page views with PostHog.
+ * PostHog event tracking hook.
  *
- * `trackEvent<E>(event, props)` is generic over the event name and enforces
- * correct property shape per event via `EventProps[E]`.
- *
- * `trackRaw(name, props)` is the untyped escape hatch for ad-hoc events
- * that aren't in the registry yet. Prefer `trackEvent`.
+ * Does NOT call Clerk's useUser() at the hook level — that breaks SSG prerender
+ * of the landing page (which has no ClerkProvider at build time). Callers that
+ * want to associate a PostHog distinct ID with a Clerk user call
+ * `identifyUser(user)` and pass their own user context in.
  */
 export const useAnalytics = () => {
-  const { user } = useUser();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -64,16 +61,29 @@ export const useAnalytics = () => {
     [pathname, searchParams]
   );
 
-  const identifyUser = useCallback(() => {
-    if (typeof window !== 'undefined' && posthog && user) {
-      posthog.identify(user.id, {
-        email: user.primaryEmailAddress?.emailAddress,
-        name: user.fullName || user.username,
-        username: user.username,
-        clerk_id: user.id,
-      });
-    }
-  }, [user]);
+  /**
+   * Associate the current anonymous PostHog session with a known user.
+   * Pass the user from your own Clerk context (useUser) — the hook does not
+   * call useUser itself so it stays safe to use on SSG pages.
+   */
+  const identifyUser = useCallback(
+    (user: {
+      id: string;
+      email?: string | null;
+      name?: string | null;
+      username?: string | null;
+    }) => {
+      if (typeof window !== 'undefined' && posthog) {
+        posthog.identify(user.id, {
+          email: user.email ?? undefined,
+          name: user.name ?? undefined,
+          username: user.username ?? undefined,
+          clerk_id: user.id,
+        });
+      }
+    },
+    []
+  );
 
   return {
     trackEvent,
