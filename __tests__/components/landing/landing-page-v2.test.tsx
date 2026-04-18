@@ -41,6 +41,7 @@ jest.mock('framer-motion', () => ({
   },
   AnimatePresence: ({ children }: React.PropsWithChildren) => children,
   useInView: () => true,
+  useReducedMotion: () => false,
   useAnimation: () => ({ start: jest.fn(), stop: jest.fn() }),
   useMotionValue: () => ({ get: () => 0, set: jest.fn() }),
   useTransform: () => ({ get: () => 0 }),
@@ -68,10 +69,10 @@ describe('LandingPageV2', () => {
     render(<LandingPageV2 />);
 
     // Hero - verify key marketing copy renders. The H1 splits across text nodes
-    // (gradient spans for "minutes" and "hours"), so check the heading element's
-    // accessible name rather than individual text fragments.
+    // (gradient span wraps the "in minutes instead of hours" phrase), so use the
+    // heading element's accessible text content rather than matching fragments.
     const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1).toHaveTextContent(/Read SEC filings in minutes instead of hours/i);
+    expect(h1).toHaveTextContent(/SEC filings, read in minutes instead of hours/i);
 
     // Features
     expect(screen.getByText(/Built for Modern Investors/i)).toBeInTheDocument();
