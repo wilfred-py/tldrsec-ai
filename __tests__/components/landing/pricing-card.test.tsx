@@ -220,13 +220,13 @@ describe('PricingCard', () => {
       expect(button.className).toContain('brand-button-gradient');
     });
 
-    it('keeps brand-button-secondary on CTA when checkoutLoading even if selected', () => {
+    it('keeps brand-button-muted on CTA when checkoutLoading even if selected', () => {
       render(
         <PricingCard {...defaultProps} selectedCard="PRO" checkoutLoading={true} />
       );
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('brand-button-secondary');
+      expect(button.className).toContain('brand-button-muted');
     });
 
     it('calls onSelect when card is clicked', () => {
@@ -262,14 +262,14 @@ describe('PricingCard', () => {
       expect(onSelect).toHaveBeenCalledTimes(1);
     });
 
-    it('uses brand-button-secondary when not selected (even if hovered)', () => {
+    it('uses brand-button-muted when not selected (even if hovered)', () => {
       render(
         <PricingCard {...defaultProps} plan={maxPlan} hoveredCard="MAX" selectedCard="PRO" />
       );
 
       const button = screen.getByRole('button');
       // Hover alone no longer triggers gradient button — parent overrides selectedCard via hoveredCard ?? selectedCard
-      expect(button.className).toContain('brand-button-secondary');
+      expect(button.className).toContain('brand-button-muted');
     });
 
     it('calls onMouseEnter and onMouseLeave handlers', () => {

@@ -43,7 +43,7 @@ describe('GmailInboxHero', () => {
 
     // Headline
     expect(screen.getByText(/SEC filings, read/i)).toBeInTheDocument();
-    expect(screen.getByText(/in 10 minutes instead of 10 hours/i)).toBeInTheDocument();
+    expect(screen.getByText(/in minutes instead of hours/i)).toBeInTheDocument();
 
     // Subhead
     expect(screen.getByText(/AI summaries of every 10-K/i)).toBeInTheDocument();

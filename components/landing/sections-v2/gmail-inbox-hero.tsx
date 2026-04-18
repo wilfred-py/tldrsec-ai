@@ -664,7 +664,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
           >
             <motion.h1 variants={staggerItem} className="brand-hero-display mb-6 text-center">
               SEC filings, read{' '}
-              <span className="brand-gradient-text">in 10 minutes instead of 10 hours.</span>
+              <span className="brand-gradient-text">in minutes instead of hours.</span>
             </motion.h1>
 
             <motion.p variants={staggerItem} className="brand-body-large mb-8 max-w-2xl mx-auto text-center">

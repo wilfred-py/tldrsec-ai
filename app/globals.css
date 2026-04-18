@@ -280,14 +280,17 @@
     border-color: var(--brand-text-muted);
   }
 
-  /* Gradient button style - matches brand-gradient-text colors */
+  /* Gradient button style - matches brand-gradient-text colors.
+     !important on background overrides shadcn Button's default `bg-primary`
+     utility which otherwise wins the cascade (utilities ship after components)
+     and paints solid near-black over the gradient. */
   .brand-button-gradient {
     @apply h-12 px-8 text-base font-semibold rounded-lg text-white;
     background: linear-gradient(
       135deg,
       var(--brand-primary) 0%,
       var(--brand-accent) 100%
-    );
+    ) !important;
     color: white !important;
     box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);
     transition: all 0.2s ease;
@@ -317,6 +320,32 @@
     background-color: var(--brand-bg-subtle);
     border-color: var(--brand-secondary);
     color: var(--brand-secondary);
+  }
+
+  /* Muted button — reads as a button (subtle fill slightly darker than the
+     pricing card) but low-emphasis compared to the active gradient CTA.
+     Used for the inactive pricing card CTA so the card's "Upgrade to Pro/Max"
+     label stays readable without competing with the selected card's gradient.
+     !important on background AND color: shadcn Button's default variant applies
+     `bg-primary text-primary-foreground` as Tailwind utilities, which win over
+     component-layer rules without !important. Without these overrides the
+     button renders with the wrong colors (near-black bg, white text). */
+  .brand-button-muted {
+    @apply h-12 px-8 text-base font-semibold rounded-lg;
+    background-color: #F3F4F6 !important; /* gray-100: one step darker than card bg */
+    color: var(--brand-text) !important;
+    border: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .brand-button-muted:hover:not(:disabled) {
+    background-color: var(--brand-border) !important;
+    color: var(--brand-secondary) !important;
+  }
+
+  .brand-button-muted:disabled {
+    opacity: 0.5;
+    pointer-events: none;
   }
 
   /* Card styles */

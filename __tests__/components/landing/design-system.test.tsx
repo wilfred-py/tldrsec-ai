@@ -134,6 +134,8 @@ describe('Design System - Typography', () => {
   it('should have button styles defined', () => {
     expect(globalsContent).toContain('.brand-button-primary');
     expect(globalsContent).toContain('.brand-button-secondary');
+    expect(globalsContent).toContain('.brand-button-muted');
+    expect(globalsContent).toContain('.brand-button-gradient');
   });
 
   it('should have card and badge styles defined', () => {

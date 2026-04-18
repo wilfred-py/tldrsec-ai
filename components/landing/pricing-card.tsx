@@ -189,7 +189,7 @@ export function PricingCard({
           <Button
             onClick={(e) => { e.stopPropagation(); onCheckout(plan.key); }}
             disabled={checkoutLoading}
-            className={`w-full ${isSelected && !checkoutLoading ? 'brand-button-gradient' : 'brand-button-secondary'}`}
+            className={`w-full ${isSelected && !checkoutLoading ? 'brand-button-gradient' : 'brand-button-muted'}`}
           >
             {checkoutLoading ? (
               <>

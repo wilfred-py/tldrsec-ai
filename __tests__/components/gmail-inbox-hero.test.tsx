@@ -44,7 +44,7 @@ describe('GmailInboxHero', () => {
   it('renders without crashing', () => {
     render(<GmailInboxHero />);
     expect(screen.getByText(/SEC filings, read/i)).toBeInTheDocument();
-    expect(screen.getByText(/in 10 minutes instead of 10 hours/i)).toBeInTheDocument();
+    expect(screen.getByText(/in minutes instead of hours/i)).toBeInTheDocument();
   });
 
   it('displays the main heading', () => {
@@ -67,7 +67,7 @@ describe('GmailInboxHero', () => {
     render(<GmailInboxHero />);
 
     // Component should render even with no emails initially
-    expect(screen.getByText(/SEC filings, read/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 
   it('accepts custom className prop', () => {
