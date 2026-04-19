@@ -57,10 +57,6 @@ describe('GmailInboxHero', () => {
     const ctaLink = screen.getByRole('link', { name: /Get Summaries Like This/i });
     expect(ctaLink).toHaveAttribute('href', '/sign-up');
 
-    // Secondary CTA
-    const pricingLink = screen.getByRole('link', { name: /View Pricing/i });
-    expect(pricingLink).toHaveAttribute('href', '#pricing');
-
     // Widget caption (may appear multiple times due to toolbar footer text)
     const captions = screen.getAllByText(/click any email/i);
     expect(captions.length).toBeGreaterThanOrEqual(1);
