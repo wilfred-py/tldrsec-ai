@@ -650,7 +650,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
     <section
       ref={combinedRef}
       id="hero"
-      className={`relative min-h-[100vh] flex flex-col items-center justify-center overflow-hidden py-12 lg:py-0 ${className}`}
+      className={`relative min-h-[100vh] flex flex-col items-center justify-center overflow-hidden pt-20 pb-12 lg:pt-24 lg:pb-8 ${className}`}
       style={meshGradientStyle}
     >
       <div className="container mx-auto px-4 relative z-10">

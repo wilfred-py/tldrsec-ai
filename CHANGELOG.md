@@ -2,10 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.22.2] - 2026-04-19
+## [0.0.22.3] - 2026-04-19
 
 ### Changed
 - Landing hero now shows a single primary CTA. The secondary "View Pricing" outline button was removed to reduce choice friction; pricing is still reachable via the navbar and footer links.
+
+## [0.0.22.2] - 2026-04-19
+
+### Fixed
+- Hero section headline now has breathing room from the top of the viewport on first paint. Previously sat flush against the browser chrome when the page loaded.
 
 ## [0.0.22.1] - 2026-04-18
 
