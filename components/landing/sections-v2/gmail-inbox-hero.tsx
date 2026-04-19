@@ -703,11 +703,6 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                   </Button>
                 </Link>
               )}
-              <Link href="#pricing">
-                <Button className="brand-button-outline">
-                  View Pricing
-                </Button>
-              </Link>
             </motion.div>
 
             <motion.p variants={staggerItem} className="brand-caption mb-8">
