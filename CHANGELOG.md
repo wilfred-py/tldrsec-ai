@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.22.4] - 2026-04-19
+
+### Changed
+- Trial-ended email now leads with the tldrSEC logo and uses the brand gradient on the upgrade button, matching the landing page. Removed the "$199/month, 25 tickers" pricing line so the email focuses on the action.
+
 ## [0.0.22.3] - 2026-04-19
 
 ### Changed
