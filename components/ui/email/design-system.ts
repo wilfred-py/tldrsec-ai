@@ -464,6 +464,34 @@ export function getTransactionCodeDescription(code: string): string {
   return SEC_TRANSACTION_CODES[code.toUpperCase()] || 'Other Transaction';
 }
 
+const MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Reformat YYYY-MM-DD dates in body text to "DD MMM YYYY" (e.g., "20 Apr 2026").
+ * Lookarounds (not \b) so hyphenated identifiers like "ID-2026-04-20-001" are skipped.
+ * Calendar-validates via Date round-trip so "2025-02-30" is left alone.
+ */
+export function formatDatesInText(text: string | undefined): string {
+  if (!text) return '';
+  return text.replace(
+    /(?<![\w-])(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?![\w-])/g,
+    (match, y, m, d) => {
+      const year = parseInt(y, 10);
+      const month = parseInt(m, 10);
+      const day = parseInt(d, 10);
+      const dt = new Date(Date.UTC(year, month - 1, day));
+      if (
+        dt.getUTCFullYear() !== year ||
+        dt.getUTCMonth() !== month - 1 ||
+        dt.getUTCDate() !== day
+      ) {
+        return match;
+      }
+      return `${day.toString().padStart(2, '0')} ${MONTH_ABBREV[month - 1]} ${year}`;
+    }
+  );
+}
+
 /**
  * Convert markdown text to email-safe HTML with inline styles
  * Handles: headers, bold, italic, bullet lists, numbered lists, tables, line breaks

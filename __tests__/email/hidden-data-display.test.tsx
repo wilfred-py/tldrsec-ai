@@ -62,7 +62,7 @@ describe('Hidden Data Display', () => {
       expect(container.textContent).toContain('Jan 10');
     });
 
-    it('should display stake change with arrow indicators', () => {
+    it('should display stake change with right-pointing arrow (pre → post)', () => {
       const filing = createFilingData({
         filingType: 'Form 4',
         summaryData: {
@@ -74,13 +74,13 @@ describe('Hidden Data Display', () => {
 
       const { container } = render(<Form4MinimalistTemplate filing={filing} />);
 
-      // Should display downward arrow for decrease
-      expect(container.textContent).toContain('↓');
+      // Always points right — direction encoded by color of (% change), not arrow
+      expect(container.textContent).toContain('→');
       // Should display the percentage change
       expect(container.textContent).toContain('2.0%');
     });
 
-    it('should display upward arrow for stake increase', () => {
+    it('should display right-pointing arrow for stake increase too', () => {
       const filing = createFilingData({
         filingType: 'Form 4',
         summaryData: {
@@ -92,8 +92,7 @@ describe('Hidden Data Display', () => {
 
       const { container } = render(<Form4MinimalistTemplate filing={filing} />);
 
-      // Should display upward arrow for increase
-      expect(container.textContent).toContain('↑');
+      expect(container.textContent).toContain('→');
     });
   });
 
