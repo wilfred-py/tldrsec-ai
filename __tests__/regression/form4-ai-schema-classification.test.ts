@@ -350,19 +350,22 @@ describe('Form 4: AI Schema → Template Classification', () => {
       expect(data.newStake).toBe('85,000 shares'); // Last transaction's post-ownership
     });
 
-    it('should not overwrite existing newStake', () => {
+    it('should override LLM newStake when transactions SOF disagrees (holdings-mismatch fix 2026-04)', () => {
+      // Plan: .claude/tasks/form4-holdings-mismatch.md — transactions are the
+      // authoritative source for holdings. LLM top-level newStake is unreliable
+      // (Parekh bug: 2026-04-15 had LLM pull 15,331 from a Table II RSU row).
       const aiResponse = JSON.stringify({
         company: 'Test Corp',
         summary: 'Insider sale',
         filerName: 'John Doe',
-        newStake: '100,000 shares',
+        newStake: '100,000 shares', // LLM value — overridden by derivation
         transactions: [
           { code: 'S', type: 'Sale', shares: '10,000', pricePerShare: '$100', sharesOwnedFollowing: '90,000' }
         ]
       });
       const result = parseResponse(aiResponse, '4');
       const data = result.data as Record<string, unknown>;
-      expect(data.newStake).toBe('100,000 shares'); // Existing value preserved
+      expect(data.newStake).toBe('90,000 shares'); // Derived from SOF, not LLM string
     });
 
     it('should skip sharesOwnedFollowing when empty/missing', () => {

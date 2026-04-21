@@ -23,6 +23,11 @@
  */
 
 import { logger } from '../logging';
+// Circular import: derive-stake.ts imports formatNumberWithCommas from this file.
+// Safe only because formatNumberWithCommas (line ~625) is a `function` declaration
+// and gets hoisted. Do NOT convert it to `const fn = () => ...` or the cycle crashes
+// at module init.
+import { deriveNewStake, detectNewStakeNarrativeMismatch } from '../ai/utils/derive-stake';
 
 const componentLogger = logger.child('form4-normalizer');
 
@@ -59,6 +64,14 @@ export interface NormalizedForm4Data {
   newStake?: string;
   previousStake?: string;
   vestingDetails?: string;
+  /**
+   * True when the derived newStake disagrees with a number in summaryText by >5%.
+   * Drives dataQuality='degraded' in email templates to fail loud on LLM hallucinations.
+   * See .claude/tasks/form4-holdings-mismatch.md.
+   */
+  hasNarrativeMismatch?: boolean;
+  /** Diagnostic: which tier produced newStake. Undefined when no derivation ran. */
+  newStakeSource?: 'authoritative' | 'derived-common-direct' | 'derived-fallback' | 'llm-legacy' | 'narrative' | 'none';
 }
 
 /**
@@ -237,7 +250,7 @@ const KNOWN_TX_FIELDS = buildKnownFieldSet(TRANSACTION_FIELD_ALIASES);
 
 const KNOWN_FORM4_FIELDS = buildKnownFieldSet(FORM4_FIELD_ALIASES);
 // Add fields that are always present and don't need aliasing
-['company', 'summary', 'filingDate', 'has10b51Plan', 'transactions', 'signalStrength', 'filingType', 'vestingDetails'].forEach(f => KNOWN_FORM4_FIELDS.add(f));
+['company', 'summary', 'filingDate', 'has10b51Plan', 'transactions', 'signalStrength', 'filingType', 'vestingDetails', 'postTransactionCommonShares', '_schemaVersion'].forEach(f => KNOWN_FORM4_FIELDS.add(f));
 
 /**
  * Normalize a single transaction object from AI output.
@@ -412,15 +425,48 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
       .filter((t): t is NormalizedTransaction => t !== null);
   }
 
-  // Derive newStake from last transaction's sharesOwnedFollowing when not set
-  if (!newStake && transactions.length > 0) {
-    for (let i = transactions.length - 1; i >= 0; i--) {
-      const sof = transactions[i].sharesOwnedFollowing;
-      if (sof !== undefined && sof !== '' && sof !== null) {
-        const sofNum = parseFloat(String(sof).replace(/[$,\[\]]/g, ''));
-        newStake = isNaN(sofNum) ? String(sof) : formatNumberWithCommas(sofNum);
-        break;
-      }
+  // Derive newStake using three-tier precedence helper:
+  //   1. authoritative postTransactionCommonShares (LLM-extracted Table I Col 5)
+  //   2. derived from Common-Stock + Direct transactions with SOF (date-sorted)
+  //   3. derived-fallback: any transaction with SOF
+  //   4. LLM's legacy newStake string (pass-through — already in `newStake` var)
+  //   5. narrative regex over summaryText (last resort)
+  // Gate removed: we always recompute so that an LLM-hallucinated top-level
+  // newStake (e.g., picked from a derivative RSU row) gets overridden by the
+  // correct Common Stock row. See .claude/tasks/form4-holdings-mismatch.md.
+  const stakeResult = deriveNewStake({
+    transactions,
+    postTransactionCommonShares: summaryJSON.postTransactionCommonShares,
+    llmNewStake: newStake || undefined,
+    summaryText,
+  });
+  let newStakeSource: NormalizedForm4Data['newStakeSource'] = stakeResult.source;
+  if (stakeResult.source !== 'none') {
+    // The normalizer contract is a bare formatted number (no " shares" suffix).
+    // Parser callers append suffixes themselves; template reads this verbatim.
+    newStake = stakeResult.formattedNumber;
+  }
+
+  // Detect narrative mismatch for fail-loud dataQuality='degraded' guard.
+  // Only run when we have a derived numeric value AND a non-llm-legacy source
+  // (LLM-legacy strings are already narrative-derived by the model, so comparing
+  // them to the narrative would double-count the same hallucination).
+  let hasNarrativeMismatch = false;
+  if (
+    stakeResult.numericValue !== null &&
+    stakeResult.source !== 'llm-legacy' &&
+    stakeResult.source !== 'narrative' &&
+    summaryText
+  ) {
+    const mismatch = detectNewStakeNarrativeMismatch(stakeResult.numericValue, summaryText);
+    if (mismatch) {
+      hasNarrativeMismatch = true;
+      componentLogger.warn('form4_newStake_narrative_mismatch', {
+        derived: mismatch.derivedNumber,
+        narrativeExtracted: mismatch.narrativeNumber,
+        diffPct: Number(mismatch.diffPct.toFixed(2)),
+        source: stakeResult.source,
+      });
     }
   }
 
@@ -429,34 +475,6 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
     const prevNum = derivePreviousStake(transactions);
     if (prevNum !== null) {
       previousStake = formatNumberWithCommas(prevNum);
-    }
-  }
-
-  // Fallback: extract newStake from summaryText when AI didn't return sharesOwnedFollowing
-  if (!newStake && summaryText) {
-    // Try multiple patterns observed in production summaryText:
-    // "holdings dropped to 14,788 shares"
-    // "direct holdings totaled 3,318 shares"
-    // "holdings net unchanged at 2,699,612 shares"
-    // "boosts her derivative holdings to 23,020 units"
-    // "direct holdings of 48,577 shares"
-    const stakePatterns = [
-      // "holdings dropped to 14,788 shares", "holdings of 48,577 shares"
-      /(?:holdings?|position|stake)\s+(?:\w+\s+)*?(?:to|at|of)\s+([\d,]+(?:\.\d+)?)\s+(?:shares|units|common|class)/i,
-      // "dropped to 14,788 shares", "unchanged at 2,699,612 shares"
-      /(?:dropped|fell|rose|climbed|reached|unchanged)\s+(?:\w+\s+)*?(?:to|at)\s+([\d,]+(?:\.\d+)?)\s+(?:shares|units)/i,
-      // "totaled 3,318 shares" — number directly after verb
-      /(?:totale?d?|reached)\s+([\d,]+(?:\.\d+)?)\s+(?:shares|units)/i,
-      // "holds 48,577 shares"
-      /(?:holds?|owns?|holding)\s+([\d,]+(?:\.\d+)?)\s+(?:shares|units)/i,
-    ];
-    for (const pattern of stakePatterns) {
-      const match = summaryText.match(pattern);
-      if (match) {
-        newStake = match[1];
-        componentLogger.debug('Extracted newStake from summaryText fallback', { newStake, pattern: pattern.source.substring(0, 40) });
-        break;
-      }
     }
   }
 
@@ -480,6 +498,8 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
     newStake,
     previousStake,
     vestingDetails: vestingDetails ? vestingDetails.substring(0, 300) : undefined,
+    hasNarrativeMismatch,
+    newStakeSource,
   };
 }
 
