@@ -440,7 +440,7 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
     llmNewStake: newStake || undefined,
     summaryText,
   });
-  let newStakeSource: NormalizedForm4Data['newStakeSource'] = stakeResult.source;
+  const newStakeSource: NormalizedForm4Data['newStakeSource'] = stakeResult.source;
   if (stakeResult.source !== 'none') {
     // The normalizer contract is a bare formatted number (no " shares" suffix).
     // Parser callers append suffixes themselves; template reads this verbatim.
