@@ -92,8 +92,8 @@ describe('LandingPageV2', () => {
     const { container } = render(<LandingPageV2 />);
     const sections = container.querySelectorAll('section, footer');
 
-    // Hero, Features, Pricing, CTA, Footer
-    expect(sections.length).toBe(5);
+    // Hero, Features, Pricing, FAQ, CTA, Footer
+    expect(sections.length).toBe(6);
   });
 
   it('should not render filing preview grid separately', () => {
