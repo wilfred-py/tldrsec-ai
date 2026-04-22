@@ -136,6 +136,9 @@ export async function sendTrialExpirationEmail(
     subject: 'Your tldrSEC trial has ended',
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="margin-bottom: 24px;">
+          <img src="https://tldrsec.app/images/logo-email.png" alt="tldrSEC" width="120" height="24" style="display:block;width:120px;height:24px;border:0;">
+        </div>
         <h1 style="color: #1a1a2e; font-size: 24px;">Your trial has ended</h1>
         <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
           Your 7-day trial ended on ${trialExpiredAt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
@@ -144,16 +147,13 @@ export async function sendTrialExpirationEmail(
           You can still access the dashboard and view your existing summaries, but you won't receive new filing notifications until you upgrade.
         </p>
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${APP_URL}/dashboard/billing" style="background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+          <a href="${APP_URL}/dashboard/billing" style="background-color: #0079F2; background: linear-gradient(135deg, #0079F2 0%, #8B5CF6 100%); color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);">
             Upgrade to Continue
           </a>
         </div>
-        <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
-          Plans start at <strong>$199/month</strong> with support for up to 25 tickers and all filing types.
-        </p>
       </div>
     `,
-    text: `Your tldrSEC trial has ended. Your 7-day trial ended on ${trialExpiredAt.toLocaleDateString()}. Upgrade at ${APP_URL}/dashboard/billing to continue receiving SEC filing summaries. Plans start at $199/month.`,
+    text: `Your tldrSEC trial has ended. Your 7-day trial ended on ${trialExpiredAt.toLocaleDateString()}. Upgrade at ${APP_URL}/dashboard/billing to continue receiving SEC filing summaries.`,
     tags: ['type:trial-expiration'],
   };
 

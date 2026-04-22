@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.22.4] - 2026-04-21
+## [0.0.22.5] - 2026-04-21
 
 ### Changed
 - Form 4 email template styling refresh: transaction value cells now render in near-black (`#111827`) instead of inheriting the per-transaction red/green that made the dollar amount the loudest element on the page. The colored signal moves to the `(% change)` parenthetical only.
@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `formatDatesInText` helper in `components/ui/email/design-system.ts` with full unit coverage for valid dates, multi-date strings, calendar invalids, leap-year edges, and hyphenated identifiers.
 - `__tests__/email/form4-summary-styling.test.tsx`: render-level coverage for transaction value color, holdings segmentation, percentage color/sign rendering, zero-change suppression, and date reformatting.
+
+## [0.0.22.4] - 2026-04-19
+
+### Changed
+- Trial-ended email now leads with the tldrSEC logo and uses the brand gradient on the upgrade button, matching the landing page. Removed the "$199/month, 25 tickers" pricing line so the email focuses on the action.
 
 ## [0.0.22.3] - 2026-04-19
 
