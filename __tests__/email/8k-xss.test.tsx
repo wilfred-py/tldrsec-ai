@@ -77,30 +77,24 @@ describe('8-K XSS safety (X1-X4)', () => {
   });
 
   it('defense-in-depth: xssPayload fixture renders safely end-to-end', () => {
-    const OLD_ENV = process.env;
-    process.env = { ...OLD_ENV, ENABLE_8K_STRUCTURED_RENDERING: 'true' };
-    try {
-      const filing: FilingTemplateData = {
-        companyName: 'Test',
-        symbol: 'TEST',
-        filingType: '8-K',
-        filingDate: '2026-04-20',
-        filingUrl: 'https://sec.gov/x',
-        summaryText: fixtures.xssPayload.summary,
-        summaryData: fixtures.xssPayload as FilingTemplateData['summaryData'],
-      };
-      const { container } = render(<Form8KMinimalistTemplate filing={filing} />);
-      // itemNumbers=['5.02'] gates out the structured blocks, so no injection surface renders
-      expect(container.querySelector('script')).toBeNull();
-      // The only <img> in the template is the tldrSEC logo (static, trusted).
-      // No attacker-controlled img (src=x, onerror, etc.) should be present.
-      const imgs = container.querySelectorAll('img');
-      for (const img of imgs) {
-        expect(img.getAttribute('onerror')).toBeNull();
-        expect(img.getAttribute('src')).not.toBe('x');
-      }
-    } finally {
-      process.env = OLD_ENV;
+    const filing: FilingTemplateData = {
+      companyName: 'Test',
+      symbol: 'TEST',
+      filingType: '8-K',
+      filingDate: '2026-04-20',
+      filingUrl: 'https://sec.gov/x',
+      summaryText: fixtures.xssPayload.summary,
+      summaryData: fixtures.xssPayload as FilingTemplateData['summaryData'],
+    };
+    const { container } = render(<Form8KMinimalistTemplate filing={filing} />);
+    // itemNumbers=['5.02'] gates out the structured blocks, so no injection surface renders
+    expect(container.querySelector('script')).toBeNull();
+    // The only <img> in the template is the tldrSEC logo (static, trusted).
+    // No attacker-controlled img (src=x, onerror, etc.) should be present.
+    const imgs = container.querySelectorAll('img');
+    for (const img of imgs) {
+      expect(img.getAttribute('onerror')).toBeNull();
+      expect(img.getAttribute('src')).not.toBe('x');
     }
   });
 });

@@ -9,8 +9,7 @@ All notable changes to this project will be documented in this file.
 - Zod validation on LLM output at save time in `services/filing/summaryGenerationService.ts`. Bad `tranches`/`dealTerms` shapes are stripped with a structured `logger.warn` payload rather than persisted to the DB or surfaced to the reader.
 - `itemNumbers` schema field with a prose-parse fallback regex so the structured renderer can gate strictly on the filing's 8-K item, not on heuristics over the subject line.
 - New email template sections under `components/ui/email/templates/sections/`: `TranchesList.tsx`, `DealTermsCard.tsx`, `TotalsLine.tsx`. JSX-only interpolation — no `dangerouslySetInnerHTML`.
-- Feature flag `ENABLE_8K_STRUCTURED_RENDERING` (inline `process.env` check, default on in production). Set to `false` to revert to prose-only rendering without a deploy.
-- 79 passing tests across 13 test files covering tranche rendering (single/multi-currency, malformed amounts, XSS payloads), deal-terms rendering, extractor validation, legacy `counterpartyContext` backwards-compat, item-number regex variants, subject-line terseness, and end-to-end integration. 4 live-LLM eval tests gated on `RUN_LIVE_LLM_EVALS=true`.
+- Passing tests across 13 test files covering tranche rendering (single/multi-currency, malformed amounts, XSS payloads), deal-terms rendering, extractor validation, legacy `counterpartyContext` backwards-compat, item-number regex variants, subject-line terseness, and end-to-end integration. 4 live-LLM eval tests gated on `RUN_LIVE_LLM_EVALS=true`.
 
 ### Changed
 - Subject line targeting for Item 2.03 and 1.01: drops filler verbs ("Issued", "Announced"); leads with ticker + materiality; hard cap ≤55 chars.

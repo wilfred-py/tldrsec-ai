@@ -26,14 +26,6 @@ function buildFiling(summaryData: Record<string, unknown>): FilingTemplateData {
 }
 
 describe('8-K debt tranches rendering (T1-T11)', () => {
-  const OLD_ENV = process.env;
-  beforeEach(() => {
-    process.env = { ...OLD_ENV, ENABLE_8K_STRUCTURED_RENDERING: 'true' };
-  });
-  afterAll(() => {
-    process.env = OLD_ENV;
-  });
-
   it('T1: renders table for multi-tranche BRK.A with both JPY + USD subheaders', () => {
     const { container } = render(
       <Form8KMinimalistTemplate filing={buildFiling(fixtures.brkMultiCurrency)} />,
@@ -109,14 +101,6 @@ describe('8-K debt tranches rendering (T1-T11)', () => {
     });
     const { container } = render(<Form8KMinimalistTemplate filing={filing} />);
     // No tranches-specific label like "tranches)" from TotalsLine
-    expect(container.textContent).not.toMatch(/\d+ tranches\)/);
-  });
-
-  it('T8: respects feature flag OFF — no structured block rendered', () => {
-    process.env.ENABLE_8K_STRUCTURED_RENDERING = 'false';
-    const { container } = render(
-      <Form8KMinimalistTemplate filing={buildFiling(fixtures.brkMultiCurrency)} />,
-    );
     expect(container.textContent).not.toMatch(/\d+ tranches\)/);
   });
 

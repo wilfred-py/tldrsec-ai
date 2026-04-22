@@ -22,14 +22,6 @@ function buildFiling(summaryData: Record<string, unknown>): FilingTemplateData {
 }
 
 describe('8-K legacy/new shape compatibility (L1-L3)', () => {
-  const OLD_ENV = process.env;
-  beforeEach(() => {
-    process.env = { ...OLD_ENV, ENABLE_8K_STRUCTURED_RENDERING: 'true' };
-  });
-  afterAll(() => {
-    process.env = OLD_ENV;
-  });
-
   it('L1: renders cached legacy summary (counterpartyContext, no dealTerms) as prose', () => {
     // Legacy shape — the now-removed counterpartyContext field simulates a
     // summary generated before the schema change landed.

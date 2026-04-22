@@ -22,14 +22,6 @@ function buildFiling(summaryData: Record<string, unknown>): FilingTemplateData {
 }
 
 describe('8-K DealTermsCard rendering (D1-D5)', () => {
-  const OLD_ENV = process.env;
-  beforeEach(() => {
-    process.env = { ...OLD_ENV, ENABLE_8K_STRUCTURED_RENDERING: 'true' };
-  });
-  afterAll(() => {
-    process.env = OLD_ENV;
-  });
-
   it('D1: renders DealTermsCard for 1.01 filing with all fields', () => {
     const filing = buildFiling({
       ...fixtures.coFiled203And101,
