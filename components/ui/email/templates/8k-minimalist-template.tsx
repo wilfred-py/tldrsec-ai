@@ -2,10 +2,25 @@ import * as React from 'react';
 import { EmailColors, EmailStyles, BadgeColors, markdownToHtml, getSentimentColor, getSentimentEmoji } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
+import { TranchesList, Tranche } from './sections/TranchesList';
+import { DealTermsCard, DealTerms } from './sections/DealTermsCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
 import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
 import { StalenessBanner } from './sections/StalenessBanner';
+
+/**
+ * Feature flag read helper: controls whether 8-K Item 2.03 (debt tranches) and
+ * 1.01/2.01 (M&A deal terms) are rendered as structured blocks. When false, the
+ * template falls back to prose-only rendering (legacy behavior).
+ *
+ * Read at render-time (not module scope) so tests can toggle per-test via
+ * process.env without module-reset gymnastics. Cost is negligible — one env
+ * lookup per 8-K email render.
+ */
+function isStructuredRenderingEnabled(): boolean {
+  return process.env.ENABLE_8K_STRUCTURED_RENDERING === 'true';
+}
 
 export { getItemDescription };
 
@@ -278,9 +293,27 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   // Merge data sources
   const eventType = (data?.eventType || extractedData?.eventType || '') as string;
   const itemNumbers = (data?.itemNumbers || extractedData?.itemNumbers || []) as string[];
-  const keyHighlights = (data?.keyHighlights || extractedData?.keyHighlights || []) as string[];
   const financialImpact = (data?.financialImpact || extractedData?.financialImpact || '') as string;
   const sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
+
+  // Structured 8-K blocks (feature-flagged, item-gated).
+  // Validation already ran at the service layer (summaryGenerationService) —
+  // tranches/dealTerms are Zod-checked upstream or stripped entirely.
+  const structuredEnabled = isStructuredRenderingEnabled();
+  const tranches = (structuredEnabled && itemNumbers.includes('2.03')
+    ? (data?.tranches as Tranche[] | undefined)
+    : undefined);
+  const dealTerms = (structuredEnabled
+    && (itemNumbers.includes('1.01') || itemNumbers.includes('2.01'))
+    ? (data?.dealTerms as DealTerms | undefined)
+    : undefined);
+
+  // Filter keyHighlights: when structured tranches render, drop bullets that
+  // duplicate tranche data (currency symbol + percent in the same line).
+  const rawKeyHighlights = (data?.keyHighlights || extractedData?.keyHighlights || []) as string[];
+  const keyHighlights = tranches && tranches.length > 0
+    ? rawKeyHighlights.filter(h => !(/[¥$€£]/.test(h) && /%/.test(h)))
+    : rawKeyHighlights;
 
   const displayTicker = symbol || ticker || 'N/A';
 
@@ -429,6 +462,11 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                 <strong style={{ color: '#000000' }}>Why it matters: </strong>
                 {whyItMattersText}
               </p>
+
+              {/* Structured 8-K blocks — DealTermsCard (1.01/2.01) before TranchesList (2.03)
+                  so co-filed M&A + financing shows the deal context first. */}
+              {dealTerms && <DealTermsCard dealTerms={dealTerms} />}
+              {tranches && tranches.length > 0 && <TranchesList tranches={tranches} />}
 
               {/* Thin divider */}
               {remainingSummary && (

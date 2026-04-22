@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.23.0] - 2026-04-22
+
+### Added
+- Event-type-aware structured rendering for 8-K summaries. Item 2.03 (debt issuance) now emits a `tranches[]` array (amountDisplay, currency, coupon, yield, maturity, spread) that renders as a tranche table grouped by currency with a totals line. Item 1.01 / 2.01 (M&A and material contracts) emits a `dealTerms` object (counterparty, dealValue, consideration, closeDate, approvals[], rationale) that renders as a deal-terms card. Falls back cleanly to the existing prose block when structured fields are absent, so cached summaries keep rendering.
+- Zod validation on LLM output at save time in `services/filing/summaryGenerationService.ts`. Bad `tranches`/`dealTerms` shapes are stripped with a structured `logger.warn` payload rather than persisted to the DB or surfaced to the reader.
+- `itemNumbers` schema field with a prose-parse fallback regex so the structured renderer can gate strictly on the filing's 8-K item, not on heuristics over the subject line.
+- New email template sections under `components/ui/email/templates/sections/`: `TranchesList.tsx`, `DealTermsCard.tsx`, `TotalsLine.tsx`. JSX-only interpolation — no `dangerouslySetInnerHTML`.
+- Feature flag `ENABLE_8K_STRUCTURED_RENDERING` (inline `process.env` check, default on in production). Set to `false` to revert to prose-only rendering without a deploy.
+- 79 passing tests across 13 test files covering tranche rendering (single/multi-currency, malformed amounts, XSS payloads), deal-terms rendering, extractor validation, legacy `counterpartyContext` backwards-compat, item-number regex variants, subject-line terseness, and end-to-end integration. 4 live-LLM eval tests gated on `RUN_LIVE_LLM_EVALS=true`.
+
+### Changed
+- Subject line targeting for Item 2.03 and 1.01: drops filler verbs ("Issued", "Announced"); leads with ticker + materiality; hard cap ≤55 chars.
+- Consolidated three HTML-escapers in `components/ui/email/design-system.ts` into a single `escapeHtml` helper that also escapes `"` and `'`, closing an attribute-injection gap.
+- Removed `counterpartyContext` prompt field; its rationale now lives in `dealTerms.rationale`.
+- Removed `Record<string, unknown>` cast in `8k-minimalist-template.tsx` — structured fields flow through typed props.
+
 ## [0.0.22.4] - 2026-04-19
 
 ### Changed

@@ -1,0 +1,11 @@
+{
+  "headline": "Two-tranche perpetual-notes offering.",
+  "summary": "Includes one perpetual tranche with no stated maturity.",
+  "eventType": "Debt Issuance",
+  "sentiment": "neutral",
+  "itemNumbers": ["2.03"],
+  "tranches": [
+    { "amountDisplay": "$1.0B", "currency": "USD", "coupon": "6.000%", "maturity": "Perpetual" },
+    { "amountDisplay": "$500M", "currency": "USD", "coupon": "5.500%", "maturity": "2034" }
+  ]
+}

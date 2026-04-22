@@ -142,6 +142,24 @@ export interface FilingTemplateData {
     positiveHighlights?: string;
     negativeHighlights?: string;
     itemNumbers?: string[];
+    // 8-K Item 2.03: per-tranche debt issuance details (new debt only, not 2.04)
+    tranches?: Array<{
+      amountDisplay: string;
+      currency: string;
+      coupon?: string;
+      yield?: string;
+      maturity?: string;
+      spread?: string;
+    }>;
+    // 8-K Item 1.01 / 2.01: M&A / material agreement deal terms
+    dealTerms?: {
+      counterparty: string;
+      dealValue?: string;
+      consideration?: string;
+      closeDate?: string;
+      approvals?: string[];
+      rationale?: string;
+    };
 
     // Form 4 specific
     filerName?: string;

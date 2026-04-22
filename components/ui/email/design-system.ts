@@ -465,6 +465,25 @@ export function getTransactionCodeDescription(code: string): string {
 }
 
 /**
+ * Escape a string for safe inclusion as HTML text content or attribute value.
+ * Covers the standard OWASP HTML-encoding set: & < > " ' /
+ *
+ * Use for any LLM-extracted or user-derived string interpolated into
+ * `dangerouslySetInnerHTML` payloads. React JSX expressions (`{value}`)
+ * auto-escape and do NOT need this helper.
+ */
+export function escapeHtml(value: string | undefined | null): string {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\//g, '&#x2F;');
+}
+
+/**
  * Convert markdown text to email-safe HTML with inline styles
  * Handles: headers, bold, italic, bullet lists, numbered lists, tables, line breaks
  */

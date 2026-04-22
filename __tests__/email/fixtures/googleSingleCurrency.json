@@ -1,0 +1,21 @@
+{
+  "headline": "Alphabet priced $17.5B of senior notes across 7 USD tranches.",
+  "summary": "Alphabet's $17.5B USD senior notes offering consisted of 7 tranches with maturities spanning 2027 through 2055.",
+  "eventType": "Debt Issuance",
+  "sentiment": "neutral",
+  "itemNumbers": ["2.03", "9.01"],
+  "keyHighlights": [
+    "Proceeds for general corporate purposes including potential buybacks.",
+    "Offering upsized from $15B to $17.5B on strong demand."
+  ],
+  "financialImpact": "Adds $17.5B of new long-term debt.",
+  "tranches": [
+    { "amountDisplay": "$2.0B", "currency": "USD", "coupon": "4.250%", "maturity": "2027" },
+    { "amountDisplay": "$2.5B", "currency": "USD", "coupon": "4.500%", "maturity": "2029" },
+    { "amountDisplay": "$3.0B", "currency": "USD", "coupon": "4.750%", "maturity": "2031" },
+    { "amountDisplay": "$3.0B", "currency": "USD", "coupon": "4.950%", "maturity": "2034" },
+    { "amountDisplay": "$2.5B", "currency": "USD", "coupon": "5.150%", "maturity": "2036" },
+    { "amountDisplay": "$2.5B", "currency": "USD", "coupon": "5.350%", "maturity": "2045" },
+    { "amountDisplay": "$2.0B", "currency": "USD", "coupon": "5.500%", "maturity": "2055" }
+  ]
+}
