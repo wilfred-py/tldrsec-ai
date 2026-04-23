@@ -116,3 +116,6 @@ test-tesla-filing-extraction.js
 # MCP servers (cloned repos)
 /mcp-send-email/
 .gstack/
+
+# Outreach — contains prospect PII, never commit
+.claude/outreach/
