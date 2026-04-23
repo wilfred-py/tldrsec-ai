@@ -10,12 +10,22 @@ All notable changes to this project will be documented in this file.
 - `itemNumbers` schema field with a prose-parse fallback regex so the structured renderer can gate strictly on the filing's 8-K item, not on heuristics over the subject line.
 - New email template sections under `components/ui/email/templates/sections/`: `TranchesList.tsx`, `DealTermsCard.tsx`, `TotalsLine.tsx`. JSX-only interpolation — no `dangerouslySetInnerHTML`.
 - Passing tests across 13 test files covering tranche rendering (single/multi-currency, malformed amounts, XSS payloads), deal-terms rendering, extractor validation, legacy `counterpartyContext` backwards-compat, item-number regex variants, subject-line terseness, and end-to-end integration. 4 live-LLM eval tests gated on `RUN_LIVE_LLM_EVALS=true`.
+- `__tests__/email/form4-watch-for.test.tsx` with 4 tests: award-only filing suppresses the section, `vestingDetails` renders only the vesting bullet, transactions-without-vesting suppresses the section, and S-3 `Use of proceeds:` rendering regression guard.
 
 ### Changed
 - Subject line targeting for Item 2.03 and 1.01: drops filler verbs ("Issued", "Announced"); leads with ticker + materiality; hard cap ≤55 chars.
 - Consolidated three HTML-escapers in `components/ui/email/design-system.ts` into a single `escapeHtml` helper that also escapes `"` and `'`, closing an attribute-injection gap.
 - Removed `counterpartyContext` prompt field; its rationale now lives in `dealTerms.rationale`.
 - Removed `Record<string, unknown>` cast in `8k-minimalist-template.tsx` — structured fields flow through typed props.
+- Form 4 insider-transaction emails no longer render a generic "Watch for: SEC transaction code: Grant/Award, Option Exercise, Tax Withholding" bullet. Those labels were hardcoded from the transaction-code letter (A/M/F) via `getTransactionCodeDescription()`, describing what already happened instead of anything forward-looking. Every routine Form 4 was getting the same uninformative line.
+- `Watch for:` section on Form 4 now renders only the `vestingDetails` bullet when the AI extracts a vesting schedule. If absent, the entire section is suppressed via the existing `watchFor.length > 0` guard. No empty headers, no orphaned bullets.
+- Transaction-code descriptions still render in the data-snapshot table via `getTransactionCodeDescription()` in `components/ui/email/design-system.ts:463` — this change only removes the duplicated, non-actionable mention in `Watch for:`.
+
+### Removed
+- Dead `codeDescription` field on the internal `AggregatedTransaction` interface in `form4-minimalist-template.tsx` — no consumers after the watchFor deletion. Removed the `@deprecated` wrapper `getTransactionCodeDescription` that re-exported the canonical function with no additional logic.
+
+### Fixed
+- `.nvmrc` bumped to `20.20.2`. Cloudflare Workers Builds runner dropped support for the old `20.11.0` pin (Jan 2024), causing CI to fail at `Installing nodejs 20.11.0 → Failed: error occurred while installing tools or dependencies` across all branches and main.
 
 ## [0.0.23.0] - 2026-04-22
 
