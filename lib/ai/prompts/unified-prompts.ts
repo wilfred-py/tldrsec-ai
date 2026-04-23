@@ -436,6 +436,11 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'Vesting schedule from footnotes if present (e.g., "25% vests annually starting March 15, 2026"). Include plan name and key dates. Empty string if no vesting info found.',
         maxLength: 300
+      },
+      postTransactionCommonShares: {
+        type: 'string',
+        description: 'AUTHORITATIVE post-transaction Common Stock holdings. Locate Table I (Non-Derivative Securities). Find the row whose Title of Security equals "Common Stock" (or "Class A Common Stock", etc.) AND whose Ownership Form (Column 7) is "D" (Direct). Take the value from Column 5 ("Amount of Securities Beneficially Owned Following Reported Transaction") of the LAST-DATED such row. Return digits only, no commas, no suffix (e.g., "14900"). CRITICAL: Do NOT use Table II (derivative) values like RSU or option counts. Do NOT use Indirect (I) holdings. If there is no Common Stock Direct row in Table I, leave empty string.',
+        maxLength: 30
       }
     }
   },
@@ -1254,6 +1259,15 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   * Table II (Derivative): Extract from Column 11 — total derivative securities remaining (e.g., stock options)
   * If the exact column value is not visible, extract from footnotes or the text "Amount of Securities Beneficially Owned Following Reported Transaction(s)"
   * NEVER omit this field. If truly unavailable after checking all sources, use "unknown" rather than omitting it.
+- **CRITICAL** TOP-LEVEL postTransactionCommonShares — authoritative final Common Stock holdings:
+  * In ADDITION to per-transaction sharesOwnedFollowing, populate the top-level postTransactionCommonShares field.
+  * Source: Table I (Non-Derivative), last-dated row where Title of Security is "Common Stock" (or "Class A/B/C Common Stock") AND Ownership Form Column 7 is "D" (Direct). Take Column 5 of THAT row.
+  * MUST NOT use Table II values (RSUs, options, derivative securities). Those are a different category of holding.
+  * MUST NOT use Indirect (I) holdings — those are reported separately and should not be conflated.
+  * If the filing reports both Class A and Class B Common Stock Direct rows, use the row matching the class that was transacted. If unclear, prefer Class A.
+  * Format: digits only, no commas, no suffix. Example: "14900" (NOT "14,900 shares").
+  * Leave empty string ("") if no Common Stock Direct row exists in Table I (e.g., derivative-only filings).
+  * WHY THIS FIELD EXISTS: Production bug 2026-04-15 (AAPL Parekh) — the LLM's summary-level holdings figure incorrectly pulled from a Table II RSU row (15,331) instead of Table I Column 5 Common Stock Direct (14,900). This field is the authoritative override.
 - TABLE II DERIVATIVE TRANSACTIONS (MUST NOT BE SKIPPED):
   * If a filing has ONLY Table II entries and NO Table I entries, you MUST still populate the transactions array
   * Stock option grants: code='A', type='Award/Grant', shares=[number of options], pricePerShare='$0', acquisitionDisposition='A'

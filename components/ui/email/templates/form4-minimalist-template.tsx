@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign, markdownToHtml, formatDatesInText } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
@@ -726,8 +726,12 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const transactions = validTransactions.length > 0 ? validTransactions : extractedTransactions;
   const firstTx = transactions[0] || {};
 
-  // Determine data quality for email metadata
+  // Determine data quality for email metadata.
+  // Fail-loud guard: if the derived newStake disagrees with the narrative by >5%,
+  // force 'degraded' regardless of transaction completeness. The mismatch is
+  // already logged inside normalizeForm4Data. See .claude/tasks/form4-holdings-mismatch.md.
   const dataQuality: 'full' | 'partial' | 'extractor-only' | 'degraded' =
+    normalizedData?.hasNarrativeMismatch ? 'degraded' :
     validTransactions.length > 0 && normalizedData?.filerName ? 'full' :
     validTransactions.length > 0 || normalizedData?.filerName ? 'partial' :
     hasExtractedData ? 'extractor-only' : 'degraded';
@@ -773,8 +777,12 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     ? (summaryText.startsWith(headline) ? summaryText.slice(headline.length).trim() : summaryText)
     : '';
 
-  // Build preheader text for inbox preview
-  const preheaderText = `${signal.level} SIGNAL: ${signal.verdict} — ${(summaryText || '').substring(0, 100)}`;
+  // Reformat YYYY-MM-DD dates in body copy to "DD MMM YYYY"
+  const headlineDisplay = formatDatesInText(headline);
+  const remainingSummaryDisplay = formatDatesInText(remainingSummary);
+
+  // Build preheader text for inbox preview (dates reformatted for consistency with body)
+  const preheaderText = `${signal.level} SIGNAL: ${signal.verdict} — ${formatDatesInText(summaryText || '').substring(0, 100)}`;
 
   // Pick the badge color based on signal level
   const signalBadgeColors = signal.level === 'HIGH' ? BadgeColors.high
@@ -784,30 +792,45 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
     : BadgeColors.moderate;
 
   // Build data snapshot rows from transaction data
-  const dataRows: { label: string; value: string; color?: string }[] = [];
+  const dataRows: { label: string; value: React.ReactNode }[] = [];
   for (const aggTx of aggregatedTransactions.slice(0, 3)) {
     const config = getAggregatedTransactionConfig(aggTx.type);
     const valueStr = aggTx.totalValue === 0
       ? `${aggTx.sharesDisplay} shares`
       : `${aggTx.valueDisplay} (${aggTx.sharesDisplay} shares${aggTx.avgPrice > 0 ? ` @ ${aggTx.priceDisplay}` : ''})`;
-    dataRows.push({ label: `${config.icon} ${config.label}`, value: valueStr, color: config.valueColor });
+    dataRows.push({ label: `${config.icon} ${config.label}`, value: valueStr });
   }
 
-  // Add holdings row with directional arrow
+  // Add holdings row with directional arrow (always points right: pre → post)
   if (previousStake && newStake) {
     const pctNum = parseFloat((percentChange || '0').replace(/[%+]/g, ''));
-    const pctColor = pctNum < 0 ? '#DC2626' : pctNum > 0 ? '#16A34A' : EmailColors.text.meta;
-    const arrow = pctNum < 0 ? '↓' : pctNum > 0 ? '↑' : '→';
+    // Darker green (#15803D = WCAG AA 4.5:1+) replaces #16A34A (3.05:1, fails AA on body text)
+    const pctColor = pctNum < 0 ? '#DC2626' : pctNum > 0 ? '#15803D' : EmailColors.text.meta;
     const pctDisplay = percentChange && !percentChange.includes('NaN')
       ? (pctNum > 0 && !percentChange.startsWith('+') ? `+${percentChange}` : percentChange)
       : '';
     dataRows.push({
       label: 'Holdings',
-      value: `${previousStake} ${arrow} ${newStake}${pctDisplay ? ` (${pctDisplay})` : ''}`,
-      color: pctColor,
+      value: (
+        <span style={{ color: '#111827' }}>
+          <span style={{ color: '#6B7280' }}>{previousStake}</span>
+          {/* NBSPs instead of span padding — Outlook Word renderer drops padding on inline spans */}
+          <span>{'\u00A0\u00A0→\u00A0\u00A0'}</span>
+          <span>{newStake}</span>
+          {pctDisplay && Number.isFinite(pctNum) && pctNum !== 0 && (
+            <>
+              {'\u00A0'}
+              <span style={{ color: pctColor }}>({pctDisplay})</span>
+            </>
+          )}
+        </span>
+      ),
     });
   } else if (newStake) {
-    dataRows.push({ label: 'Holdings', value: newStake });
+    dataRows.push({
+      label: 'Holdings',
+      value: newStake,
+    });
   }
 
   // Ownership breakdown for mixed direct/indirect
@@ -880,7 +903,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
 
               {/* Lead sentence */}
               <h1 style={EmailStyles.leadSentence}>
-                {headline || `${filerName} filed a Form 4 for ${displayTicker}`}
+                {headlineDisplay || `${filerName} filed a Form 4 for ${displayTicker}`}
               </h1>
 
               {/* Why it matters */}
@@ -908,7 +931,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
                         }}>{row.label}</td>
                         <td style={{
                           ...EmailStyles.dataValue,
-                          color: row.color || '#111827',
+                          color: '#111827',
                           borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
                         }}>{row.value}</td>
                       </tr>
@@ -953,7 +976,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
               {remainingSummary && (
                 <div
                   style={EmailStyles.prose}
-                  dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummary) }}
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(remainingSummaryDisplay) }}
                 />
               )}
 

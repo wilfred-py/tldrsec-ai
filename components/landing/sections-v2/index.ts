@@ -10,5 +10,6 @@ export { GmailInboxHero } from './gmail-inbox-hero';
 export { FeaturesSectionV2 } from './features-section-v2';
 export { SummariesShowcaseV2 } from './summaries-showcase-v2';
 export { PricingSectionV2 } from './pricing-section-v2';
+export { FAQSectionV2 } from './faq-section-v2';
 export { CTASectionV2 } from './cta-section-v2';
 export { FooterSectionV2 } from './footer-section-v2';
