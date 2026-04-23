@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.22.7] - 2026-04-23
+
+### Added
+- `ResendClient.prepareEmailParams` now auto-injects `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers on every single-recipient transactional send (RFC 8058, Gmail/Yahoo Feb-2024 bulk-sender requirement). Caller-supplied headers win on collision, so campaign routes that set their own unsubscribe token continue to work. Bulk sends (array `to`) skip auto-injection because per-recipient tokens cannot be derived from a shared envelope.
+- `EmailMessage.headers?: Record<string, string>` field on the shared email type so callers can pass custom headers through the shared send path.
+- `lib/email/__tests__/frequency-gate-regression.test.ts`: six SDK-only regression tests proving `NotificationService.getImmediateNotificationRecipients()` filters at the Prisma query level with `emailFrequency equals IMMEDIATE`. Guards against a class of regressions where NONE/DAILY users leak into the immediate cron fan-out.
+
+### Changed
+- Header merge logic prefers caller-supplied headers over auto-injected defaults, preserving existing campaign-side unsubscribe flows while closing the gap for transactional sends that had no unsubscribe header at all.
+
 ## [0.0.22.6] - 2026-04-23
 
 ### Changed
