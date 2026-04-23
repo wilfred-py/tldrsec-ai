@@ -726,8 +726,12 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const transactions = validTransactions.length > 0 ? validTransactions : extractedTransactions;
   const firstTx = transactions[0] || {};
 
-  // Determine data quality for email metadata
+  // Determine data quality for email metadata.
+  // Fail-loud guard: if the derived newStake disagrees with the narrative by >5%,
+  // force 'degraded' regardless of transaction completeness. The mismatch is
+  // already logged inside normalizeForm4Data. See .claude/tasks/form4-holdings-mismatch.md.
   const dataQuality: 'full' | 'partial' | 'extractor-only' | 'degraded' =
+    normalizedData?.hasNarrativeMismatch ? 'degraded' :
     validTransactions.length > 0 && normalizedData?.filerName ? 'full' :
     validTransactions.length > 0 || normalizedData?.filerName ? 'partial' :
     hasExtractedData ? 'extractor-only' : 'degraded';
@@ -823,7 +827,10 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
       ),
     });
   } else if (newStake) {
-    dataRows.push({ label: 'Holdings', value: newStake });
+    dataRows.push({
+      label: 'Holdings',
+      value: newStake,
+    });
   }
 
   // Ownership breakdown for mixed direct/indirect
