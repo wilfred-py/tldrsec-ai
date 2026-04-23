@@ -53,9 +53,10 @@ const safeRecordEmailSent = (emailType: string, recipient: string, success: bool
 };
 
 import { resendConfig } from './config';
-import type { 
-  EmailMessage, 
-  EmailSendResult, 
+import { generateUnsubscribeUrl } from './unsubscribe-tokens';
+import type {
+  EmailMessage,
+  EmailSendResult,
   // EmailSendSuccess, // Type export not used directly
   // EmailSendFailure, // Type export not used directly
   EmailUsage,
@@ -63,6 +64,26 @@ import type {
   // EmailAttachment, // Type export not used directly
   EmailVerificationResult
 } from './types';
+
+const EMAIL_FORMAT_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Extract a single recipient email string from EmailMessage.to, or null if
+ * the recipient is ambiguous (array, bulk send) or malformed.
+ * Used to derive per-recipient headers (e.g. List-Unsubscribe).
+ */
+function getSingleRecipientEmail(
+  to: string | string[] | EmailRecipient | EmailRecipient[]
+): string | null {
+  if (typeof to === 'string') {
+    return EMAIL_FORMAT_RE.test(to) ? to : null;
+  }
+  if (Array.isArray(to)) {
+    return null;
+  }
+  const email = to?.email;
+  return typeof email === 'string' && EMAIL_FORMAT_RE.test(email) ? email : null;
+}
 
 /**
  * Error codes specific to the Resend API
@@ -502,7 +523,7 @@ export class ResendClient {
     // Add CC and BCC if present
     if (message.cc) params.cc = this.formatRecipients(message.cc);
     if (message.bcc) params.bcc = this.formatRecipients(message.bcc);
-    
+
     // Add attachments if present
     if (message.attachments && message.attachments.length > 0) {
       params.attachments = message.attachments.map(attachment => ({
@@ -511,7 +532,31 @@ export class ResendClient {
         contentType: attachment.contentType
       }));
     }
-    
+
+    // Merge caller-supplied + auto-injected headers.
+    // Auto-inject List-Unsubscribe + List-Unsubscribe-Post for single-recipient
+    // transactional sends (Gmail/Yahoo Feb-2024 bulk-sender requirement, RFC 8058).
+    // Caller headers win on collision so campaign routes that set their own
+    // unsubscribe token keep working.
+    const autoHeaders: Record<string, string> = {};
+    const singleRecipient = getSingleRecipientEmail(message.to);
+    if (singleRecipient) {
+      try {
+        const unsubscribeUrl = generateUnsubscribeUrl(singleRecipient);
+        autoHeaders['List-Unsubscribe'] = `<${unsubscribeUrl}>`;
+        autoHeaders['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+      } catch (err) {
+        // CRON_SECRET missing or sign failure — skip header rather than blocking send
+        logger.warn('Failed to generate List-Unsubscribe header, sending without it', {
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+    const mergedHeaders = { ...autoHeaders, ...(message.headers || {}) };
+    if (Object.keys(mergedHeaders).length > 0) {
+      params.headers = mergedHeaders;
+    }
+
     return params;
   }
   
