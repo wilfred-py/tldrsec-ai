@@ -5,6 +5,7 @@ import {
   GmailInboxHero,
   FeaturesSectionV2,
   PricingSectionV2,
+  FAQSectionV2,
   CTASectionV2,
   FooterSectionV2
 } from './sections-v2';
@@ -48,6 +49,7 @@ export function LandingPageV2() {
 
           <FeaturesSectionV2 />
           <PricingSectionV2 />
+          <FAQSectionV2 />
           <CTASectionV2 />
           <FooterSectionV2 />
         </main>

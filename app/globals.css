@@ -173,12 +173,33 @@
   .animate-pulse-dot-2 { animation: pulseDot 1.4s ease-in-out 0.2s infinite; }
   .animate-pulse-dot-3 { animation: pulseDot 1.4s ease-in-out 0.4s infinite; }
 
+  /* Radix Accordion height transitions (used by components/ui/accordion.tsx) */
+  @keyframes accordion-down {
+    from { height: 0; }
+    to { height: var(--radix-accordion-content-height); }
+  }
+
+  @keyframes accordion-up {
+    from { height: var(--radix-accordion-content-height); }
+    to { height: 0; }
+  }
+
+  .animate-accordion-down {
+    animation: accordion-down 0.2s ease-out;
+  }
+
+  .animate-accordion-up {
+    animation: accordion-up 0.2s ease-out;
+  }
+
   /* Respect user's motion preferences (WCAG 2.3.1) */
   @media (prefers-reduced-motion: reduce) {
     .animate-shimmer,
     .animate-fadeIn,
     .animate-fade-in,
-    .animate-slideUp {
+    .animate-slideUp,
+    .animate-accordion-down,
+    .animate-accordion-up {
       animation: none !important;
       transition: none !important;
     }

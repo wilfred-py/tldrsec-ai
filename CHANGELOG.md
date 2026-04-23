@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.23.0] - 2026-04-22
+
+### Added
+- Landing page FAQ section below pricing, answering the nine questions most likely to block a trial sign-up: free trial terms, cancel flow, accuracy, Pro vs Max tiers, which filing types are covered, speed, which companies are tracked, investment-advice disclaimer, and data sourcing. Uses shadcn Accordion (single-expand, collapsible, item 1 open by default) so the section stays compact on first paint.
+- FAQPage JSON-LD schema emitted on the landing page so Google can render FAQ rich results. Questions and plaintext answers are shared between the rendered accordion and the structured data so they never drift.
+- Jest regression tests covering the FAQ render, accordion interaction, and guards against `SUBSCRIPTION_PLANS.PRO.monthlyPrice` / `.MAX.monthlyPrice` / `PRO.tickerLimit` drifting out of sync with the copy.
+
+### Changed
+- Pricing/FAQ answer text pulls live from `SUBSCRIPTION_PLANS` instead of hardcoding dollar amounts, so plan-config changes propagate automatically.
+
 ## [0.0.22.6] - 2026-04-23
 
 ### Changed
