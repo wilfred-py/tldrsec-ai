@@ -125,7 +125,7 @@ describe('Email Subject Line Consistency', () => {
         ticker: 'GOOGL'
       });
 
-      expect(subject).toBe('New 10-K/A Filing: Google LLC (GOOGL)');
+      expect(subject).toBe('[AMENDED] New 10-K/A Filing: Google LLC (GOOGL)');
     });
   });
 });

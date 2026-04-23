@@ -122,6 +122,10 @@ export interface FilingTemplateData {
   summaryUrl?: string; // URL to view summary
   summaryText?: string; // Additional summary text
   summaryData?: {
+    // AI-generated headline (shared across templates)
+    headline?: string;
+    keyPoints?: string[];
+
     // Common fields for 10-K/10-Q
     period?: string;
     financials?: Array<{
@@ -145,6 +149,7 @@ export interface FilingTemplateData {
 
     // Form 4 specific
     filerName?: string;
+    filerRole?: string;
     relationship?: string;
     percentageChange?: string;
     newStake?: string;

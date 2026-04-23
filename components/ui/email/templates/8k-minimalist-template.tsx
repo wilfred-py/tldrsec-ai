@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, markdownToHtml, getSentimentColor, getSentimentEmoji } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, markdownToHtml, getSentimentEmoji } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
@@ -302,8 +303,13 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   // Build preheader text for inbox preview
   const preheaderText = `${signal.level}: ${signal.verdict} — ${(summaryText || '').substring(0, 100)}`;
 
-  // Pick badge colors from the muted palette
-  const signalBadgeColors = isMaterial ? BadgeColors.high : BadgeColors.low;
+  // Signal colorKey for material/routine badge
+  const signalColorKey = isMaterial ? 'high' : 'low';
+  const sentimentKey = sentiment.toLowerCase();
+  const sentimentColorKey = (sentimentKey === 'positive' || sentimentKey === 'negative' || sentimentKey === 'mixed')
+    ? sentimentKey
+    : 'neutral';
+  const suppressSentiment = isMaterial && sentimentKey === 'neutral';
 
   // Remaining summary: decouple from headline — find first sentence boundary in original text
   const sentenceBoundary = findFirstSentenceBoundary(summaryText || '');
@@ -313,15 +319,6 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
 
   // "Why it matters" — use financialImpact when available, drop boilerplate
   const whyItMattersText = financialImpact || signal.description;
-
-  // Build data snapshot rows
-  const dataRows: { label: string; value: string }[] = [];
-  if (eventType) {
-    dataRows.push({ label: 'Event', value: eventType });
-  }
-  if (filingDate) {
-    dataRows.push({ label: 'Filed', value: filingDate });
-  }
 
   // Build watch-for items from key highlights + items reported
   const watchFor: string[] = [];
@@ -354,75 +351,40 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
-        ticker={displayTicker}
-        companyName={companyName}
-        filingType={filingType || '8-K'}
-        filingDate={filingDate}
-        filingCategory={eventType || (isMaterial ? 'Material' : 'Routine')}
-      />
-
-      {/* Staleness warning */}
+      {/* Staleness warning (above header) */}
       {filingDate && (
         <div style={{ padding: '0 15px' }}>
           <StalenessBanner filingDate={new Date(filingDate)} />
         </div>
       )}
 
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
+        ticker={displayTicker}
+        companyName={companyName}
+        filingDate={filingDate}
+        headline={headline}
+      />
+
+      {/* Form badge + materiality + sentiment row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || '8-K'}
+        filingCategory={eventType || (isMaterial ? 'Material' : 'Routine')}
+        signal={{
+          label: `${signal.icon} ${signal.level}`,
+          colorKey: signalColorKey,
+        }}
+        secondarySignal={sentiment && !suppressSentiment ? {
+          label: `${getSentimentEmoji(sentiment)} ${sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}`,
+          colorKey: sentimentColorKey,
+        } : undefined}
+      />
+
       {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-
-              {/* Signal badge + sentiment — one row, no duplicate category badge */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: signalBadgeColors.bg,
-                  color: signalBadgeColors.text,
-                }}>
-                  {signal.icon} {signal.level}
-                </span>
-
-                {/* Sentiment badge — inline, muted colors */}
-                {sentiment && !(isMaterial && sentiment.toLowerCase() === 'neutral') && (
-                  <span style={{
-                    ...EmailStyles.pillBadge,
-                    marginLeft: '8px',
-                    backgroundColor: getSentimentColor(sentiment).bg,
-                    color: getSentimentColor(sentiment).text,
-                  }}>
-                    {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
-                  </span>
-                )}
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {headline}
-              </h1>
-
-              {/* Data snapshot — after headline, before why-it-matters */}
-              {dataRows.length > 0 && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '12px' }}>
-                  <tbody>
-                    {dataRows.map((row, idx) => (
-                      <tr key={idx}>
-                        <td style={{
-                          ...EmailStyles.dataLabel,
-                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
-                        }}>{row.label}</td>
-                        <td style={{
-                          ...EmailStyles.dataValue,
-                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
-                        }}>{row.value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
 
               {/* Why it matters */}
               <p style={EmailStyles.whyItMatters}>

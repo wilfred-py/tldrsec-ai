@@ -147,3 +147,61 @@ describe('Form 4 Template Transfer Rendering', () => {
     });
   });
 });
+
+/**
+ * Render-order block — locks in the new lead-with-headline layout contract for
+ * Form 4: logo → headline → ticker line → badge cluster (form + signal pills)
+ * → body. If anyone reverts to the old "ticker first, headline buried in body"
+ * layout, these assertions fail loudly.
+ */
+describe('Form 4 render order (post-restructure)', () => {
+  // We import inside describe to avoid pulling React/render at module load
+  // time when the utility-only tests above run in isolation.
+  const { render } = require('@testing-library/react') as typeof import('@testing-library/react');
+  const { Form4MinimalistTemplate } = require('../../components/ui/email/templates/form4-minimalist-template') as typeof import('../../components/ui/email/templates/form4-minimalist-template');
+
+  const baseFiling = {
+    companyName: 'Apple Inc.',
+    symbol: 'AAPL',
+    filingType: '4',
+    filingDate: '2026-01-15',
+    filingUrl: 'https://www.sec.gov/example',
+    summaryText: 'Insider transaction.',
+    summaryData: {
+      headline: 'Tim Cook sold 50,000 AAPL shares',
+      filerName: 'Tim Cook',
+      filerRole: 'CEO',
+    },
+  };
+
+  it('renders logo before headline before ticker line before form badge', () => {
+    const { container } = render(
+      React.createElement(Form4MinimalistTemplate, { filing: baseFiling as never }),
+    );
+    const html = container.innerHTML;
+
+    const logoIdx = html.indexOf('alt="tldrSEC"');
+    const headlineIdx = html.search(/<h1[^>]*>/);
+    // "Apple Inc." also appears in hidden preheader text; anchor at headlineIdx.
+    const tickerIdx = html.indexOf('Apple Inc.', Math.max(0, headlineIdx));
+    // Form badge always renders the filing type label — look for it AFTER the
+    // ticker line so the match is guaranteed to be the body badge, not any
+    // accidental upstream occurrence.
+    const badgeIdx = html.indexOf('Insider', Math.max(0, tickerIdx));
+
+    expect(logoIdx).toBeGreaterThanOrEqual(0);
+    expect(headlineIdx).toBeGreaterThan(logoIdx);
+    expect(tickerIdx).toBeGreaterThan(headlineIdx);
+    expect(badgeIdx).toBeGreaterThan(tickerIdx);
+  });
+
+  it('renders the filer name inline with the ticker line, not in a separate "Filer:" row', () => {
+    const { container } = render(
+      React.createElement(Form4MinimalistTemplate, { filing: baseFiling as never }),
+    );
+    // The ticker line should now carry "AAPL · Apple Inc. · Tim Cook, CEO".
+    // That's the one place the filer identity renders — no dedicated table row.
+    expect(container.textContent).toMatch(/Tim Cook, CEO/);
+  });
+});
+

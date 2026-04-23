@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, markdownToHtml } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, markdownToHtml } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extractForm144Data } from '../../../../lib/email/form144-data-extractor';
@@ -132,7 +133,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   const notable = isNotableSale(signalStrength, summaryText || '', estimatedValueNum);
 
   // Badge colors
-  const badgeColors = notable ? BadgeColors.high : BadgeColors.low;
+  const signalColorKey = notable ? 'high' : 'low';
   const signalLabel = notable ? 'NOTABLE SALE' : 'ROUTINE';
   const signalVerdict = notable ? 'Worth Attention' : 'Pre-planned Sale';
   const signalDescription = notable
@@ -219,14 +220,23 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
         ticker={displayTicker}
         companyName={companyName}
-        filingType={filingType || 'Form 144'}
         filingDate={filingDate}
+        headline={headline || `${filerName} filed a Form 144 for ${displayTicker}`}
         filerName={filerName}
         filerRole={filerRole}
+      />
+
+      {/* Form badge + signal badge row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || 'Form 144'}
+        signal={{
+          label: `${notable ? '!' : '\u2713'} ${signalLabel}`,
+          colorKey: signalColorKey,
+        }}
       />
 
       {/* Smart Brevity body */}
@@ -234,22 +244,6 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-
-              {/* Signal badge -- FIRST element */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: badgeColors.bg,
-                  color: badgeColors.text,
-                }}>
-                  {notable ? '!' : '\u2713'} {signalLabel}
-                </span>
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {headline || `${filerName} filed a Form 144 for ${displayTicker}`}
-              </h1>
 
               {/* Why it matters */}
               <p style={EmailStyles.whyItMatters}>

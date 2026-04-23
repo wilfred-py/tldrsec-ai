@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
@@ -130,12 +131,18 @@ export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateP
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
         ticker={displayTicker}
         companyName={companyName}
-        filingType={filingType || '11-K'}
         filingDate={filingDate}
+        headline={leadText || `${companyName} filed an 11-K employee benefit plan report`}
+      />
+
+      {/* Form badge + signal badge row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || '11-K'}
+        signal={{ label: planType || 'EMPLOYEE PLAN', colorKey: 'neutral' }}
       />
 
       {/* Smart Brevity body */}
@@ -143,22 +150,6 @@ export function Form11KMinimalistTemplate({ filing }: Form11KMinimalistTemplateP
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-
-              {/* Signal badge -- FIRST element */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: BadgeColors.neutral.bg,
-                  color: BadgeColors.neutral.text,
-                }}>
-                  {planType || 'EMPLOYEE PLAN'}
-                </span>
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {leadText || `${companyName} filed an 11-K employee benefit plan report`}
-              </h1>
 
               {/* Why it matters */}
               <p style={EmailStyles.whyItMatters}>

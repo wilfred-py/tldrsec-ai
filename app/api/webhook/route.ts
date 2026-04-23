@@ -3,6 +3,7 @@
  *
  * POST /api/webhook?provider=clerk  → Clerk user lifecycle events
  * POST /api/webhook?provider=stripe → Stripe billing events
+ * POST /api/webhook?provider=resend → Resend email engagement events (open/click)
  */
 
 import { headers } from 'next/headers';
@@ -46,8 +47,10 @@ export async function POST(req: NextRequest) {
       return handleClerkWebhook(req);
     case 'stripe':
       return handleStripeWebhook(req);
+    case 'resend':
+      return handleResendWebhook(req);
     default:
-      return NextResponse.json({ error: 'Unknown provider. Use ?provider=clerk or ?provider=stripe' }, { status: 400 });
+      return NextResponse.json({ error: 'Unknown provider. Use ?provider=clerk, ?provider=stripe, or ?provider=resend' }, { status: 400 });
   }
 }
 
@@ -521,4 +524,120 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
       console.error(`[webhook] Failed to send payment failed notification to ${user.email}:`, emailError);
     }
   }
+}
+
+// ─── Resend Webhook ─────────────────────────────────────────────────────────
+
+/**
+ * Resend posts engagement events (sent, delivered, opened, clicked, bounced,
+ * complained, delivery_delayed) signed with Svix. We only forward the two
+ * engagement events that aren't already covered by client-side autocapture:
+ * email.opened and email.clicked.
+ *
+ * Outbound tags are written by notification-service.ts as {name, value} pairs
+ * (template, userId, filingId, formType, ticker). Resend hands them back on
+ * the event payload as a flat Record<string,string>, which we lift onto the
+ * PostHog event so each engagement is fully attributable.
+ */
+
+type ResendTag = { name: string; value: string };
+
+interface ResendEmailEventData {
+  email_id?: string;
+  to?: string[] | string;
+  from?: string;
+  subject?: string;
+  created_at?: string;
+  tags?: Record<string, string> | ResendTag[];
+  click?: { link?: string };
+}
+
+interface ResendEvent {
+  type: string;
+  created_at?: string;
+  data: ResendEmailEventData;
+}
+
+function normalizeResendTags(tags: ResendEmailEventData['tags']): Record<string, string> {
+  if (!tags) return {};
+  if (Array.isArray(tags)) {
+    return tags.reduce<Record<string, string>>((acc, t) => {
+      if (t && typeof t.name === 'string') acc[t.name] = String(t.value ?? '');
+      return acc;
+    }, {});
+  }
+  return tags;
+}
+
+async function handleResendWebhook(req: Request) {
+  const WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET;
+
+  if (!WEBHOOK_SECRET) {
+    console.error('[webhook][resend] RESEND_WEBHOOK_SECRET is not set');
+    return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
+  }
+
+  // Read svix headers directly from the incoming Request. Next's headers()
+  // helper requires an app-router request context and breaks in unit tests;
+  // the Request object is the same shape in prod and tests.
+  const svix_id = req.headers.get('svix-id');
+  const svix_timestamp = req.headers.get('svix-timestamp');
+  const svix_signature = req.headers.get('svix-signature');
+
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return new Response('Missing Svix headers', { status: 400 });
+  }
+
+  const body = await req.text();
+
+  let evt: ResendEvent;
+  try {
+    const { Webhook } = await import('svix');
+    const wh = new Webhook(WEBHOOK_SECRET);
+    evt = wh.verify(body, {
+      'svix-id': svix_id,
+      'svix-timestamp': svix_timestamp,
+      'svix-signature': svix_signature,
+    }) as ResendEvent;
+  } catch (err) {
+    console.error('[webhook][resend] Signature verification failed:', err);
+    return new Response('Signature verification failed', { status: 400 });
+  }
+
+  try {
+    if (evt.type === 'email.opened' || evt.type === 'email.clicked') {
+      const tagMap = normalizeResendTags(evt.data.tags);
+      const userId = tagMap.userId || tagMap.user_id;
+
+      if (!userId) {
+        // No user attribution — skip silently. Resend still gets a 200 so it
+        // doesn't retry, but we don't pollute PostHog with anonymous events.
+        console.warn(`[webhook][resend] ${evt.type} missing userId tag for email ${evt.data.email_id}`);
+      } else {
+        const baseProps = {
+          email_id: evt.data.email_id || '',
+          template: tagMap.template,
+          form_type: tagMap.formType || tagMap.form_type,
+          ticker: tagMap.ticker,
+          filing_id: tagMap.filingId || tagMap.filing_id,
+        };
+
+        if (evt.type === 'email.opened') {
+          captureServerEvent(userId, EVENTS.EMAIL_OPENED, baseProps);
+        } else {
+          captureServerEvent(userId, EVENTS.EMAIL_CLICKED, {
+            ...baseProps,
+            link: evt.data.click?.link,
+          });
+        }
+      }
+    }
+    // All other event types (sent/delivered/bounced/complained/delivery_delayed)
+    // are acknowledged but not forwarded — add cases here if downstream consumers need them.
+  } catch (err) {
+    console.error('[webhook][resend] Handler error (non-fatal, returning 200):', err);
+  }
+
+  waitUntil(shutdownServerPostHog());
+  return NextResponse.json({ received: true });
 }
