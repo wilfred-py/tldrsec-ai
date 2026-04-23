@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.22.5] - 2026-04-21
+
+### Fixed
+- Form 4 "Holdings" row now deterministically reflects post-transaction Common Stock Direct balance (Table I Column 5) instead of sometimes picking a derivative RSU row from the LLM's array. Observed incident: AAPL Parekh 2026-04-15 displayed 15,331 (RSU row) instead of 14,900 (Common Stock Direct). New five-tier precedence in `lib/ai/utils/derive-stake.ts`: authoritative `postTransactionCommonShares` LLM field → Common Stock + Direct filtered derivation → any-SOF fallback → LLM legacy string → narrative regex. `isDirect()` now requires explicit `D` ownership form instead of defaulting permissively.
+- Dashboard filing-display now re-runs the Form 4 normalizer at read time, so historical summaries with the old wrong `newStake` value get the corrected display automatically. No data migration needed.
+
+### Added
+- Authoritative `postTransactionCommonShares` field in the unified Form 4 prompt schema. LLM is instructed to populate it from Table I Column 5 of the last-dated Common Stock Direct row.
+- `detectNewStakeNarrativeMismatch` flags >5% disagreement between the derived number and the narrative. Skips hedge-word narratives ("roughly", "approximately", "~") and zero-narrative false positives. Disagreements flip `dataQuality: 'degraded'` and emit a structured `form4_newStake_narrative_mismatch` log for observability. User-facing banner intentionally suppressed (decision 2026-04-20).
+- 14 new regression tests in `__tests__/email/form4-field-normalizer.test.ts` covering the Parekh fixture, dual-class issuers, Direct-vs-Indirect filtering, derivative-only filings, date-sort precedence, zero-balance holdings, and narrative mismatch edge cases.
+
 ## [0.0.22.4] - 2026-04-19
 
 ### Changed
