@@ -20,6 +20,15 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Duplicate-signal suppression in FormPlusMaterialityBadgeRow: if the form-type badge fully covers the signal (e.g. `S-1 | IPO` + `IPO FILING`), the redundant signal pill is omitted. Prevents two badges saying the same thing on IPO/acquisition filings.
 
+## [0.0.23.2] - 2026-04-24
+
+### Added
+- `.context/wiki/positioning-vs-seeking-alpha.md` — competitive positioning doc answering "why this, not Seeking Alpha?" in one place. Honest framing (where Seeking Alpha wins vs where tldrSEC wins), price-comparison table, and the market-gap thesis. Single source of truth for landing-FAQ updates and cold-outreach follow-ups.
+- `docs/outreach/dm-templates.md` — T1 (Reddit reply), T2 (Twitter), T3 (LinkedIn) cold-outreach templates plus one 4-day follow-up template. Pain-language bank pulled verbatim from `.claude/analysis/user-pain-points-and-quotes.md` ("patience-testing, eye-glazing", "300 pages", "days, if not weeks"). UTM URLs for each channel tag visits via existing `lib/analytics/page-tracking.ts` capture.
+
+### Changed
+- `.gitignore` now excludes `.claude/outreach/` so a workspace-local `prospect-list.md` (contact handles, send history) stays off GitHub.
+
 ## [0.0.23.1] - 2026-04-24
 
 ### Changed
