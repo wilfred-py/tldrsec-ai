@@ -92,6 +92,65 @@ function isSchedule13Type(formType?: string): boolean {
 }
 
 /**
+ * UTM variants for click-through attribution on the "Why it matters" rollout.
+ * - `ai`: AI-generated whyItMatters rendered
+ * - `fallback`: hardcoded fallback copy rendered
+ * - `note`: LOW/10b5-1 routine "Note:" label
+ * - `neutral`: NEUTRAL descriptive "What happened:" label
+ */
+export type WhyItMattersUtmVariant = 'ai' | 'fallback' | 'note' | 'neutral';
+
+interface UrlOptions {
+  variant?: WhyItMattersUtmVariant;
+  filingId?: string;
+}
+
+const EDGAR_SEARCH_FALLBACK = 'https://www.sec.gov/edgar/searchedgar/companysearch.html';
+const DEFAULT_APP_URL = 'https://tldrsec.app';
+
+/**
+ * Pulls the 18-digit accession number out of a SEC Archives URL. Returns
+ * `undefined` for URLs that don't match the `.../data/{CIK}/{ACCESSION}/...`
+ * pattern (e.g. EDGAR search pages).
+ */
+function extractAccessionFromUrl(url: string): string | undefined {
+  const match = url.match(/\/Archives\/edgar\/data\/\d+\/(\d{18})(?:[\/?#]|$)/);
+  return match?.[1];
+}
+
+/**
+ * When a `variant` is present, wrap the SEC URL in our `/r/filing` redirect
+ * so PostHog can capture an `email_cta_clicked` event server-side. sec.gov
+ * doesn't run our snippet — a redirect on our own domain is the only place
+ * we can observe the click.
+ *
+ * The `filing_id` query param (`f`) is used as PostHog distinctId for cohort
+ * attribution. When no explicit `filingId` is provided, fall back to the
+ * accession number parsed out of the SEC URL — otherwise every click would
+ * get a random anon id and lose cohort correlation across variants.
+ *
+ * Without a variant, the URL passes through unchanged (backward compat).
+ */
+function wrapWithRedirect(
+  url: string,
+  variant: WhyItMattersUtmVariant | undefined,
+  filingId: string | undefined,
+  formType: string | undefined,
+): string {
+  if (!variant) return url;
+  // Don't wrap the EDGAR search fallback — it's not a filing link.
+  if (url === EDGAR_SEARCH_FALLBACK) return url;
+  const base = process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL;
+  const params = new URLSearchParams();
+  params.set('url', url);
+  params.set('v', variant);
+  const resolvedFilingId = filingId ?? extractAccessionFromUrl(url);
+  if (resolvedFilingId) params.set('f', resolvedFilingId);
+  if (formType) params.set('ft', formType);
+  return `${base}/r/filing?${params.toString()}`;
+}
+
+/**
  * Validates and normalizes an SEC filing URL for use in email links.
  *
  * Design: Link directly to the actual document whenever possible.
@@ -102,33 +161,24 @@ function isSchedule13Type(formType?: string): boolean {
  *
  * @param filingUrl - The SEC filing URL (directory URL, document URL, or -index.htm URL)
  * @param formType - Optional form type (e.g., "Form 4", "Form 144") for smart XML handling
- * @returns A valid SEC filing URL for email display, or the EDGAR search page for empty URLs
- *
- * @example
- * // XML document (Form 4) with stylesheet - passes through for direct viewing
- * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/0001045810/000119903925000015/xslF345X05/wk-form4_1766450107.xml')
- * // Returns: 'https://www.sec.gov/Archives/edgar/data/0001045810/000119903925000015/xslF345X05/wk-form4_1766450107.xml'
- *
- * // XML document (Form 4) WITHOUT stylesheet - constructs stylesheet URL
- * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/1234567/000123456725000001/form4.xml', 'Form 4')
- * // Returns: 'https://www.sec.gov/Archives/edgar/data/1234567/000123456725000001/xslF345X05/form4.xml'
- *
- * // HTML document (8-K, 10-K) - passes through for direct viewing
- * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/0000021344/000155278125000454/e25454_ko-8k.htm')
- * // Returns: 'https://www.sec.gov/Archives/edgar/data/0000021344/000155278125000454/e25454_ko-8k.htm'
- *
- * // Directory URL - converts to index URL (fallback)
- * getSecFilingViewerUrl('https://www.sec.gov/Archives/edgar/data/0001679788/000167978825000249')
- * // Returns: 'https://www.sec.gov/Archives/edgar/data/0001679788/000167978825000249/0001679788-25-000249-index.html'
- *
- * // Empty URL - returns search fallback
- * getSecFilingViewerUrl('')
- * // Returns: 'https://www.sec.gov/edgar/searchedgar/companysearch.html'
+ * @param options - Optional `{ variant, filingId }`. When `variant` is set, the URL is wrapped
+ *                  in `/r/filing?...` so PostHog can capture the click server-side before 302ing
+ *                  to SEC. No-options / no-variant path returns the resolved SEC URL unchanged.
+ * @returns A valid URL for email display, or the EDGAR search page for empty URLs
  */
-export function getSecFilingViewerUrl(filingUrl: string, formType?: string): string {
+export function getSecFilingViewerUrl(
+  filingUrl: string,
+  formType?: string,
+  options?: UrlOptions,
+): string {
+  const resolved = resolveSecFilingUrl(filingUrl, formType);
+  return wrapWithRedirect(resolved, options?.variant, options?.filingId, formType);
+}
+
+function resolveSecFilingUrl(filingUrl: string, formType?: string): string {
   // Handle empty or invalid URLs - redirect to EDGAR company search
   if (!filingUrl || filingUrl.trim() === '') {
-    return 'https://www.sec.gov/edgar/searchedgar/companysearch.html';
+    return EDGAR_SEARCH_FALLBACK;
   }
 
   // For Schedule 13G/13D filings with -index.htm URLs, construct the actual document URL

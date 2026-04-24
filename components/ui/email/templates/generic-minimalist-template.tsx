@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, markdownToHtml, getWhyItMattersLabel } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
@@ -38,6 +38,10 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
   const rawData = summaryData as Record<string, unknown> | undefined;
   const keyPoints = rawData?.keyPoints as string[] | undefined;
   const documentDescription = rawData?.documentDescription as string | undefined;
+  const aiWhyItMatters = typeof rawData?.whyItMatters === 'string' ? rawData.whyItMatters : '';
+
+  // UTM variant: `ai` when AI produced whyItMatters, else `fallback`.
+  const utmVariant: 'ai' | 'fallback' = aiWhyItMatters ? 'ai' : 'fallback';
 
   // Build preheader text
   const preheaderText = `${filingType || 'SEC FILING'}: ${companyName} (${displayTicker}) -- ${(documentDescription || summaryText || '').substring(0, 80)}`;
@@ -98,13 +102,19 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* Why it matters */}
-              <p style={EmailStyles.whyItMatters}>
-                <strong style={{ color: '#000000' }}>Why it matters: </strong>
-                {documentDescription
+              {/* Why it matters — prefer AI copy when present, fall back to boilerplate */}
+              {(() => {
+                const fallback = documentDescription
                   ? `This filing provides new disclosure that may affect your investment thesis for ${displayTicker}.`
-                  : `SEC filings contain material disclosures. Review the key points below for anything relevant to your ${displayTicker} position.`}
-              </p>
+                  : `SEC filings contain material disclosures. Review the key points below for anything relevant to your ${displayTicker} position.`;
+                const label = getWhyItMattersLabel('material');
+                return (
+                  <p style={label.paragraphStyle}>
+                    <strong style={label.labelStyle}>{label.text}</strong>
+                    {aiWhyItMatters || fallback}
+                  </p>
+                );
+              })()}
 
               {/* Key points as watch-for style bullets */}
               {keyPoints && keyPoints.length > 0 && (
@@ -148,6 +158,7 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType}
+        utmVariant={utmVariant}
       />
     </div>
   );

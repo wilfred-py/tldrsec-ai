@@ -1,19 +1,24 @@
 import * as React from 'react';
 import { EmailColors, EMAIL_PREFERENCES_URL } from '../../design-system';
-import { getSecFilingViewerUrl } from '../../../../../lib/email/url-utils';
+import { getSecFilingViewerUrl, type WhyItMattersUtmVariant } from '../../../../../lib/email/url-utils';
 
 interface EmailFooterProps {
   filingUrl: string;
   formType?: string;
+  utmVariant?: WhyItMattersUtmVariant;
 }
 
 /**
  * Minimalist email footer component
  * CTA button + preferences link (always shown)
  */
-export function EmailFooter({ filingUrl, formType }: EmailFooterProps) {
-  // Convert index URLs to EDGAR Filing Viewer URLs for better user experience
-  const viewerUrl = filingUrl ? getSecFilingViewerUrl(filingUrl, formType) : '';
+export function EmailFooter({ filingUrl, formType, utmVariant }: EmailFooterProps) {
+  // Convert index URLs to EDGAR Filing Viewer URLs for better user experience.
+  // UTM variant (when provided) tags click-through attribution for the
+  // "Why it matters" rollout.
+  const viewerUrl = filingUrl
+    ? getSecFilingViewerUrl(filingUrl, formType, utmVariant ? { variant: utmVariant } : undefined)
+    : '';
 
   return (
     <table width="100%" cellPadding="0" cellSpacing="0">

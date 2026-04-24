@@ -28,6 +28,7 @@ export const EVENTS = {
   // Engagement
   SUMMARY_VIEWED: 'summary_viewed',
   FILING_CHAT_MESSAGE_SENT: 'filing_chat_message_sent',
+  EMAIL_CTA_CLICKED: 'email_cta_clicked',
 
   // Email lifecycle (Resend webhook → PostHog)
   EMAIL_OPENED: 'email_opened',
@@ -89,6 +90,17 @@ export type EventProps = {
   [EVENTS.FILING_CHAT_MESSAGE_SENT]: {
     filing_id: string;
     message_length: number;
+  };
+  [EVENTS.EMAIL_CTA_CLICKED]: {
+    // utm_content — which whyItMatters variant was rendered in the email
+    variant: 'ai' | 'fallback' | 'note' | 'neutral';
+    // Final SEC URL the user will land on after the redirect
+    destination: string;
+    // Optional accession number / filing id, passed from the email link for cohort analysis
+    filing_id?: string;
+    // Optional form type for per-form-type funnels
+    form_type?: string;
+    campaign: string;
   };
   [EVENTS.EMAIL_OPENED]: {
     email_id: string;

@@ -11,6 +11,8 @@
  * - 15px border-radius
  */
 
+import type * as React from 'react';
+
 export const EMAIL_LOGO_URL = 'https://tldrsec.app/images/logo-email.png';
 export const EMAIL_LOGO_WIDTH = 120;
 export const EMAIL_LOGO_HEIGHT = 24;
@@ -246,6 +248,19 @@ export const EmailStyles = {
     margin: '0',
   },
 
+  /**
+   * Muted variant for routine/neutral signals (10b5-1 trades, transfers, awards).
+   * Smaller and lighter so "Note:" and "What happened:" read as descriptive,
+   * not as a call to action.
+   */
+  whyItMattersRoutine: {
+    fontSize: '13px',
+    fontWeight: 400,
+    color: '#6B7280',
+    lineHeight: '1.5',
+    margin: '0',
+  },
+
   /** Thin section divider — replaces bordered SectionCards */
   thinDivider: {
     borderTop: '1px solid #E5E7EB',
@@ -414,6 +429,53 @@ export function getSentimentColor(sentiment: string): SentimentColorConfig {
     case 'mixed': return BadgeColors.mixed;
     default: return BadgeColors.neutral;
   }
+}
+
+/**
+ * Semantic signal buckets used to pick the "Why it matters / Note / What happened" label.
+ *
+ * - `material`: AI-actionable (HIGH, MODERATE, MATERIAL EVENT). Renders
+ *   **Why it matters:** with the default prominent style.
+ * - `routine`: mechanistic, non-discretionary (LOW, 10b5-1, ROUTINE DISCLOSURE).
+ *   Renders **Note:** with the muted style.
+ * - `descriptive`: purely neutral (trust transfers, stock awards). Renders
+ *   **What happened:** with the muted style.
+ */
+export type WhyItMattersBucket = 'material' | 'routine' | 'descriptive';
+
+export interface WhyItMattersLabel {
+  /** Label text including trailing colon + space (e.g., "Why it matters: "). */
+  text: string;
+  /** Paragraph style to apply to the whole line. */
+  paragraphStyle: React.CSSProperties;
+  /** Style for the <strong> label prefix. */
+  labelStyle: React.CSSProperties;
+}
+
+/**
+ * Map a semantic signal bucket to the label text + styles.
+ * Used across form4, 8-K, and generic templates so label behavior is consistent.
+ */
+export function getWhyItMattersLabel(bucket: WhyItMattersBucket): WhyItMattersLabel {
+  if (bucket === 'routine') {
+    return {
+      text: 'Note: ',
+      paragraphStyle: EmailStyles.whyItMattersRoutine,
+      labelStyle: { color: '#6B7280', fontWeight: 500 },
+    };
+  }
+  if (bucket === 'descriptive') {
+    return {
+      text: 'What happened: ',
+      paragraphStyle: EmailStyles.whyItMattersRoutine,
+      labelStyle: { color: '#6B7280', fontWeight: 500 },
+    };
+  }
+  return {
+    text: 'Why it matters: ',
+    paragraphStyle: EmailStyles.whyItMatters,
+    labelStyle: { color: '#000000', fontWeight: 700 },
+  };
 }
 
 /**
