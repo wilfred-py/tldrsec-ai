@@ -17,6 +17,10 @@ import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
 import { getHistoricalSummaries, buildContextEnrichedPrompt } from './historical-context';
 import { getEnrichmentContext } from './web-search-context';
+import {
+  isWhyItMattersEnabled,
+  isWithinDailyEnrichmentBudget,
+} from './enrichment-flags';
 // Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
@@ -746,18 +750,34 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       }
     }
 
-    // Enrich 8-K filings with web search context (M&A counterparty, director governance)
-    if (filingRecordFromDB.formType === '8-K' || filingRecordFromDB.formType === '8-K/A') {
+    // Enrich supported filings with web search context.
+    // Providers: counterparty + governance (8-K), debt issuance (424B2/424B3/FWP),
+    // earnings + capital return (8-K). Gated by PostHog flag + daily spend cap.
+    const ENRICHMENT_FORM_TYPES = new Set(['8-K', '8-K/A', '424B2', '424B3', 'FWP']);
+    if (ENRICHMENT_FORM_TYPES.has(filingRecordFromDB.formType) && !process.env.ENRICHMENT_FORCE_DISABLE) {
+      const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol || 'unknown';
       try {
-        const enrichments = await getEnrichmentContext(
-          processedContent,
-          filingRecordFromDB.formType,
-          filingRecordFromDB.companyName,
-          tickerSymbol || 'UNKNOWN'
-        );
-        for (const ctx of enrichments) {
-          enrichedContent += `\n\n${ctx}`;
-          componentLogger.info(`Added enrichment context for ${tickerSymbol}`);
+        const flagEnabled = await isWhyItMattersEnabled(accession);
+        const withinBudget = isWithinDailyEnrichmentBudget();
+        if (!flagEnabled) {
+          componentLogger.info('Enrichment flag off, skipping web-search', { accession });
+        } else if (!withinBudget) {
+          componentLogger.info('Enrichment daily spend cap reached, skipping', { accession });
+        } else {
+          const enrichments = await getEnrichmentContext(
+            processedContent,
+            filingRecordFromDB.formType,
+            filingRecordFromDB.companyName,
+            tickerSymbol || 'UNKNOWN',
+            { cacheKey: accession },
+          );
+          // Spend is recorded per-provider inside runSingleProvider via
+          // tryDebitEnrichmentBudget() — so 5 providers count 5x against the
+          // cap instead of a single flat per-filing debit.
+          for (const ctx of enrichments) {
+            enrichedContent += `\n\n${ctx}`;
+            componentLogger.info(`Added enrichment context for ${tickerSymbol}`);
+          }
         }
       } catch (enrichError) {
         componentLogger.warn(`Failed to fetch enrichment context: ${enrichError instanceof Error ? enrichError.message : String(enrichError)}`);

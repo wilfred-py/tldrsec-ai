@@ -9,6 +9,19 @@ import { z } from 'zod';
 import { SECFilingType } from '../prompts/prompt-types';
 import { ValidationResult } from './types';
 import { canonicalizeFormType } from '../utils/form-type-utils';
+import { coerceWhyItMatters } from './why-it-matters';
+
+/**
+ * Optional whyItMatters field. Kept in Zod so non-strict `.partial()` mode
+ * doesn't strip it before post-parse coercion runs.
+ *
+ * Zod enforces only the hard upper bound (max 180 chars). The 40-char
+ * minimum is applied inside coerceWhyItMatters, which DELETES invalid
+ * values rather than rejecting the whole parse. This keeps the two-state
+ * contract intact even when the AI returns empty string or sub-threshold
+ * text, since the prompt explicitly allows an empty-string bailout.
+ */
+const whyItMattersSchema = z.string().max(180).optional();
 
 /**
  * Common reused schema elements
@@ -40,7 +53,8 @@ const schema10K = z.object({
   sections: z.array(sectionSchema).optional(),
   summary: z.string().optional(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(100).optional(),
+  whyItMatters: whyItMattersSchema
 });
 
 /**
@@ -58,7 +72,8 @@ const schema10Q = z.object({
   sections: z.array(sectionSchema).optional(),
   summary: z.string().optional(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(100).optional(),
+  whyItMatters: whyItMattersSchema
 });
 
 /**
@@ -75,7 +90,8 @@ const schema8K = z.object({
   structuralChanges: z.string().or(z.array(z.string())).optional(),
   additionalNotes: z.string().optional(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(100).optional(),
+  whyItMatters: whyItMattersSchema
 });
 
 /**
@@ -162,7 +178,8 @@ const schemaS1 = z.object({
   ).optional(),
   summary: z.string(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(100).optional(),
+  whyItMatters: whyItMattersSchema
 });
 
 /**
@@ -194,7 +211,8 @@ const schemaDEF14A = z.object({
   ).optional(),
   summary: z.string(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(100).optional(),
+  whyItMatters: whyItMattersSchema
 });
 
 /**
@@ -208,7 +226,8 @@ const schemaGeneric = z.object({
   keyPoints: z.array(z.string()),
   summary: z.string(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(100).optional(),
+  whyItMatters: whyItMattersSchema
 });
 
 /**
@@ -277,11 +296,13 @@ export function validateAgainstSchema(
     // In strict mode, we validate against the full schema
     if (strict) {
       const result = schema.safeParse(data);
-      
+
       if (result.success) {
+        const validated = result.data as Record<string, unknown>;
+        coerceWhyItMatters(validated);
         return {
           valid: true,
-          validatedData: result.data
+          validatedData: validated
         };
       } else {
         return {
@@ -290,15 +311,17 @@ export function validateAgainstSchema(
           partialData: data
         };
       }
-    } 
+    }
     // In non-strict mode, we validate as much as possible
     else {
       // Create a partial schema with only the fields that exist in the data
       // Type assertion to handle the fact that partial() is not on ZodTypeAny
       const partialSchema = (schema as z.ZodObject<z.ZodRawShape>).partial();
       const result = partialSchema.safeParse(data);
-      
+
       if (result.success) {
+        const validated = result.data as Record<string, unknown>;
+        coerceWhyItMatters(validated);
         // Since we've already applied post-processing at this point,
         // we can be more lenient with validation since missing fields should have been filled
         
@@ -318,7 +341,7 @@ export function validateAgainstSchema(
         
         return {
           valid: minimumCheck.success,
-          validatedData: result.data,
+          validatedData: validated,
           errors: minimumCheck.success ? undefined : ['Missing minimum required fields']
         };
       } else {
