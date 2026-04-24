@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.2] - 2026-04-25
+
+### Fixed
+- Cloudflare Pages build (`npm ci`) was failing because `package-lock.json` only contained the `darwin-arm64` platform binaries from local generation, missing every Linux/Windows variant the CF builder needs. Surgically injected the 44 missing entries (24 `@esbuild/*` at 0.25.4, 16 `@unrs/resolver-binding-*` at 1.7.2, plus `@napi-rs/wasm-runtime`, `@emnapi/core`, `@emnapi/wasi-threads`, `@tybys/wasm-util`) by fetching tarball URLs and integrity hashes directly from the npm registry. Direct deps and devDeps are unchanged — zero transitive drift (cssstyle stays at 5.3.1, `@clerk/nextjs` at 6.33.0). `npm ci` now succeeds on Linux x64; `npm run build` (Next.js production) verified locally.
+
+### Changed
+- `.npmrc` removed two unrecognized config keys (`target_platform=linux`, `target_arch=x64`) that npm warned about on every install. They had no effect; npm's `--cpu`/`--os` flags are the real way to target a foreign platform, and the lockfile is the ground truth anyway. (`.nvmrc` was bumped to `20.20.2` separately on main.)
+
 ## [0.0.24.1] - 2026-04-25
 
 ### Added
@@ -25,7 +33,6 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Duplicate-signal suppression in FormPlusMaterialityBadgeRow: if the form-type badge fully covers the signal (e.g. `S-1 | IPO` + `IPO FILING`), the redundant signal pill is omitted. Prevents two badges saying the same thing on IPO/acquisition filings.
-
 ## [0.0.23.3] - 2026-04-24
 
 ### Changed
