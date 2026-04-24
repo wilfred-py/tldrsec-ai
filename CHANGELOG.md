@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.23.2] - 2026-04-24
+
+### Added
+- `.context/wiki/positioning-vs-seeking-alpha.md` — competitive positioning doc answering "why this, not Seeking Alpha?" in one place. Honest framing (where Seeking Alpha wins vs where tldrSEC wins), price-comparison table, and the market-gap thesis. Single source of truth for landing-FAQ updates and cold-outreach follow-ups.
+- `docs/outreach/dm-templates.md` — T1 (Reddit reply), T2 (Twitter), T3 (LinkedIn) cold-outreach templates plus one 4-day follow-up template. Pain-language bank pulled verbatim from `.claude/analysis/user-pain-points-and-quotes.md` ("patience-testing, eye-glazing", "300 pages", "days, if not weeks"). UTM URLs for each channel tag visits via existing `lib/analytics/page-tracking.ts` capture.
+
+### Changed
+- `.gitignore` now excludes `.claude/outreach/` so a workspace-local `prospect-list.md` (contact handles, send history) stays off GitHub.
+
+## [0.0.23.1] - 2026-04-24
+
+### Changed
+- Form 4 insider-transaction emails no longer render a generic "Watch for: SEC transaction code: Grant/Award, Option Exercise, Tax Withholding" bullet. Those labels were hardcoded from the transaction-code letter (A/M/F) via `getTransactionCodeDescription()`, describing what already happened instead of anything forward-looking. Every routine Form 4 was getting the same uninformative line.
+- `Watch for:` section on Form 4 now renders only the `vestingDetails` bullet when the AI extracts a vesting schedule. If absent, the entire section is suppressed via the existing `watchFor.length > 0` guard. No empty headers, no orphaned bullets.
+- Transaction-code descriptions still render in the data-snapshot table via `getTransactionCodeDescription()` in `components/ui/email/design-system.ts:463` — this change only removes the duplicated, non-actionable mention in `Watch for:`.
+
+### Removed
+- Dead `codeDescription` field on the internal `AggregatedTransaction` interface in `form4-minimalist-template.tsx` — no consumers after the watchFor deletion. Removed the `@deprecated` wrapper `getTransactionCodeDescription` that re-exported the canonical function with no additional logic.
+
+### Added
+- `__tests__/email/form4-watch-for.test.tsx` with 4 tests: award-only filing suppresses the section, `vestingDetails` renders only the vesting bullet, transactions-without-vesting suppresses the section, and S-3 `Use of proceeds:` rendering regression guard.
+
+### Fixed
+- `.nvmrc` bumped to `20.18.0`. Cloudflare Workers Builds runner dropped support for the old `20.11.0` pin (Jan 2024), causing CI to fail at `Installing nodejs 20.11.0 → Failed: error occurred while installing tools or dependencies` across all branches and main.
+
+## [0.0.23.0] - 2026-04-22
+
+### Added
+- Landing page FAQ section below pricing, answering the nine questions most likely to block a trial sign-up: free trial terms, cancel flow, accuracy, Pro vs Max tiers, which filing types are covered, speed, which companies are tracked, investment-advice disclaimer, and data sourcing. Uses shadcn Accordion (single-expand, collapsible, item 1 open by default) so the section stays compact on first paint.
+- FAQPage JSON-LD schema emitted on the landing page so Google can render FAQ rich results. Questions and plaintext answers are shared between the rendered accordion and the structured data so they never drift.
+- Jest regression tests covering the FAQ render, accordion interaction, and guards against `SUBSCRIPTION_PLANS.PRO.monthlyPrice` / `.MAX.monthlyPrice` / `PRO.tickerLimit` drifting out of sync with the copy.
+
+### Changed
+- Pricing/FAQ answer text pulls live from `SUBSCRIPTION_PLANS` instead of hardcoding dollar amounts, so plan-config changes propagate automatically.
+
 ## [0.0.22.7] - 2026-04-23
 
 ### Added

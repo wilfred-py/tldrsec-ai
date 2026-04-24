@@ -1,5 +1,7 @@
 'use client';
 
+import { faqItems } from '@/components/landing/sections-v2/faq-section-v2';
+
 export function JsonLd() {
   const graph = {
     '@context': 'https://schema.org',
@@ -29,6 +31,17 @@ export function JsonLd() {
           price: '0',
           priceCurrency: 'USD',
         },
+      },
+      {
+        '@type': 'FAQPage',
+        mainEntity: faqItems.map((item) => ({
+          '@type': 'Question',
+          name: item.question,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: item.answerPlain,
+          },
+        })),
       },
     ],
   };

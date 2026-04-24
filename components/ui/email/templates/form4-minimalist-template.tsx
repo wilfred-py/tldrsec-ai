@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign, markdownToHtml, formatDatesInText } from '../design-system';
+import { EmailColors, EmailStyles, BadgeColors, markdownToHtml, formatDatesInText } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
@@ -27,15 +27,6 @@ interface TransactionData {
   securityType?: string;
   ownershipForm?: string;
   ownershipNature?: string;
-}
-
-/**
- * Get SEC transaction code description
- * Maps SEC Form 4 transaction codes to human-readable descriptions
- * @deprecated Use getTransactionCodeDescription from design-system.ts instead
- */
-export function getTransactionCodeDescription(code: string): string {
-  return getTransactionCodeDescriptionFromDesign(code);
 }
 
 /**
@@ -303,7 +294,6 @@ interface AggregatedTransaction {
   priceDisplay: string;
   // SEC transaction code (only populated for single transactions)
   code?: string;
-  codeDescription?: string;
   // Security types from underlying transactions
   securityTypes: string[];
 }
@@ -386,7 +376,6 @@ export function aggregateTransactionsByType(transactions: TransactionData[]): Ag
         valueDisplay: formatAggregatedValue(data.value),
         priceDisplay: avgPrice > 0 ? `$${avgPrice.toFixed(2)}` : '$0',
         code: primaryCode,
-        codeDescription: primaryCode ? getTransactionCodeDescription(primaryCode) : undefined,
         securityTypes: data.securityTypes,
       });
     }
@@ -836,14 +825,11 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   // Ownership breakdown for mixed direct/indirect
   const breakdown = getOwnershipBreakdown(transactions);
 
-  // Build watch-for items
+  // Build watch-for items. If empty, the `watchFor.length > 0` guard below
+  // suppresses the section entirely — no stale "Watch for:" header.
   const watchFor: string[] = [];
   if (normalizedData?.vestingDetails) {
     watchFor.push(`Vesting schedule: ${normalizedData.vestingDetails}`);
-  }
-  if (aggregatedTransactions.some(t => t.codeDescription)) {
-    const descs = aggregatedTransactions.filter(t => t.codeDescription).map(t => t.codeDescription);
-    watchFor.push(`SEC transaction code: ${descs.join(', ')}`);
   }
 
   return (
