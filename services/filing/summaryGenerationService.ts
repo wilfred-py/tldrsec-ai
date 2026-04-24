@@ -5,12 +5,31 @@
  * OpenRouter's xAI models with intelligent fallback and retry mechanisms
  */
 
+import { z } from 'zod';
 import { openRouterClient, OpenRouterClient } from '../../lib/ai/openrouter-client';
 import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { normalizeFormType } from './formTypeService';
 import { generateSecureCorrelationId } from '../../lib/security/secure-random';
 import { cleanHtmlContent } from '../../lib/parsers/filing-extractor-utils';
+
+const TrancheSchema = z.object({
+  amountDisplay: z.string().min(1).max(64),
+  currency: z.string().regex(/^[A-Z]{3}$/, 'ISO 4217 code'),
+  coupon: z.string().max(64).optional(),
+  yield: z.string().max(64).optional(),
+  maturity: z.string().max(64).optional(),
+  spread: z.string().max(64).optional(),
+});
+
+const DealTermsSchema = z.object({
+  counterparty: z.string().min(1).max(200),
+  dealValue: z.string().max(64).optional(),
+  consideration: z.string().max(200).optional(),
+  closeDate: z.string().max(64).optional(),
+  approvals: z.array(z.string().max(100)).max(5).optional(),
+  rationale: z.string().max(200).optional(),
+});
 
 // Initialize OpenRouter client for summary generation
 const aiClient = openRouterClient;
@@ -207,6 +226,61 @@ export async function generateAISummary(
         responsePreview: responseContent.substring(0, 200)
       });
       throw new Error(`Failed to parse AI response JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+    }
+
+    // 8-K structured field validation: strip invalid tranches/dealTerms, log warnings.
+    // Runs once per summary (service-layer) rather than at render-time to avoid log spam.
+    if (formType === '8-K') {
+      const logPayload = {
+        event: '8k_structured_validation',
+        filingId: filing.id,
+        summaryId: correlationId,
+        ticker: company.ticker,
+      };
+      const itemNumbersRaw = summaryJSON.itemNumbers;
+      const has203 = Array.isArray(itemNumbersRaw) && itemNumbersRaw.includes('2.03');
+      const has101or201 = Array.isArray(itemNumbersRaw)
+        && (itemNumbersRaw.includes('1.01') || itemNumbersRaw.includes('2.01'));
+
+      if (summaryJSON.tranches !== undefined) {
+        const trancheResult = z.array(TrancheSchema).max(25).safeParse(summaryJSON.tranches);
+        if (!trancheResult.success) {
+          logger.warn('8-K tranches failed Zod validation — stripping', {
+            ...logPayload,
+            issue: 'tranches_invalid',
+            zodError: trancheResult.error.issues.slice(0, 3),
+          });
+          delete summaryJSON.tranches;
+        } else {
+          summaryJSON.tranches = trancheResult.data;
+        }
+      }
+      if (has203 && (!summaryJSON.tranches || (summaryJSON.tranches as unknown[]).length === 0)) {
+        logger.warn('8-K Item 2.03 filing has empty tranches[]', {
+          ...logPayload,
+          issue: 'tranches_empty_on_203',
+        });
+      }
+
+      if (summaryJSON.dealTerms !== undefined) {
+        const dealResult = DealTermsSchema.safeParse(summaryJSON.dealTerms);
+        if (!dealResult.success) {
+          logger.warn('8-K dealTerms failed Zod validation — stripping', {
+            ...logPayload,
+            issue: 'dealTerms_invalid',
+            zodError: dealResult.error.issues.slice(0, 3),
+          });
+          delete summaryJSON.dealTerms;
+        } else {
+          summaryJSON.dealTerms = dealResult.data;
+        }
+      }
+      if (has101or201 && !summaryJSON.dealTerms) {
+        logger.warn('8-K Item 1.01/2.01 filing has no dealTerms', {
+          ...logPayload,
+          issue: 'dealTerms_missing_on_101_201',
+        });
+      }
     }
 
     // Extract and structure the summary data

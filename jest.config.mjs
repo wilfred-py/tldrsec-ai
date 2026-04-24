@@ -21,6 +21,17 @@ const esmPackages = [
   '@number-flow/react',
   'number-flow',
   'framer-motion',
+  // jsdom 27 + cssstyle 5 transitive ESM deps
+  // jsdom must be listed so the outer `node_modules/jsdom/` path doesn't
+  // match the ignore pattern — otherwise nested `node_modules/jsdom/node_modules/parse5`
+  // is never reached by the regex engine.
+  'jsdom',
+  '@csstools/.*',
+  '@asamuzakjp/.*',
+  'parse5',
+  'entities',
+  'tough-cookie',
+  'lru-cache',
 ].join('|');
 
 // Add any custom config to be passed to Jest

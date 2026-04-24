@@ -1,0 +1,11 @@
+{
+  "headline": "Issuer priced a single $500M senior note.",
+  "summary": "A single-tranche $500M USD senior note offering.",
+  "eventType": "Debt Issuance",
+  "sentiment": "neutral",
+  "itemNumbers": ["2.03"],
+  "keyHighlights": ["Proceeds for refinancing."],
+  "tranches": [
+    { "amountDisplay": "$500M", "currency": "USD", "coupon": "5.250%", "maturity": "2032" }
+  ]
+}

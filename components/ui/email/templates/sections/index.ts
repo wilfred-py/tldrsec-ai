@@ -10,3 +10,6 @@ export { DataRow } from './DataRow';
 export { CTAButton } from './CTAButton';
 export { EmailHeader } from './EmailHeader';
 export { EmailFooter } from './EmailFooter';
+export { TotalsLine } from './TotalsLine';
+export { TranchesList } from './TranchesList';
+export { DealTermsCard } from './DealTermsCard';
