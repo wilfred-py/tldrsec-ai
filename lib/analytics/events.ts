@@ -29,6 +29,10 @@ export const EVENTS = {
   SUMMARY_VIEWED: 'summary_viewed',
   FILING_CHAT_MESSAGE_SENT: 'filing_chat_message_sent',
   EMAIL_CTA_CLICKED: 'email_cta_clicked',
+
+  // Email lifecycle (Resend webhook → PostHog)
+  EMAIL_OPENED: 'email_opened',
+  EMAIL_CLICKED: 'email_clicked',
 } as const;
 
 export type EventName = typeof EVENTS[keyof typeof EVENTS];
@@ -97,6 +101,21 @@ export type EventProps = {
     // Optional form type for per-form-type funnels
     form_type?: string;
     campaign: string;
+  };
+  [EVENTS.EMAIL_OPENED]: {
+    email_id: string;
+    template?: string;
+    form_type?: string;
+    ticker?: string;
+    filing_id?: string;
+  };
+  [EVENTS.EMAIL_CLICKED]: {
+    email_id: string;
+    template?: string;
+    form_type?: string;
+    ticker?: string;
+    filing_id?: string;
+    link?: string;
   };
 };
 

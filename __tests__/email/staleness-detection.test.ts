@@ -59,3 +59,61 @@ describe('StalenessDetector', () => {
     });
   });
 });
+
+/**
+ * Post-restructure positional regression — the StalenessBanner was moved from
+ * BELOW the old header to ABOVE the new EmailLeadHeader (plan Step 6). These
+ * tests lock in that position: when a filing is stale, the banner appears
+ * FIRST in the visible body, before the logo/headline block.
+ */
+describe('StalenessBanner position (above EmailLeadHeader)', () => {
+  // Dynamic require keeps the existing pure-logic tests above from paying the
+  // React/jsdom import cost when run in isolation.
+  const React = require('react') as typeof import('react');
+  const { render } = require('@testing-library/react') as typeof import('@testing-library/react');
+  const { Form8KMinimalistTemplate } = require(
+    '@/components/ui/email/templates/8k-minimalist-template',
+  ) as typeof import('@/components/ui/email/templates/8k-minimalist-template');
+
+  it('renders stale banner before the logo + headline for an 8-day-old filing', () => {
+    const { container } = render(
+      React.createElement(Form8KMinimalistTemplate, {
+        filing: {
+          companyName: 'Apple Inc.',
+          symbol: 'AAPL',
+          filingType: '8-K',
+          // 8 days before "now" — the component uses real Date.now(), so pick
+          // a date relative to the current system clock.
+          filingDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+          filingUrl: 'https://sec.gov',
+          summaryText: 'Stale filing.',
+          summaryData: { headline: 'AAPL delayed 8-K' },
+        } as never,
+      }),
+    );
+    const html = container.innerHTML;
+
+    const bannerIdx = html.indexOf('This summary was delayed');
+    const logoIdx = html.indexOf('alt="tldrSEC"');
+
+    expect(bannerIdx).toBeGreaterThanOrEqual(0);
+    expect(logoIdx).toBeGreaterThan(bannerIdx);
+  });
+
+  it('does not render the banner for a fresh filing (< 7 days old)', () => {
+    const { container } = render(
+      React.createElement(Form8KMinimalistTemplate, {
+        filing: {
+          companyName: 'Apple Inc.',
+          symbol: 'AAPL',
+          filingType: '8-K',
+          filingDate: new Date().toISOString(),
+          filingUrl: 'https://sec.gov',
+          summaryText: 'Fresh filing.',
+          summaryData: { headline: 'AAPL fresh 8-K' },
+        } as never,
+      }),
+    );
+    expect(container.textContent).not.toMatch(/This summary was delayed/);
+  });
+});

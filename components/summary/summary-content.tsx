@@ -11,6 +11,7 @@ import { SummaryErrorState } from './summary-error-state';
 import DOMPurify from 'dompurify';
 import { canonicalizeFormType } from '@/lib/ai/utils/form-type-utils';
 import { StructuredSummary } from './formatted-summaries/structured-summary';
+import { normalizeForm4Data } from '@/lib/email/form4-field-normalizer';
 
 /**
  * Sanitize content to prevent DOM clobbering and XSS attacks
@@ -201,7 +202,7 @@ function FormattedSummary({ summaryData, filingType, summaryText, ticker, filing
     return (
       <>
         {amendmentBadge}
-        <InsiderTradingSummary summaryData={summaryData} ticker={ticker} filingDate={filingDate} />
+        <InsiderTradingSummary summaryData={summaryData} summaryText={summaryText} ticker={ticker} filingDate={filingDate} />
       </>
     );
   }
@@ -426,7 +427,18 @@ function CurrentReportSummary({ summaryData, ticker, filingDate }: Omit<Formatte
 }
 
 // Specialized component for Form 4 (Insider Trading) reports
-function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<FormattedSummaryProps, 'filingType' | 'summaryText'>) {
+function InsiderTradingSummary({ summaryData, summaryText, ticker, filingDate }: Omit<FormattedSummaryProps, 'filingType'>) {
+  // Route raw summaryJSON through the shared normalizer so the dashboard
+  // shows the authoritative Common-Stock-Direct holdings instead of the LLM's
+  // top-level newStake (which may have been pulled from a Table II RSU row).
+  // See .claude/tasks/form4-holdings-mismatch.md.
+  const normalized = normalizeForm4Data(summaryData, summaryText);
+  const newStakeDisplay = normalized?.newStake || (summaryData.newStake as string | undefined) || '';
+  const previousStakeDisplay = normalized?.previousStake || (summaryData.previousStake as string | undefined) || '';
+  const percentageChangeDisplay = (normalized?.percentageChange || summaryData.percentageChange || '') as string;
+  const filerNameDisplay = normalized?.filerName || (summaryData.filerName as string | undefined) || '';
+  const filerRoleDisplay = normalized?.filerRole || (summaryData.relationship as string | undefined) || '';
+
   return (
     <div className="space-y-6">
       <Card className="border-0 shadow-none">
@@ -456,12 +468,12 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
               <div className="bg-muted/30 rounded-lg p-4">
                 <div className="mb-3">
                   <span className="text-sm text-muted-foreground">Name</span>
-                  <p className="text-lg font-medium">{summaryData.filerName}</p>
+                  <p className="text-lg font-medium">{filerNameDisplay}</p>
                 </div>
 
                 <div>
                   <span className="text-sm text-muted-foreground">Position</span>
-                  <p>{summaryData.relationship}</p>
+                  <p>{filerRoleDisplay}</p>
                 </div>
               </div>
             </div>
@@ -475,12 +487,12 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
               <div className="bg-muted/30 rounded-lg p-4">
                 <div className="mb-3">
                   <span className="text-sm text-muted-foreground">Ownership Type</span>
-                  <p className="font-medium">{summaryData.ownershipType}</p>
+                  <p className="font-medium">{summaryData.ownershipType as string | undefined}</p>
                 </div>
 
                 <div>
                   <span className="text-sm text-muted-foreground">Transaction Date</span>
-                  <p>{summaryData.transactionDate || format(new Date(filingDate), 'PPP')}</p>
+                  <p>{(summaryData.transactionDate as string | undefined) || format(new Date(filingDate), 'PPP')}</p>
                 </div>
               </div>
             </div>
@@ -496,18 +508,18 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-muted/50 p-4 rounded-lg">
                 <div className="text-sm text-muted-foreground">Total Value</div>
-                <div className="text-2xl font-bold">{summaryData.totalValue}</div>
+                <div className="text-2xl font-bold">{(normalized?.totalValue || summaryData.totalValue) as string | undefined}</div>
               </div>
 
               <div className="bg-muted/50 p-4 rounded-lg">
                 <div className="text-sm text-muted-foreground">Percentage Change</div>
-                <div className={`text-2xl font-bold flex items-center ${summaryData.percentageChange?.startsWith('-') ? 'text-destructive' : 'text-green-500'}`}>
-                  {summaryData.percentageChange?.startsWith('-') ? (
+                <div className={`text-2xl font-bold flex items-center ${percentageChangeDisplay.startsWith('-') ? 'text-destructive' : 'text-green-500'}`}>
+                  {percentageChangeDisplay.startsWith('-') ? (
                     <ArrowDown className="h-5 w-5 mr-1" />
                   ) : (
                     <ArrowUp className="h-5 w-5 mr-1" />
                   )}
-                  {summaryData.percentageChange}
+                  {percentageChangeDisplay}
                 </div>
               </div>
             </div>
@@ -524,12 +536,12 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <span className="text-sm text-muted-foreground">Previous Stake</span>
-                  <p className="text-lg font-medium">{summaryData.previousStake}</p>
+                  <p className="text-lg font-medium">{previousStakeDisplay}</p>
                 </div>
 
                 <div>
                   <span className="text-sm text-muted-foreground">New Stake</span>
-                  <p className="text-lg font-medium">{summaryData.newStake}</p>
+                  <p className="text-lg font-medium">{newStakeDisplay}</p>
                 </div>
               </div>
             </div>
@@ -543,7 +555,7 @@ function InsiderTradingSummary({ summaryData, ticker, filingDate }: Omit<Formatt
             </div>
 
             <div className="bg-muted/30 rounded-lg p-4">
-              <p>{summaryData.summary}</p>
+              <p>{(normalized?.summary || summaryData.summary) as string | undefined}</p>
             </div>
           </section>
         </CardContent>

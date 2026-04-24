@@ -107,12 +107,15 @@ describe('Derivative transaction handling (Bug 4 & 5)', () => {
       expect(data.newStake).toBe('40,000 derivative securities');
     });
 
-    it('should not override newStake if already set by AI', () => {
+    it('should override AI newStake with derived SOF (holdings-mismatch fix 2026-04)', () => {
+      // Plan: .claude/tasks/form4-holdings-mismatch.md — the LLM's top-level
+      // newStake is unreliable (Parekh bug: pulled from a Table II RSU row).
+      // Derivation from transactions[].sharesOwnedFollowing now always runs.
       const jsonData = {
         company: 'Test Corp',
         summary: 'Test filing.',
         filerName: 'Test Person',
-        newStake: '500,000 shares',
+        newStake: '500,000 shares', // LLM hallucinated value — overridden
         transactions: [
           {
             code: 'A',
@@ -129,8 +132,8 @@ describe('Derivative transaction handling (Bug 4 & 5)', () => {
 
       expect(result.success).toBe(true);
       const data = result.data as Record<string, unknown>;
-      // Should keep original newStake, not derive from transaction
-      expect(data.newStake).toBe('500,000 shares');
+      // All-derivative filing → "40,000 derivative securities" (A-code with $0)
+      expect(data.newStake).toBe('40,000 derivative securities');
     });
 
     it('should not replace "derivative securities" suffix during stake normalization', () => {

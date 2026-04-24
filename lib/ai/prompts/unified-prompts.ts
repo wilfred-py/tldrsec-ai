@@ -282,7 +282,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
 
   '8-K': {
     type: 'object',
-    required: ['company', 'summary', 'eventType', 'keyHighlights', 'sentiment'],
+    required: ['company', 'summary', 'eventType', 'keyHighlights', 'sentiment', 'itemNumbers'],
     properties: {
       ...BASE_SCHEMA_PROPERTIES,
       eventType: {
@@ -301,8 +301,9 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       itemNumbers: {
         type: 'array',
-        description: 'SEC item numbers reported (e.g., ["2.02", "9.01"])',
-        items: { type: 'string', description: 'Item number', maxLength: 10 }
+        description: 'REQUIRED. SEC item numbers reported (e.g., ["2.02", "9.01"]). Each item must match the pattern "N.NN" (digits.digits).',
+        maxItems: 10,
+        items: { type: 'string', description: 'Item number in "N.NN" format', maxLength: 10 }
       },
       itemDescriptions: {
         type: 'array',
@@ -318,9 +319,44 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       keyHighlights: {
         type: 'array',
-        description: 'Top 3-5 material facts with specific numbers. Lead with the most important.',
+        description: 'Top 3-5 material facts with specific numbers. Lead with the most important. For Item 2.03 (debt): DO NOT list per-tranche data here — use the structured `tranches` field instead.',
         maxItems: 5,
         items: { type: 'string', description: 'Single key fact with number', maxLength: 150 }
+      },
+      tranches: {
+        type: 'array',
+        description: 'ONLY for Item 2.03 (debt issuance). Array of debt tranches being issued, one entry per tranche. Omit entirely for any other item type (especially NOT for 2.04 covenant triggers).',
+        maxItems: 25,
+        items: {
+          type: 'object',
+          properties: {
+            amountDisplay: { type: 'string', description: 'Pre-formatted display amount with currency symbol and unit. Examples: "¥128.9B", "$3B", "€500M". MUST match pattern: currency symbol optional, digits, optional comma/dot, optional unit letter (M/B/T).', maxLength: 20 },
+            currency: { type: 'string', description: 'ISO currency code. Examples: "USD", "JPY", "EUR", "GBP".', maxLength: 8 },
+            coupon: { type: 'string', description: 'Interest rate or floating reference. Examples: "2.077%", "SOFR + 125bps". Omit if not disclosed.', maxLength: 30 },
+            yield: { type: 'string', description: 'Yield at pricing if disclosed (e.g., "2.095%"). Often same as coupon; omit if redundant.', maxLength: 30 },
+            maturity: { type: 'string', description: 'Maturity year or full date. Examples: "2029", "2029-03-15", "Perpetual". Omit only if truly undisclosed.', maxLength: 30 },
+            spread: { type: 'string', description: 'Spread over benchmark at pricing. Examples: "T+45bps", "MS+30bps". Omit if not disclosed.', maxLength: 30 }
+          },
+          required: ['amountDisplay', 'currency']
+        }
+      },
+      dealTerms: {
+        type: 'object',
+        description: 'ONLY for Item 1.01 (Material Definitive Agreement, including M&A) or Item 2.01 (Completion of Acquisition). Structured deal summary. Omit for any other item type.',
+        properties: {
+          counterparty: { type: 'string', description: 'Name of the counterparty or target company. Be specific — use the legal name from the filing.', maxLength: 150 },
+          dealValue: { type: 'string', description: 'Total deal value with currency symbol and unit. Examples: "$1.2B", "$475M cash + $250M stock".', maxLength: 50 },
+          consideration: { type: 'string', description: 'Form of consideration: "all cash", "stock-for-stock", "mixed cash+stock", etc.', maxLength: 50 },
+          closeDate: { type: 'string', description: 'Expected close date, quarter, or year. Examples: "Q2 2026", "2026-09-30", "H1 2026".', maxLength: 30 },
+          approvals: {
+            type: 'array',
+            description: 'List of pending approvals (e.g., ["shareholder vote", "HSR clearance", "FCC approval"]). Max 5 items.',
+            maxItems: 5,
+            items: { type: 'string', description: 'Single approval gate', maxLength: 60 }
+          },
+          rationale: { type: 'string', description: 'One-sentence strategic rationale: why this deal matters to shareholders. What was previously captured in counterpartyContext.', maxLength: 200 }
+        },
+        required: ['counterparty']
       },
       financialImpact: {
         type: 'string',
@@ -337,11 +373,6 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         description: 'Any forward-looking guidance provided (e.g., "Q4 revenue expected $13-14B")',
         maxLength: 150
       },
-      counterpartyContext: {
-        type: 'string',
-        description: 'For M&A filings (Item 1.01, 2.01): Who is the counterparty, what do they do, and why does this deal matter to shareholders',
-        maxLength: 300
-      },
       governanceContext: {
         type: 'string',
         description: 'For governance filings (Item 5.02, 5.07): Who are the directors involved, their background, and why the change matters to shareholders',
@@ -355,7 +386,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       emailSubject: {
         type: 'string',
-        description: 'Email subject line, 40-80 chars, starting with ticker symbol. Format: "TICKER: [key fact]". Must be compelling enough to open.',
+        description: 'Email subject line. Format: "TICKER: [key fact]". Must start with ticker symbol. For Item 2.03 (debt) and Item 1.01 (M&A): target ≤55 chars, omit filler verbs ("Issued", "Announced", "Prices", "Offers") — lead with raw amounts + tranche count (2.03) or counterparty + value (1.01). For other items: 40-80 chars. Must be compelling enough to open.',
         maxLength: 80
       }
     }
@@ -419,6 +450,11 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'Vesting schedule from footnotes if present (e.g., "25% vests annually starting March 15, 2026"). Include plan name and key dates. Empty string if no vesting info found.',
         maxLength: 300
+      },
+      postTransactionCommonShares: {
+        type: 'string',
+        description: 'AUTHORITATIVE post-transaction Common Stock holdings. Locate Table I (Non-Derivative Securities). Find the row whose Title of Security equals "Common Stock" (or "Class A Common Stock", etc.) AND whose Ownership Form (Column 7) is "D" (Direct). Take the value from Column 5 ("Amount of Securities Beneficially Owned Following Reported Transaction") of the LAST-DATED such row. Return digits only, no commas, no suffix (e.g., "14900"). CRITICAL: Do NOT use Table II (derivative) values like RSU or option counts. Do NOT use Indirect (I) holdings. If there is no Common Stock Direct row in Table I, leave empty string.',
+        maxLength: 30
       }
     }
   },
@@ -1241,6 +1277,15 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   * Table II (Derivative): Extract from Column 11 — total derivative securities remaining (e.g., stock options)
   * If the exact column value is not visible, extract from footnotes or the text "Amount of Securities Beneficially Owned Following Reported Transaction(s)"
   * NEVER omit this field. If truly unavailable after checking all sources, use "unknown" rather than omitting it.
+- **CRITICAL** TOP-LEVEL postTransactionCommonShares — authoritative final Common Stock holdings:
+  * In ADDITION to per-transaction sharesOwnedFollowing, populate the top-level postTransactionCommonShares field.
+  * Source: Table I (Non-Derivative), last-dated row where Title of Security is "Common Stock" (or "Class A/B/C Common Stock") AND Ownership Form Column 7 is "D" (Direct). Take Column 5 of THAT row.
+  * MUST NOT use Table II values (RSUs, options, derivative securities). Those are a different category of holding.
+  * MUST NOT use Indirect (I) holdings — those are reported separately and should not be conflated.
+  * If the filing reports both Class A and Class B Common Stock Direct rows, use the row matching the class that was transacted. If unclear, prefer Class A.
+  * Format: digits only, no commas, no suffix. Example: "14900" (NOT "14,900 shares").
+  * Leave empty string ("") if no Common Stock Direct row exists in Table I (e.g., derivative-only filings).
+  * WHY THIS FIELD EXISTS: Production bug 2026-04-15 (AAPL Parekh) — the LLM's summary-level holdings figure incorrectly pulled from a Table II RSU row (15,331) instead of Table I Column 5 Common Stock Direct (14,900). This field is the authoritative override.
 - TABLE II DERIVATIVE TRANSACTIONS (MUST NOT BE SKIPPED):
   * If a filing has ONLY Table II entries and NO Table I entries, you MUST still populate the transactions array
   * Stock option grants: code='A', type='Award/Grant', shares=[number of options], pricePerShare='$0', acquisitionDisposition='A'
@@ -1283,10 +1328,28 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - Lead keyHighlights with the most investor-relevant fact
 - If management provides a quote, include it in managementCommentary
 - Sentiment: Set to "positive" for beats/good news, "negative" for misses/concerns, "neutral" for informational filings, "mixed" if both
-- COUNTERPARTY CONTEXT: If a "COUNTERPARTY CONTEXT" section appears in the content, use it to populate the counterpartyContext field. Weave the counterparty's identity and strategic rationale into the summary and keyHighlights to explain WHO the counterparty is and WHY the deal matters.
+- ITEM 2.03 DEBT TRANCHES: When itemNumbers includes "2.03" (Creation of Direct Financial Obligation — new debt issuance), you MUST populate the tranches[] array with one object per tranche/series of notes. For each tranche extract:
+  * amountDisplay (REQUIRED): Formatted amount with currency symbol and scale, e.g., "¥265.0B", "$7.0B", "€500M". Preserve the original currency — do NOT convert to USD.
+  * currency (REQUIRED): ISO 4217 code: "JPY", "USD", "EUR", "GBP", etc.
+  * coupon: Coupon rate as stated, e.g., "3.25%", "SOFR + 125bps", "Floating". Omit if not disclosed.
+  * yield: Yield to maturity if disclosed separately from coupon, e.g., "3.35%". Omit if same as coupon or not disclosed.
+  * maturity: Maturity year or descriptor, e.g., "2030", "2055", "Perpetual". Omit if not disclosed.
+  * spread: Spread over benchmark if disclosed, e.g., "+75bps over UST". Omit if not disclosed.
+  * Do NOT populate tranches[] for Item 2.04 (covenant violations/acceleration) — only Item 2.03 new issuance.
+  * Do NOT populate tranches[] for redemptions, refinancings without new issuance, or credit facility draws that aren't issued notes.
+  * When tranches[] is populated, do NOT duplicate tranche-level data (amounts, coupons, maturities) in keyHighlights — keyHighlights should cover non-tranche material facts only (use of proceeds, rating, covenants, etc.).
+- ITEM 1.01 / 2.01 DEAL TERMS: When itemNumbers includes "1.01" (Material Definitive Agreement) or "2.01" (Completion of Acquisition), populate the dealTerms object:
+  * counterparty (REQUIRED): The other party's legal name, e.g., "Globalstar, Inc.", "Microsoft Corporation".
+  * dealValue: Total deal value as disclosed, e.g., "$1.2B", "€450M". Omit if not disclosed.
+  * consideration: Form of consideration, e.g., "all-cash", "stock-for-stock", "mixed cash and stock", "cash plus contingent value rights". Omit if not disclosed.
+  * closeDate: Expected or actual close date/quarter, e.g., "Q3 2026", "2026-06-30", "expected H2 2026". Omit if not disclosed.
+  * approvals: Array of required approvals as short strings, e.g., ["shareholder vote", "HSR", "EU Commission", "CFIUS"]. Max 5 items. Omit if not disclosed.
+  * rationale: One-sentence strategic rationale from the filing (max 200 chars), e.g., "Expands satellite connectivity for iPhone services." Omit if not stated in the filing.
 - GOVERNANCE CONTEXT: If a "GOVERNANCE CONTEXT" section appears in the content, use it to populate the governanceContext field. Weave the directors' backgrounds and the significance of the governance change into the summary and keyHighlights to explain WHO the directors are and WHY the change matters.
 - HEADLINE: Write ONE compelling sentence (max 200 chars) summarizing the most material fact. This appears as the email's bold lead sentence. Be specific — include names, numbers, and the key action. NEVER start with "This filing...", "This 8-K...", "This document...", or similar generic prefixes. Example: "AMZN entered a definitive merger agreement to acquire Globalstar, Inc. for $1.2B in cash."
-- EMAIL SUBJECT: Write a 40-80 char email subject line starting with the ticker symbol. Format: "TICKER: [key fact]". Must be compelling enough to open. Example: "AMZN: $1.2B acquisition of Globalstar announced"`,
+- EMAIL SUBJECT: Write an email subject line starting with the ticker symbol. Format: "TICKER: [key fact]". Must be compelling enough to open.
+  * For Item 2.03 (debt) and 1.01/2.01 (M&A): target ≤55 characters. OMIT filler verbs like "Issued", "Announced", "Prices", "Offers", "Enters into" — lead with the amount/counterparty directly. Example: "BRK.A: ¥265B yen + $7B USD notes (7 tranches)". Example: "AMZN: $1.2B Globalstar acquisition".
+  * For other item types: target 40-80 characters.`,
 
   '144': `FORM 144 EXTRACTION RULES:
 - COMPANY FIELD IS REQUIRED: The "company" field must contain the ISSUER name (the company whose stock is being sold, e.g., "Tesla, Inc."). Extract from "Name of Issuer" or "Issuer Name" on the form. This is NOT the filer — it is the company whose securities are being sold. NEVER leave blank.

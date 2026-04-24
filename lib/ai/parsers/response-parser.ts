@@ -24,6 +24,7 @@ import {
   formatNumberWithCommas,
   NormalizedTransaction,
 } from '../../email/form4-field-normalizer';
+import { deriveNewStake } from '../utils/derive-stake';
 
 /**
  * Transaction code to human-readable type mapping
@@ -256,38 +257,30 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
         }).filter(Boolean);
       }
 
-      // Derive newStake from last transaction's sharesOwnedFollowing when not already set
-      if (!normalized.newStake && Array.isArray(normalized.transactions)) {
-        const txArr = normalized.transactions as Record<string, unknown>[];
-        // Use the last transaction's post-transaction ownership as the final stake
-        for (let i = txArr.length - 1; i >= 0; i--) {
-          const sof = txArr[i].sharesOwnedFollowing;
-          if (sof && String(sof).trim()) {
-            const cleaned = String(sof).replace(/[$,\[\]]/g, '').trim();
-            if (/\d/.test(cleaned)) {
-              // Detect if ALL transactions are derivative-type
-              // Derivative codes: M (exercise), C (conversion), X (exercise ITM),
-              // O (exercise OTM), E (expiration short), H (expiration long),
-              // or A with $0 price (option grant)
-              const derivativeCodes = new Set(['M', 'C', 'X', 'O', 'E', 'H']);
-              const allDerivative = txArr.every(t => {
-                const txCode = String(t.code || '').toUpperCase();
-                if (derivativeCodes.has(txCode)) return true;
-                // Code A with $0 price = option/grant (derivative)
-                if (txCode === 'A') {
-                  const txPrice = parseFloat(String(t.pricePerShare || '0').replace(/[$,]/g, '')) || 0;
-                  return txPrice === 0;
-                }
-                return false;
-              });
+      // Derive newStake using three-tier precedence helper:
+      //   1. authoritative postTransactionCommonShares (LLM-extracted Table I Col 5)
+      //   2. derived from Common-Stock + Direct transactions with SOF (date-sorted)
+      //   3. derived-fallback: any transaction with SOF (derivative-only filings)
+      //   4. LLM's legacy newStake string (pass-through, preserves original suffix)
+      // See .claude/tasks/form4-holdings-mismatch.md — the `!normalized.newStake`
+      // gate was removed because the LLM's top-level newStake unreliably picked
+      // the last-indexed transaction, which is often a derivative (RSU) row.
+      {
+        const txArr = Array.isArray(normalized.transactions)
+          ? (normalized.transactions as unknown as NormalizedTransaction[])
+          : [];
+        const stakeResult = deriveNewStake({
+          transactions: txArr,
+          postTransactionCommonShares: normalized.postTransactionCommonShares,
+          llmNewStake: typeof normalized.newStake === 'string' ? normalized.newStake : undefined,
+        });
 
-              const suffix = allDerivative ? 'derivative securities' : 'shares';
-              const num = parseFloat(cleaned);
-              const formatted = isNaN(num) ? cleaned : formatNumberWithCommas(num);
-              normalized.newStake = `${formatted} ${suffix}`;
-              break;
-            }
-          }
+        if (stakeResult.source === 'llm-legacy') {
+          // Preserve LLM's raw string verbatim (may already have suffix/text)
+          normalized.newStake = stakeResult.llmLegacyRaw;
+        } else if (stakeResult.source !== 'none') {
+          const suffix = stakeResult.isDerivative ? 'derivative securities' : 'shares';
+          normalized.newStake = `${stakeResult.formattedNumber} ${suffix}`;
         }
       }
 

@@ -1,0 +1,21 @@
+{
+  "headline": "Berkshire Hathaway issued ¥265.0B yen and $7.0B USD senior notes across 7 tranches.",
+  "summary": "Berkshire Hathaway completed a multi-currency senior notes offering totaling ¥265B and $7B across 7 tranches to fund general corporate purposes.",
+  "eventType": "Debt Issuance",
+  "sentiment": "neutral",
+  "itemNumbers": ["2.03", "9.01"],
+  "keyHighlights": [
+    "Proceeds to be used for general corporate purposes.",
+    "Joint book-runners include Mizuho, BofA, and Goldman Sachs."
+  ],
+  "financialImpact": "Adds approximately $8.7B (USD-equivalent) of long-term debt to the balance sheet.",
+  "tranches": [
+    { "amountDisplay": "¥60.0B", "currency": "JPY", "coupon": "1.065%", "maturity": "2029", "yield": "1.065%" },
+    { "amountDisplay": "¥55.0B", "currency": "JPY", "coupon": "1.273%", "maturity": "2031" },
+    { "amountDisplay": "¥40.0B", "currency": "JPY", "coupon": "1.521%", "maturity": "2033" },
+    { "amountDisplay": "¥110.0B", "currency": "JPY", "coupon": "2.105%", "maturity": "2035" },
+    { "amountDisplay": "$3.0B", "currency": "USD", "coupon": "4.750%", "maturity": "2030", "spread": "+75bps over UST" },
+    { "amountDisplay": "$2.5B", "currency": "USD", "coupon": "5.125%", "maturity": "2035" },
+    { "amountDisplay": "$1.5B", "currency": "USD", "coupon": "5.500%", "maturity": "2055" }
+  ]
+}

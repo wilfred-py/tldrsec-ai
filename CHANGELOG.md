@@ -2,6 +2,110 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.0] - 2026-04-24
+
+### Changed
+- All nine minimalist filing email templates (10-K, 10-Q, 8-K, Form 4, Form 144, DEF 14A, 11-K, S-1, S-3, generic) now lead with the AI-generated headline on line 1. Prior layout rendered logo+date, then ticker line, then body copy — the headline lived inside the body, buried. New order: staleness banner (when applicable) → EmailLeadHeader (logo, date, H1 headline, ticker line) → FormPlusMaterialityBadgeRow (`<form> | <category>` badge + materiality/signal pill) → body. Driven by two new section components (`components/ui/email/templates/sections/EmailLeadHeader.tsx`, `FormPlusMaterialityBadgeRow.tsx`) so rearranging the block never drifts across templates.
+- 8-K template drops the standalone `Event` and `Filed` data rows from the body table. Event category moves into the FormPlusMaterialityBadgeRow pill (`8-K | Capital Return`), and the filing date is already rendered by EmailLeadHeader — the duplicate rows were wasted vertical space.
+- StalenessBanner now renders ABOVE the EmailLeadHeader, not below it. Stale filings push the date-delay warning to the top of the email where the reader can't miss it; prior position put it under the ticker line and readers scrolled past it.
+- PostHog email tags migrated from prefix-encoded strings (e.g. `t-filing_notification`, `u-abc123`) to stable `{name, value}` object form. PostHog now filters by `template`, `userId`, `filingId`, `formType`, `ticker` as first-class properties. Legacy 13D template path in `lib/email/templates.ts` updated to match.
+
+### Added
+- `capHeadline(text, maxLen)` in `components/ui/email/design-system.ts` truncates long headlines at word boundaries with ellipsis, so the H1 never wraps past two lines on mobile. Default cap is 90 chars, word-boundary aware.
+- `ensureTickerPrefix(ticker, symbol)` in the same file guarantees the ticker line starts with the `$TICKER` prefix (e.g. `$AAPL · Apple Inc.`). Idempotent — running twice doesn't double-prefix.
+- `DEFAULT_FILING_CATEGORY_MAP` default-labels each filing type for the `<form> | <category>` badge (e.g. `S-1 | IPO`, `Form 144 | Insider Sale Notice`). Overridable per-filing via the `filingCategory` prop.
+- Resend webhook handler in `app/api/webhook/route.ts` ingests `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained` events. Signature is verified via `svix`; events are mapped to PostHog with `distinct_id` derived from the `userId` tag so email engagement joins the same user timeline as app events. Missing `userId` tag logs a warning rather than crashing (backfill path). New analytics event types added to `lib/analytics/events.ts`.
+- Six new test files: `__tests__/email/email-lead-header.test.tsx`, `headline-cap.test.ts`, `headline-ticker-prefix.test.ts`, `template-layout-order.test.tsx`, `resend-tag-schema.test.ts`, `__tests__/api/webhook-resend.test.ts`. The layout-order test is the important one — it renders every minimalist template with realistic AI-headline input and asserts (via `container.innerHTML.indexOf()`) that the order is logo → headline → ticker line → badge row → body. Pill text splits across DOM nodes, so index-of on serialized HTML is the only reliable check.
+
+### Fixed
+- Duplicate-signal suppression in FormPlusMaterialityBadgeRow: if the form-type badge fully covers the signal (e.g. `S-1 | IPO` + `IPO FILING`), the redundant signal pill is omitted. Prevents two badges saying the same thing on IPO/acquisition filings.
+
+## [0.0.23.3] - 2026-04-24
+
+### Changed
+- `components/landing/sections-v2/faq-section-v2.tsx` — FAQ copy rewrite on the "Before you start your trial" section. Trial answer leads with "7-day trial at $0" and what the trial includes (unlimited tracking, first-priority processing, all filing types). Pro-vs-Max answer drops the monthly-price mirror (pricing cards own that number) and focuses on audience fit: Pro = focused investors on a watchlist up to `PRO.tickerLimit`, Max = analysts/research teams covering large universes. Filings answer enumerates the full EDGAR coverage (annual/quarterly/events/insider/ownership/proxy/registration) backed by `lib/user/preference-types.ts`, closing "If EDGAR publishes it, we cover it." Speed answer drops the now-defunct free-tier reference.
+- FAQ accordion defaults to fully collapsed. Previously opened item 1 via `defaultValue={faqItems[0].id}` — removed so the section reads as a scan-first list.
+- Header subtitle ("Answers to the questions most prospects ask before signing up.") removed. Section heading carries the intent on its own.
+
+### Removed
+- Three FAQ items: "How many companies can I track?" (owned by pricing cards), "Is this investment advice?" (footer disclaimer owns this independently — see `__tests__/components/landing/footer-section-v2.test.tsx:32`), "How do you handle my data?" (not the question prospects actually ask on a paid trial flow). `faqItems` reduced from 9 → 6.
+
+### Notes
+- `components/structured-data.tsx` consumes `faqItems` directly for FAQPage JSON-LD — no edit needed; structured data auto-reflects the 6-item list.
+- `__tests__/landing/faq-section-v2.test.tsx` updated: trigger count 9 → 6, "first item open" assertion replaced with all-collapsed loop, new regression guards for (1) Pro ticker limit sourced from `SUBSCRIPTION_PLANS.PRO.tickerLimit`, (2) no monthly-price leakage into FAQ copy, (3) removed IDs stay removed, (4) `answer`/`answerPlain` stay 1:1 for all-string items.
+
+## [0.0.23.2] - 2026-04-24
+
+### Added
+- `.context/wiki/positioning-vs-seeking-alpha.md` — competitive positioning doc answering "why this, not Seeking Alpha?" in one place. Honest framing (where Seeking Alpha wins vs where tldrSEC wins), price-comparison table, and the market-gap thesis. Single source of truth for landing-FAQ updates and cold-outreach follow-ups.
+- `docs/outreach/dm-templates.md` — T1 (Reddit reply), T2 (Twitter), T3 (LinkedIn) cold-outreach templates plus one 4-day follow-up template. Pain-language bank pulled verbatim from `.claude/analysis/user-pain-points-and-quotes.md` ("patience-testing, eye-glazing", "300 pages", "days, if not weeks"). UTM URLs for each channel tag visits via existing `lib/analytics/page-tracking.ts` capture.
+
+### Changed
+- `.gitignore` now excludes `.claude/outreach/` so a workspace-local `prospect-list.md` (contact handles, send history) stays off GitHub.
+
+## [0.0.23.1] - 2026-04-24
+
+### Added
+- Event-type-aware structured rendering for 8-K summaries. Item 2.03 (debt issuance) now emits a `tranches[]` array (amountDisplay, currency, coupon, yield, maturity, spread) that renders as a tranche table grouped by currency with a totals line. Item 1.01 / 2.01 (M&A and material contracts) emits a `dealTerms` object (counterparty, dealValue, consideration, closeDate, approvals[], rationale) that renders as a deal-terms card. Falls back cleanly to the existing prose block when structured fields are absent, so cached summaries keep rendering.
+- Zod validation on LLM output at save time in `services/filing/summaryGenerationService.ts`. Bad `tranches`/`dealTerms` shapes are stripped with a structured `logger.warn` payload rather than persisted to the DB or surfaced to the reader.
+- `itemNumbers` schema field with a prose-parse fallback regex so the structured renderer can gate strictly on the filing's 8-K item, not on heuristics over the subject line.
+- New email template sections under `components/ui/email/templates/sections/`: `TranchesList.tsx`, `DealTermsCard.tsx`, `TotalsLine.tsx`. JSX-only interpolation — no `dangerouslySetInnerHTML`.
+- Passing tests across 13 test files covering tranche rendering (single/multi-currency, malformed amounts, XSS payloads), deal-terms rendering, extractor validation, legacy `counterpartyContext` backwards-compat, item-number regex variants, subject-line terseness, and end-to-end integration. 4 live-LLM eval tests gated on `RUN_LIVE_LLM_EVALS=true`.
+- `__tests__/email/form4-watch-for.test.tsx` with 4 tests: award-only filing suppresses the section, `vestingDetails` renders only the vesting bullet, transactions-without-vesting suppresses the section, and S-3 `Use of proceeds:` rendering regression guard.
+
+### Changed
+- Subject line targeting for Item 2.03 and 1.01: drops filler verbs ("Issued", "Announced"); leads with ticker + materiality; hard cap ≤55 chars.
+- Consolidated three HTML-escapers in `components/ui/email/design-system.ts` into a single `escapeHtml` helper that also escapes `"` and `'`, closing an attribute-injection gap.
+- Removed `counterpartyContext` prompt field; its rationale now lives in `dealTerms.rationale`.
+- Removed `Record<string, unknown>` cast in `8k-minimalist-template.tsx` — structured fields flow through typed props.
+- Form 4 insider-transaction emails no longer render a generic "Watch for: SEC transaction code: Grant/Award, Option Exercise, Tax Withholding" bullet. Those labels were hardcoded from the transaction-code letter (A/M/F) via `getTransactionCodeDescription()`, describing what already happened instead of anything forward-looking. Every routine Form 4 was getting the same uninformative line.
+- `Watch for:` section on Form 4 now renders only the `vestingDetails` bullet when the AI extracts a vesting schedule. If absent, the entire section is suppressed via the existing `watchFor.length > 0` guard. No empty headers, no orphaned bullets.
+- Transaction-code descriptions still render in the data-snapshot table via `getTransactionCodeDescription()` in `components/ui/email/design-system.ts:463` — this change only removes the duplicated, non-actionable mention in `Watch for:`.
+
+### Removed
+- Dead `codeDescription` field on the internal `AggregatedTransaction` interface in `form4-minimalist-template.tsx` — no consumers after the watchFor deletion. Removed the `@deprecated` wrapper `getTransactionCodeDescription` that re-exported the canonical function with no additional logic.
+
+### Fixed
+- `.nvmrc` bumped to `20.20.2`. Cloudflare Workers Builds runner dropped support for the old `20.11.0` pin (Jan 2024), causing CI to fail at `Installing nodejs 20.11.0 → Failed: error occurred while installing tools or dependencies` across all branches and main.
+
+## [0.0.23.0] - 2026-04-22
+
+### Added
+- Landing page FAQ section below pricing, answering the nine questions most likely to block a trial sign-up: free trial terms, cancel flow, accuracy, Pro vs Max tiers, which filing types are covered, speed, which companies are tracked, investment-advice disclaimer, and data sourcing. Uses shadcn Accordion (single-expand, collapsible, item 1 open by default) so the section stays compact on first paint.
+- FAQPage JSON-LD schema emitted on the landing page so Google can render FAQ rich results. Questions and plaintext answers are shared between the rendered accordion and the structured data so they never drift.
+- Jest regression tests covering the FAQ render, accordion interaction, and guards against `SUBSCRIPTION_PLANS.PRO.monthlyPrice` / `.MAX.monthlyPrice` / `PRO.tickerLimit` drifting out of sync with the copy.
+
+### Changed
+- Pricing/FAQ answer text pulls live from `SUBSCRIPTION_PLANS` instead of hardcoding dollar amounts, so plan-config changes propagate automatically.
+
+## [0.0.22.6] - 2026-04-23
+
+### Changed
+- Form 4 email template styling refresh: transaction value cells now render in near-black (`#111827`) instead of inheriting the per-transaction red/green that made the dollar amount the loudest element on the page. The colored signal moves to the `(% change)` parenthetical only.
+- Holdings row is segmented for scannability: pre-stake in muted gray (`#6B7280`), an NBSP-padded right arrow, post-stake in near-black, and `(% change)` colored only when non-zero. Arrow always points right (pre → post), with NBSPs around the glyph instead of inline span padding so the Outlook Word renderer doesn't collapse spacing.
+- Positive-stake-change green darkened from `#16A34A` (3.05:1 contrast, fails WCAG AA on body text) to `#15803D` (5.46:1, passes AA). Negative stays at `#DC2626`.
+- ISO `YYYY-MM-DD` dates in summary body copy reformat to `DD MMM YYYY` (e.g. `2026-04-20` → `20 Apr 2026`). Calendar-invalid dates (`2026-02-30`, `2026-04-31`) and hyphenated identifiers (`ID-2026-04-20-001`) are left untouched via Date.UTC round-trip validation and lookbehind/lookahead anchors.
+
+### Added
+- `formatDatesInText` helper in `components/ui/email/design-system.ts` with full unit coverage for valid dates, multi-date strings, calendar invalids, leap-year edges, and hyphenated identifiers.
+- `__tests__/email/form4-summary-styling.test.tsx`: render-level coverage for transaction value color, holdings segmentation, percentage color/sign rendering, zero-change suppression, and date reformatting.
+
+## [0.0.22.5] - 2026-04-21
+
+### Fixed
+- Form 4 "Holdings" row now deterministically reflects post-transaction Common Stock Direct balance (Table I Column 5) instead of sometimes picking a derivative RSU row from the LLM's array. Observed incident: AAPL Parekh 2026-04-15 displayed 15,331 (RSU row) instead of 14,900 (Common Stock Direct). New five-tier precedence in `lib/ai/utils/derive-stake.ts`: authoritative `postTransactionCommonShares` LLM field → Common Stock + Direct filtered derivation → any-SOF fallback → LLM legacy string → narrative regex. `isDirect()` now requires explicit `D` ownership form instead of defaulting permissively.
+- Dashboard filing-display now re-runs the Form 4 normalizer at read time, so historical summaries with the old wrong `newStake` value get the corrected display automatically. No data migration needed.
+
+### Added
+- Authoritative `postTransactionCommonShares` field in the unified Form 4 prompt schema. LLM is instructed to populate it from Table I Column 5 of the last-dated Common Stock Direct row.
+- `detectNewStakeNarrativeMismatch` flags >5% disagreement between the derived number and the narrative. Skips hedge-word narratives ("roughly", "approximately", "~") and zero-narrative false positives. Disagreements flip `dataQuality: 'degraded'` and emit a structured `form4_newStake_narrative_mismatch` log for observability. User-facing banner intentionally suppressed (decision 2026-04-20).
+- 14 new regression tests in `__tests__/email/form4-field-normalizer.test.ts` covering the Parekh fixture, dual-class issuers, Direct-vs-Indirect filtering, derivative-only filings, date-sort precedence, zero-balance holdings, and narrative mismatch edge cases.
+
+## [0.0.22.4] - 2026-04-19
+
+### Changed
+- Trial-ended email now leads with the tldrSEC logo and uses the brand gradient on the upgrade button, matching the landing page. Removed the "$199/month, 25 tickers" pricing line so the email focuses on the action.
+
 ## [0.0.22.3] - 2026-04-19
 
 ### Changed

@@ -1,0 +1,17 @@
+{
+  "headline": "Deal with hostile counterparty string.",
+  "summary": "Deal terms contain XSS-like payloads in counterparty/approvals fields; itemNumbers gate should block this from rendering dealTerms since neither 1.01 nor 2.01 is listed.",
+  "eventType": "Other",
+  "sentiment": "neutral",
+  "itemNumbers": ["5.02"],
+  "keyHighlights": ["Filing does not trigger structured blocks."],
+  "dealTerms": {
+    "counterparty": "<script>alert(1)</script>",
+    "dealValue": "\"><img src=x onerror=alert(1)>",
+    "approvals": ["<b>html</b>", "normal approval"],
+    "rationale": "javascript:alert('xss')"
+  },
+  "tranches": [
+    { "amountDisplay": "<script>", "currency": "USD" }
+  ]
+}

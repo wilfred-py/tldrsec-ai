@@ -42,8 +42,10 @@ describe('Hidden Data Display', () => {
 
       // Should display the transaction code 'S' somewhere in the template
       expect(container.textContent).toContain('S');
-      // Should also display the code description
-      expect(container.textContent).toMatch(/Open Market Sale|Sale/i);
+      // Should display a human-readable transaction label (extractor renders
+      // "Sold" for code 'S'; Form 4 PR #467 removed the "Open Market Sale"
+      // description from the body — the label remains).
+      expect(container.textContent).toMatch(/Sold|Sale/i);
     });
 
     it('should display transaction dates for each transaction', () => {
@@ -62,7 +64,7 @@ describe('Hidden Data Display', () => {
       expect(container.textContent).toContain('Jan 10');
     });
 
-    it('should display stake change with arrow indicators', () => {
+    it('should display stake change with right-pointing arrow (pre → post)', () => {
       const filing = createFilingData({
         filingType: 'Form 4',
         summaryData: {
@@ -74,13 +76,13 @@ describe('Hidden Data Display', () => {
 
       const { container } = render(<Form4MinimalistTemplate filing={filing} />);
 
-      // Should display downward arrow for decrease
-      expect(container.textContent).toContain('↓');
+      // Always points right — direction encoded by color of (% change), not arrow
+      expect(container.textContent).toContain('→');
       // Should display the percentage change
       expect(container.textContent).toContain('2.0%');
     });
 
-    it('should display upward arrow for stake increase', () => {
+    it('should display right-pointing arrow for stake increase too', () => {
       const filing = createFilingData({
         filingType: 'Form 4',
         summaryData: {
@@ -92,8 +94,7 @@ describe('Hidden Data Display', () => {
 
       const { container } = render(<Form4MinimalistTemplate filing={filing} />);
 
-      // Should display upward arrow for increase
-      expect(container.textContent).toContain('↑');
+      expect(container.textContent).toContain('→');
     });
   });
 
@@ -245,5 +246,86 @@ describe('Transaction Code Descriptions', () => {
       // Should include description matching the code
       expect(container.textContent).toMatch(expectedDesc);
     });
+  });
+});
+
+/**
+ * Layout ordering regression — the hidden-data surfacing tests above verify
+ * that computed fields APPEAR. This block verifies they appear in the RIGHT
+ * PLACE under the new lead-with-headline layout: hidden data belongs in the
+ * body, below the headline / ticker line / badge cluster, not above them.
+ *
+ * Uses container.innerHTML.indexOf() because pill text (e.g. transaction code
+ * descriptions) splits across multiple DOM nodes, which defeats textContent.
+ */
+describe('Hidden data appears below the lead header in the body', () => {
+  it('Form 4: transaction detail renders after the ticker line', () => {
+    const filing = createFilingData({
+      filingType: 'Form 4',
+      symbol: 'AAPL',
+      companyName: 'Apple Inc.',
+      summaryData: {
+        headline: 'AAPL insider sold shares',
+        transactions: [
+          { type: 'Sale', shares: '10,000', pricePerShare: '$150.00', code: 'S' },
+        ],
+      },
+    });
+    const { container } = render(<Form4MinimalistTemplate filing={filing} />);
+    const html = container.innerHTML;
+    const headlineIdx = html.search(/<h1[^>]*>/);
+    const tickerIdx = html.indexOf('Apple Inc.', Math.max(0, headlineIdx));
+    // Transaction line (shares @ pricePerShare) is the computed body content
+    // we want to guarantee lands below the ticker, not above it.
+    const sharesIdx = html.indexOf('10,000', Math.max(0, tickerIdx));
+
+    expect(tickerIdx).toBeGreaterThan(headlineIdx);
+    expect(sharesIdx).toBeGreaterThan(tickerIdx);
+  });
+
+  it('8-K: form badge cluster renders after the ticker line', () => {
+    const filing = createFilingData({
+      filingType: '8-K',
+      symbol: 'AAPL',
+      companyName: 'Apple Inc.',
+      summaryData: {
+        headline: 'AAPL announces $90B buyback',
+        eventType: 'Capital Return',
+        itemNumbers: ['1.01'],
+      },
+    });
+    const { container } = render(<Form8KMinimalistTemplate filing={filing} />);
+    const html = container.innerHTML;
+    const headlineIdx = html.search(/<h1[^>]*>/);
+    const tickerIdx = html.indexOf('Apple Inc.', Math.max(0, headlineIdx));
+    // Form badge emits "8-K | <category>" — the 8-K template uses eventType
+    // as the category. Match the "Capital Return" slice we passed in.
+    const formBadgeIdx = html.indexOf('Capital Return', Math.max(0, tickerIdx));
+
+    expect(tickerIdx).toBeGreaterThan(headlineIdx);
+    expect(formBadgeIdx).toBeGreaterThan(tickerIdx);
+  });
+
+  it('Form 144: insider shares figure renders after the ticker line', () => {
+    const filing = createFilingData({
+      filingType: 'Form 144',
+      symbol: 'AAPL',
+      companyName: 'Apple Inc.',
+      summaryData: {
+        headline: 'AAPL insider proposes 100K share sale',
+        filerName: 'Tim Cook',
+        // Field name matches template's `data?.shares` lookup.
+        shares: '100,000',
+        remainingHoldings: '500,000',
+      },
+    });
+    const { container } = render(<Form144MinimalistTemplate filing={filing} />);
+    const html = container.innerHTML;
+    const headlineIdx = html.search(/<h1[^>]*>/);
+    const tickerIdx = html.indexOf('Apple Inc.', Math.max(0, headlineIdx));
+    const sharesIdx = html.indexOf('100,000', Math.max(0, tickerIdx));
+
+    expect(tickerIdx).toBeGreaterThan(headlineIdx);
+    expect(sharesIdx).toBeGreaterThan(tickerIdx);
   });
 });

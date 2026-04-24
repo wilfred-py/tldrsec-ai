@@ -1,0 +1,24 @@
+{
+  "headline": "AMZN announced $1.2B acquisition of Globalstar financed via new notes.",
+  "summary": "Amazon entered into a definitive agreement to acquire Globalstar for $1.2B in cash, financed through 3 new tranches of senior notes.",
+  "eventType": "M&A + Debt Financing",
+  "sentiment": "positive",
+  "itemNumbers": ["1.01", "2.03"],
+  "keyHighlights": [
+    "All-cash consideration of $1.2B.",
+    "Expected close Q3 2026, subject to regulatory approval."
+  ],
+  "tranches": [
+    { "amountDisplay": "$500M", "currency": "USD", "coupon": "4.500%", "maturity": "2029" },
+    { "amountDisplay": "$400M", "currency": "USD", "coupon": "4.750%", "maturity": "2031" },
+    { "amountDisplay": "$300M", "currency": "USD", "coupon": "5.000%", "maturity": "2034" }
+  ],
+  "dealTerms": {
+    "counterparty": "Globalstar, Inc.",
+    "dealValue": "$1.2B",
+    "consideration": "all-cash",
+    "closeDate": "Q3 2026",
+    "approvals": ["Globalstar shareholder vote", "HSR", "FCC"],
+    "rationale": "Expands satellite connectivity capabilities for iPhone services."
+  }
+}

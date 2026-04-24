@@ -463,4 +463,252 @@ describe('Form 4 Field Normalizer', () => {
       expect(tx!.shares).toBe(60208);
     });
   });
+
+  // =========================================================================
+  // AAPL Parekh holdings mismatch regression tests (2026-04-15 incident)
+  // Root cause: LLM top-level newStake pulled from Table II RSU row (15,331)
+  // instead of Table I Common Stock Direct Column 5 (14,900).
+  // See .claude/tasks/form4-holdings-mismatch.md.
+  // =========================================================================
+  describe('Form 4 holdings three-tier precedence', () => {
+    it('picks Common Stock Direct row over derivative RSU row (Parekh fixture)', () => {
+      const data = normalizeForm4Data({
+        company: 'Apple Inc.',
+        summary: 'CFO disposed of shares for tax withholding.',
+        filerName: 'Parekh Kevan',
+        filerRole: 'SVP, CFO',
+        newStake: '15,331 shares', // LLM hallucinated from RSU row
+        transactions: [
+          { code: 'M', shares: 100, pricePerShare: '$0', sharesOwnedFollowing: 15000, securityType: 'Restricted Stock Unit', ownershipForm: 'D', date: '2026-04-10' },
+          { code: 'F', shares: 1200, pricePerShare: '$200', sharesOwnedFollowing: 14900, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-11' },
+          { code: 'A', shares: 500, pricePerShare: '$0', sharesOwnedFollowing: 15331, securityType: 'Restricted Stock Unit', ownershipForm: 'D', date: '2026-04-12' },
+        ],
+      });
+      expect(data!.newStake).toBe('14,900');
+      expect(data!.newStakeSource).toBe('derived-common-direct');
+    });
+
+    it('authoritative postTransactionCommonShares overrides everything', () => {
+      const data = normalizeForm4Data({
+        company: 'Apple Inc.',
+        summary: 'Test',
+        filerName: 'Test',
+        postTransactionCommonShares: '14900',
+        newStake: '999,999 shares', // LLM hallucination — must be ignored
+        transactions: [
+          { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 12345, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-11' },
+        ],
+      });
+      expect(data!.newStake).toBe('14,900');
+      expect(data!.newStakeSource).toBe('authoritative');
+    });
+
+    it('picks transacted class in dual-class Common Stock filings', () => {
+      // Two Common Stock Direct rows (Class A and Class B) — chronological order wins
+      const data = normalizeForm4Data({
+        company: 'Google',
+        summary: 'Test',
+        filerName: 'Test',
+        transactions: [
+          { code: 'S', shares: 100, pricePerShare: '$150', sharesOwnedFollowing: 5000, securityType: 'Class A Common Stock', ownershipForm: 'D', date: '2026-04-10' },
+          { code: 'S', shares: 200, pricePerShare: '$150', sharesOwnedFollowing: 3000, securityType: 'Class B Common Stock', ownershipForm: 'D', date: '2026-04-12' },
+        ],
+      });
+      expect(data!.newStake).toBe('3,000');
+      expect(data!.newStakeSource).toBe('derived-common-direct');
+    });
+
+    it('excludes Indirect holdings from Common Stock Direct tier', () => {
+      const data = normalizeForm4Data({
+        company: 'Test',
+        summary: 'Test',
+        filerName: 'Test',
+        transactions: [
+          { code: 'S', shares: 100, pricePerShare: '$50', sharesOwnedFollowing: 7000, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-10' },
+          { code: 'S', shares: 100, pricePerShare: '$50', sharesOwnedFollowing: 99999, securityType: 'Common Stock', ownershipForm: 'I', date: '2026-04-12' },
+        ],
+      });
+      // Only the Direct row counts even though Indirect has later date
+      expect(data!.newStake).toBe('7,000');
+      expect(data!.newStakeSource).toBe('derived-common-direct');
+    });
+
+    it('falls back to derived-fallback for derivative-only filings', () => {
+      const data = normalizeForm4Data({
+        company: 'Test',
+        summary: 'Test',
+        filerName: 'Test',
+        transactions: [
+          { code: 'M', shares: 500, pricePerShare: '$0', sharesOwnedFollowing: 2500, securityType: 'Stock Option (Right to Buy)', ownershipForm: 'D', date: '2026-04-10' },
+        ],
+      });
+      expect(data!.newStake).toBe('2,500');
+      expect(data!.newStakeSource).toBe('derived-fallback');
+    });
+
+    it('sorts transactions by date (not array index) when picking last', () => {
+      // Chronologically, 2026-04-11 is last even though it's index 0
+      const data = normalizeForm4Data({
+        company: 'Test',
+        summary: 'Test',
+        filerName: 'Test',
+        transactions: [
+          { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 14900, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-11' },
+          { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 14000, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-09' },
+        ],
+      });
+      expect(data!.newStake).toBe('14,900');
+    });
+
+    it('handles zero-balance Common Stock holdings', () => {
+      const data = normalizeForm4Data({
+        company: 'Test',
+        summary: 'Test',
+        filerName: 'Test',
+        transactions: [
+          { code: 'S', shares: 5000, pricePerShare: '$50', sharesOwnedFollowing: 0, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-10' },
+        ],
+      });
+      expect(data!.newStake).toBe('0');
+      expect(data!.newStakeSource).toBe('derived-common-direct');
+    });
+
+    it('preserves insertion order when dates are missing', () => {
+      const data = normalizeForm4Data({
+        company: 'Test',
+        summary: 'Test',
+        filerName: 'Test',
+        transactions: [
+          { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 10000, securityType: 'Common Stock', ownershipForm: 'D' },
+          { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 9000, securityType: 'Common Stock', ownershipForm: 'D' },
+        ],
+      });
+      expect(data!.newStake).toBe('9,000');
+    });
+
+    it('missing ownershipForm falls through to fallback (not assumed Direct)', () => {
+      const data = normalizeForm4Data({
+        company: 'Test',
+        summary: 'Test',
+        filerName: 'Test',
+        transactions: [
+          { code: 'S', shares: 100, pricePerShare: '$50', sharesOwnedFollowing: 1234, securityType: 'Common Stock', date: '2026-04-10' },
+        ],
+      });
+      expect(data!.newStake).toBe('1,234');
+      expect(data!.newStakeSource).toBe('derived-fallback');
+    });
+
+    it('falls through to llm-legacy when no transactions', () => {
+      const data = normalizeForm4Data({
+        company: 'Test',
+        summary: 'Test',
+        filerName: 'Test',
+        newStake: '5,000 shares',
+        transactions: [],
+      });
+      // LLM's raw string parsed to bare number via llm-legacy tier
+      expect(data!.newStake).toBe('5,000');
+      expect(data!.newStakeSource).toBe('llm-legacy');
+    });
+  });
+
+  describe('Form 4 newStake narrative mismatch detection', () => {
+    it('sets hasNarrativeMismatch=true when derived disagrees with narrative by >5%', () => {
+      const data = normalizeForm4Data(
+        {
+          company: 'Apple',
+          summary: 'Test',
+          filerName: 'Parekh Kevan',
+          transactions: [
+            { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 14900, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-10' },
+          ],
+        },
+        'Parekh now holds 50,000 common shares after the transaction.',
+      );
+      expect(data!.newStake).toBe('14,900');
+      expect(data!.hasNarrativeMismatch).toBe(true);
+    });
+
+    it('does NOT flag mismatch when narrative agrees within 5%', () => {
+      const data = normalizeForm4Data(
+        {
+          company: 'Apple',
+          summary: 'Test',
+          filerName: 'Test',
+          transactions: [
+            { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 14900, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-10' },
+          ],
+        },
+        'The insider now holds 14,950 common shares.',
+      );
+      expect(data!.hasNarrativeMismatch).toBe(false);
+    });
+
+    it('does NOT flag mismatch when narrative uses hedge words like "roughly"', () => {
+      const data = normalizeForm4Data(
+        {
+          company: 'Test',
+          summary: 'Test',
+          filerName: 'Test',
+          transactions: [
+            { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 14900, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-10' },
+          ],
+        },
+        'The insider holds roughly 50,000 common shares.',
+      );
+      expect(data!.hasNarrativeMismatch).toBe(false);
+    });
+
+    it('does NOT flag mismatch when narrative number is zero (guarded)', () => {
+      const data = normalizeForm4Data(
+        {
+          company: 'Test',
+          summary: 'Test',
+          filerName: 'Test',
+          transactions: [
+            { code: 'F', shares: 100, pricePerShare: '$200', sharesOwnedFollowing: 14900, securityType: 'Common Stock', ownershipForm: 'D', date: '2026-04-10' },
+          ],
+        },
+        'The insider now holds 0 common shares.',
+      );
+      expect(data!.hasNarrativeMismatch).toBe(false);
+    });
+  });
+
+  describe('Form 4 newStake tier-precedence coverage', () => {
+    it('derived-fallback beats llm-legacy when SOF data is present (even for non-Common-Direct rows)', () => {
+      // Non-Common-Stock row with SOF = 7777. LLM would have said "7,777 units".
+      // Tier 2 Common-Direct filter is empty; Tier 3 derived-fallback returns 7777
+      // and wins over the LLM string. This locks in the contract that real SOF
+      // data beats LLM text whenever possible.
+      const data = normalizeForm4Data({
+        company: 'Test',
+        summary: 'Test',
+        filerName: 'Test',
+        newStake: '999 units', // intentionally different from SOF to prove derivation wins
+        transactions: [
+          { code: 'A', shares: 500, pricePerShare: '$12.00', sharesOwnedFollowing: 7777, securityType: 'Restricted Stock Unit', ownershipForm: 'D', date: '2026-04-10' },
+        ],
+      });
+      expect(data!.newStake).toBe('7,777');
+      expect(data!.newStakeSource).toBe('derived-fallback');
+    });
+
+    it('falls through to narrative tier when transactions empty AND no llm newStake', () => {
+      const data = normalizeForm4Data(
+        {
+          company: 'Test',
+          summary: 'Test',
+          filerName: 'Test',
+          transactions: [],
+          // no newStake field at all
+        },
+        // Matches stakePatterns[2]: "totaled N shares"
+        'Holdings totaled 42,000 shares after the transaction.',
+      );
+      expect(data!.newStake).toBe('42,000');
+      expect(data!.newStakeSource).toBe('narrative');
+    });
+  });
 });

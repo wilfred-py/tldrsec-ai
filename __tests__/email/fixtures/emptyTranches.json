@@ -1,0 +1,8 @@
+{
+  "headline": "Company announced a debt offering.",
+  "summary": "Prose-only summary without structured tranche data. Proceeds of approximately $1B will fund operations.",
+  "eventType": "Debt Issuance",
+  "sentiment": "neutral",
+  "itemNumbers": ["2.03"],
+  "keyHighlights": ["Offering size $1B.", "Proceeds fund operations."]
+}

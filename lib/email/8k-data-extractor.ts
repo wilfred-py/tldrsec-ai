@@ -55,31 +55,40 @@ export function extract8KData(summaryText: string): Form8KExtractedData {
 }
 
 /**
- * Extract 8-K item numbers from summary text
- * Items are formatted as "Item X.XX" in SEC filings
+ * Extract 8-K item numbers from summary text.
+ *
+ * Primary regex (locked per plan): matches "Item 2.03", "Items 2.03", "Item § 2.03".
+ * Secondary pass catches coordinated lists like "Items 2.03 and 5.02".
+ * Explicitly rejects percentage tokens ("2.03%") via trailing-char lookahead.
  */
 function extractItemNumbers(text: string): string[] {
+  if (!text) return [];
   const items: string[] = [];
+  const seen = new Set<string>();
 
-  // Match patterns like "Item 2.02", "Item 5.02", etc.
-  const patterns = [
-    /Item\s*(\d+\.\d+)/gi,
-    /Items?\s*(?:reported)?[:\s]*(\d+\.\d+(?:\s*,\s*\d+\.\d+)*)/gi,
-    /(?:^|\s)(\d+\.\d+)(?:\s*[-–]\s*[A-Z])/gm,
-  ];
+  const push = (raw: string) => {
+    const normalized = raw.trim();
+    if (/^\d+\.\d+$/.test(normalized) && !seen.has(normalized)) {
+      seen.add(normalized);
+      items.push(normalized);
+    }
+  };
 
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      const itemStr = match[1];
-      // Handle comma-separated items
-      const itemParts = itemStr.split(/\s*,\s*/);
-      for (const item of itemParts) {
-        const normalized = item.trim();
-        if (/^\d+\.\d+$/.test(normalized) && !items.includes(normalized)) {
-          items.push(normalized);
-        }
-      }
+  // Primary: "Item[s] [§] N.NN"
+  const primary = /\bitems?\s*§?\s*(\d+\.\d+)(?!%)\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = primary.exec(text)) !== null) {
+    push(m[1]);
+  }
+
+  // Secondary: "and N.NN" / ", N.NN" following a previously-matched item
+  // (captures coordinated lists like "Items 2.03 and 5.02")
+  const coordinated = /\b(?:and|&|,)\s*(\d+\.\d+)(?!%)\b/gi;
+  // Only run this pass if the primary matched at least once — avoids false
+  // positives on isolated decimals elsewhere in the text.
+  if (items.length > 0) {
+    while ((m = coordinated.exec(text)) !== null) {
+      push(m[1]);
     }
   }
 
