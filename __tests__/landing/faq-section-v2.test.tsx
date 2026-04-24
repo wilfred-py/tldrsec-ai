@@ -42,10 +42,10 @@ if (typeof global.ResizeObserver === 'undefined') {
 import { FAQSectionV2, faqItems } from '@/components/landing/sections-v2/faq-section-v2';
 
 describe('FAQSectionV2', () => {
-  it('renders all 9 FAQ questions as accordion triggers', () => {
+  it('renders all 6 FAQ questions as accordion triggers', () => {
     render(<FAQSectionV2 />);
     const triggers = screen.getAllByRole('button');
-    expect(triggers).toHaveLength(9);
+    expect(triggers).toHaveLength(6);
   });
 
   it('renders the section heading', () => {
@@ -55,20 +55,12 @@ describe('FAQSectionV2', () => {
     ).toBeInTheDocument();
   });
 
-  it('has the first item (free trial) expanded by default', () => {
+  it('collapses all items by default', () => {
     render(<FAQSectionV2 />);
-    const trialTrigger = screen.getByRole('button', {
-      name: /is there a free trial/i,
+    const triggers = screen.getAllByRole('button');
+    triggers.forEach((trigger) => {
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
     });
-    expect(trialTrigger).toHaveAttribute('aria-expanded', 'true');
-  });
-
-  it('collapses other items by default', () => {
-    render(<FAQSectionV2 />);
-    const cancelTrigger = screen.getByRole('button', {
-      name: /can i cancel anytime/i,
-    });
-    expect(cancelTrigger).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('expands an item when its trigger is clicked', async () => {
@@ -81,30 +73,37 @@ describe('FAQSectionV2', () => {
     expect(cancelTrigger).toHaveAttribute('aria-expanded', 'true');
   });
 
-  // Pricing regression guard — fails if FAQ copy drifts from SUBSCRIPTION_PLANS.
-  it('renders Pro monthly price from SUBSCRIPTION_PLANS in the Pro-vs-Max answer', () => {
+  // Pricing regression guard — Pro-vs-Max intentionally omits prices now
+  // (pricing cards own that). The ticker limit is the remaining dynamic value.
+  it('renders Pro ticker limit from SUBSCRIPTION_PLANS in the Pro-vs-Max answer', () => {
     const proAnswer = faqItems.find((i) => i.id === 'pro-vs-max')?.answerPlain;
-    expect(proAnswer).toContain(`$${SUBSCRIPTION_PLANS.PRO.monthlyPrice}`);
-    expect(proAnswer).toContain(`$${SUBSCRIPTION_PLANS.MAX.monthlyPrice}`);
+    expect(proAnswer).toContain(String(SUBSCRIPTION_PLANS.PRO.tickerLimit));
   });
 
-  it('renders Pro ticker limit from SUBSCRIPTION_PLANS in the companies answer', () => {
-    const companiesAnswer = faqItems.find((i) => i.id === 'companies')
-      ?.answerPlain;
-    expect(companiesAnswer).toContain(
-      String(SUBSCRIPTION_PLANS.PRO.tickerLimit)
-    );
-  });
-
-  it('keeps answer (JSX) and answerPlain (string) in sync for text content', () => {
-    // Critical invariant: JSON-LD uses answerPlain, UI uses answer.
-    // This test ensures both contain the same pricing numbers.
+  it('Pro-vs-Max answer does not leak monthly prices (owned by pricing cards)', () => {
     const pro = faqItems.find((i) => i.id === 'pro-vs-max');
-    expect(pro?.answerPlain).toMatch(
-      new RegExp(`\\$${SUBSCRIPTION_PLANS.PRO.monthlyPrice}`)
+    expect(pro?.answerPlain).not.toContain(
+      `$${SUBSCRIPTION_PLANS.PRO.monthlyPrice}`
     );
-    expect(pro?.answerPlain).toMatch(
-      new RegExp(`\\$${SUBSCRIPTION_PLANS.MAX.monthlyPrice}`)
+    expect(pro?.answerPlain).not.toContain(
+      `$${SUBSCRIPTION_PLANS.MAX.monthlyPrice}`
     );
+  });
+
+  it('removed FAQ items (companies, advice, data) are not present', () => {
+    const ids = faqItems.map((i) => i.id);
+    expect(ids).not.toContain('companies');
+    expect(ids).not.toContain('advice');
+    expect(ids).not.toContain('data');
+  });
+
+  it('keeps answer (JSX) and answerPlain (string) in sync for every item', () => {
+    // Critical invariant: JSON-LD uses answerPlain, UI uses answer.
+    // For all-string answers, they must be identical references.
+    faqItems.forEach((item) => {
+      if (typeof item.answer === 'string') {
+        expect(item.answer).toBe(item.answerPlain);
+      }
+    });
   });
 });

@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.23.3] - 2026-04-24
+
+### Changed
+- `components/landing/sections-v2/faq-section-v2.tsx` — FAQ copy rewrite on the "Before you start your trial" section. Trial answer leads with "7-day trial at $0" and what the trial includes (unlimited tracking, first-priority processing, all filing types). Pro-vs-Max answer drops the monthly-price mirror (pricing cards own that number) and focuses on audience fit: Pro = focused investors on a watchlist up to `PRO.tickerLimit`, Max = analysts/research teams covering large universes. Filings answer enumerates the full EDGAR coverage (annual/quarterly/events/insider/ownership/proxy/registration) backed by `lib/user/preference-types.ts`, closing "If EDGAR publishes it, we cover it." Speed answer drops the now-defunct free-tier reference.
+- FAQ accordion defaults to fully collapsed. Previously opened item 1 via `defaultValue={faqItems[0].id}` — removed so the section reads as a scan-first list.
+- Header subtitle ("Answers to the questions most prospects ask before signing up.") removed. Section heading carries the intent on its own.
+
+### Removed
+- Three FAQ items: "How many companies can I track?" (owned by pricing cards), "Is this investment advice?" (footer disclaimer owns this independently — see `__tests__/components/landing/footer-section-v2.test.tsx:32`), "How do you handle my data?" (not the question prospects actually ask on a paid trial flow). `faqItems` reduced from 9 → 6.
+
+### Notes
+- `components/structured-data.tsx` consumes `faqItems` directly for FAQPage JSON-LD — no edit needed; structured data auto-reflects the 6-item list.
+- `__tests__/landing/faq-section-v2.test.tsx` updated: trigger count 9 → 6, "first item open" assertion replaced with all-collapsed loop, new regression guards for (1) Pro ticker limit sourced from `SUBSCRIPTION_PLANS.PRO.tickerLimit`, (2) no monthly-price leakage into FAQ copy, (3) removed IDs stay removed, (4) `answer`/`answerPlain` stay 1:1 for all-string items.
+
 ## [0.0.23.2] - 2026-04-24
 
 ### Added
