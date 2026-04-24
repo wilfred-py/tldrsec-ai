@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.1] - 2026-04-25
+
+### Added
+- `components/dashboard/post-onboarding-hero-card.tsx` — inline hero card shown on the first dashboard visit after a user completes onboarding. Announces that AI-generated SEC filing summaries are being emailed (naming the target address and listing the tracked tickers as chips), with an `Open Inbox` CTA that deep-links to Gmail/Outlook/Yahoo/iCloud or falls back to `mailto:`. Dismissal writes `postOnboardingHeroDismissed` to localStorage; the server-side `isFirstVisit` flag also flips off once `tutorialCompletedAt` is set, so the card does not reappear after navigation. Wired into `app/dashboard/page.tsx` behind `isFirstVisit && initialCompanies.length > 0 && email`. Fixes HIGH #1 in `.gstack/qa-reports/qa-report-onboarding-notification-2026-04-24.md` (new users had no in-app signal that sample summaries were being emailed).
+- 12 unit tests in `__tests__/components/dashboard/post-onboarding-hero-card.test.tsx` covering headline personalization, empty-ticker guard, X-dismiss persistence, overflow chip (`+N more` past 6 tickers), and inbox URL resolution for each provider.
+
 ## [0.0.24.0] - 2026-04-24
 
 ### Changed
