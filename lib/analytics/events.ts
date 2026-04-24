@@ -28,6 +28,10 @@ export const EVENTS = {
   // Engagement
   SUMMARY_VIEWED: 'summary_viewed',
   FILING_CHAT_MESSAGE_SENT: 'filing_chat_message_sent',
+
+  // Email lifecycle (Resend webhook → PostHog)
+  EMAIL_OPENED: 'email_opened',
+  EMAIL_CLICKED: 'email_clicked',
 } as const;
 
 export type EventName = typeof EVENTS[keyof typeof EVENTS];
@@ -85,6 +89,21 @@ export type EventProps = {
   [EVENTS.FILING_CHAT_MESSAGE_SENT]: {
     filing_id: string;
     message_length: number;
+  };
+  [EVENTS.EMAIL_OPENED]: {
+    email_id: string;
+    template?: string;
+    form_type?: string;
+    ticker?: string;
+    filing_id?: string;
+  };
+  [EVENTS.EMAIL_CLICKED]: {
+    email_id: string;
+    template?: string;
+    form_type?: string;
+    ticker?: string;
+    filing_id?: string;
+    link?: string;
   };
 };
 

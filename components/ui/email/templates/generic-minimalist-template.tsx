@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, markdownToHtml } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, markdownToHtml } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
@@ -80,35 +81,22 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
         ticker={displayTicker}
         companyName={companyName}
-        filingType={filingType}
         filingDate={filingDate}
+        headline={headline || `${companyName} filed a ${filingType || 'document'} with the SEC`}
       />
+
+      {/* Form badge row (no extra signal — form badge is the signal for generic) */}
+      <FormPlusMaterialityBadgeRow filingType={filingType || 'SEC'} />
 
       {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-
-              {/* Signal badge -- FIRST element */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: BadgeColors.neutral.bg,
-                  color: BadgeColors.neutral.text,
-                }}>
-                  {filingType || 'SEC FILING'}
-                </span>
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {headline || `${companyName} filed a ${filingType || 'document'} with the SEC`}
-              </h1>
 
               {/* Why it matters */}
               <p style={EmailStyles.whyItMatters}>

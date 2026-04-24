@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { FilingTemplateData } from '../../../../lib/email/types';
@@ -143,42 +144,32 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
-        ticker={displayTicker}
-        companyName={companyName}
-        filingType={filingType}
-        filingDate={filingDate}
-      />
-
-      {/* Staleness warning */}
+      {/* Staleness warning (above header per new layout) */}
       {filingDate && (
         <div style={{ padding: '0 15px' }}>
           <StalenessBanner filingDate={new Date(filingDate)} />
         </div>
       )}
 
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
+        ticker={displayTicker}
+        companyName={companyName}
+        filingDate={filingDate}
+        headline={leadSentence || `${companyName || displayTicker} filed its annual report (10-K)`}
+      />
+
+      {/* Form badge + signal badge row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || '10-K'}
+        signal={{ label: 'ANNUAL REPORT', colorKey: 'neutral' }}
+      />
+
       {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-
-              {/* ANNUAL REPORT pill badge */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: BadgeColors.neutral.bg,
-                  color: BadgeColors.neutral.text,
-                }}>
-                  ANNUAL REPORT
-                </span>
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {leadSentence || `${companyName || displayTicker} filed its annual report (10-K)`}
-              </h1>
 
               {/* Why it matters */}
               {whyItMatters && (

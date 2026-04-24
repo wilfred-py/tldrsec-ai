@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
@@ -119,12 +120,18 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
         ticker={displayTicker}
         companyName={companyName}
-        filingType={filingType || 'S-1'}
         filingDate={filingDate}
+        headline={leadText || `${companyName} filed an S-1 registration statement`}
+      />
+
+      {/* Form badge + signal badge row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || 'S-1'}
+        signal={{ label: 'IPO FILING', colorKey: 'moderate' }}
       />
 
       {/* Smart Brevity body */}
@@ -132,22 +139,6 @@ export function FormS1MinimalistTemplate({ filing }: FormS1MinimalistTemplatePro
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-
-              {/* Signal badge -- FIRST element */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: BadgeColors.moderate.bg,
-                  color: BadgeColors.moderate.text,
-                }}>
-                  IPO FILING
-                </span>
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {leadText || `${companyName} filed an S-1 registration statement`}
-              </h1>
 
               {/* Why it matters */}
               <p style={EmailStyles.whyItMatters}>

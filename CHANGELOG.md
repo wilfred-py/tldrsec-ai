@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.0] - 2026-04-24
+
+### Changed
+- All nine minimalist filing email templates (10-K, 10-Q, 8-K, Form 4, Form 144, DEF 14A, 11-K, S-1, S-3, generic) now lead with the AI-generated headline on line 1. Prior layout rendered logo+date, then ticker line, then body copy — the headline lived inside the body, buried. New order: staleness banner (when applicable) → EmailLeadHeader (logo, date, H1 headline, ticker line) → FormPlusMaterialityBadgeRow (`<form> | <category>` badge + materiality/signal pill) → body. Driven by two new section components (`components/ui/email/templates/sections/EmailLeadHeader.tsx`, `FormPlusMaterialityBadgeRow.tsx`) so rearranging the block never drifts across templates.
+- 8-K template drops the standalone `Event` and `Filed` data rows from the body table. Event category moves into the FormPlusMaterialityBadgeRow pill (`8-K | Capital Return`), and the filing date is already rendered by EmailLeadHeader — the duplicate rows were wasted vertical space.
+- StalenessBanner now renders ABOVE the EmailLeadHeader, not below it. Stale filings push the date-delay warning to the top of the email where the reader can't miss it; prior position put it under the ticker line and readers scrolled past it.
+- PostHog email tags migrated from prefix-encoded strings (e.g. `t-filing_notification`, `u-abc123`) to stable `{name, value}` object form. PostHog now filters by `template`, `userId`, `filingId`, `formType`, `ticker` as first-class properties. Legacy 13D template path in `lib/email/templates.ts` updated to match.
+
+### Added
+- `capHeadline(text, maxLen)` in `components/ui/email/design-system.ts` truncates long headlines at word boundaries with ellipsis, so the H1 never wraps past two lines on mobile. Default cap is 90 chars, word-boundary aware.
+- `ensureTickerPrefix(ticker, symbol)` in the same file guarantees the ticker line starts with the `$TICKER` prefix (e.g. `$AAPL · Apple Inc.`). Idempotent — running twice doesn't double-prefix.
+- `DEFAULT_FILING_CATEGORY_MAP` default-labels each filing type for the `<form> | <category>` badge (e.g. `S-1 | IPO`, `Form 144 | Insider Sale Notice`). Overridable per-filing via the `filingCategory` prop.
+- Resend webhook handler in `app/api/webhook/route.ts` ingests `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained` events. Signature is verified via `svix`; events are mapped to PostHog with `distinct_id` derived from the `userId` tag so email engagement joins the same user timeline as app events. Missing `userId` tag logs a warning rather than crashing (backfill path). New analytics event types added to `lib/analytics/events.ts`.
+- Six new test files: `__tests__/email/email-lead-header.test.tsx`, `headline-cap.test.ts`, `headline-ticker-prefix.test.ts`, `template-layout-order.test.tsx`, `resend-tag-schema.test.ts`, `__tests__/api/webhook-resend.test.ts`. The layout-order test is the important one — it renders every minimalist template with realistic AI-headline input and asserts (via `container.innerHTML.indexOf()`) that the order is logo → headline → ticker line → badge row → body. Pill text splits across DOM nodes, so index-of on serialized HTML is the only reliable check.
+
+### Fixed
+- Duplicate-signal suppression in FormPlusMaterialityBadgeRow: if the form-type badge fully covers the signal (e.g. `S-1 | IPO` + `IPO FILING`), the redundant signal pill is omitted. Prevents two badges saying the same thing on IPO/acquisition filings.
+
 ## [0.0.23.3] - 2026-04-24
 
 ### Changed
