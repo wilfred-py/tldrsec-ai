@@ -24,7 +24,7 @@ const nextConfig = {
   },
   // Configure output to handle both static and dynamic routes appropriately
   output: process.env.VERCEL ? undefined : 'standalone',
-  serverExternalPackages: ['ioredis'],
+  serverExternalPackages: ['ioredis', 'posthog-node'],
   webpack: (config, { isServer, webpack, dev, nextRuntime }) => {
     // Enable safe minification - SWC is configured at Next.js level
     if (!dev) {

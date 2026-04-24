@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, getTransactionCodeDescription as getTransactionCodeDescriptionFromDesign, markdownToHtml, formatDatesInText, getWhyItMattersLabel, type WhyItMattersBucket } from '../design-system';
+import { EmailColors, EmailStyles, markdownToHtml, formatDatesInText, getWhyItMattersLabel, type WhyItMattersBucket } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
