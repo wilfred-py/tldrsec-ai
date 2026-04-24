@@ -86,6 +86,7 @@ const nextConfig = {
         events: false,
         buffer: false,
         assert: false,
+        readline: false,
         // Add canvas fallback for client-side rendering
         canvas: false,
         'canvas/lib/bindings': false,
