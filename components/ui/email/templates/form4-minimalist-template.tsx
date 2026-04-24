@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, markdownToHtml, formatDatesInText } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, markdownToHtml, formatDatesInText } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extractForm4Data } from '../../../../lib/email/form4-data-extractor';
@@ -774,11 +775,12 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const preheaderText = `${signal.level} SIGNAL: ${signal.verdict} — ${formatDatesInText(summaryText || '').substring(0, 100)}`;
 
   // Pick the badge color based on signal level
-  const signalBadgeColors = signal.level === 'HIGH' ? BadgeColors.high
-    : signal.level === 'LOW' ? BadgeColors.low
-    : signal.level === 'NEUTRAL' && isAwardOnly ? BadgeColors.award
-    : signal.level === 'NEUTRAL' ? BadgeColors.trust
-    : BadgeColors.moderate;
+  const signalColorKey: 'high' | 'low' | 'award' | 'trust' | 'moderate' =
+    signal.level === 'HIGH' ? 'high'
+    : signal.level === 'LOW' ? 'low'
+    : signal.level === 'NEUTRAL' && isAwardOnly ? 'award'
+    : signal.level === 'NEUTRAL' ? 'trust'
+    : 'moderate';
 
   // Build data snapshot rows from transaction data
   const dataRows: { label: string; value: React.ReactNode }[] = [];
@@ -854,43 +856,35 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         {preheaderText}
       </div>
 
-      <EmailHeader
-        ticker={displayTicker}
-        companyName={companyName}
-        filingType={filingType}
-        filingDate={filingDate}
-        filerName={filerName}
-        filerRole={filerRole}
-        dataQuality={dataQuality}
-      />
-
       {filingDate && (
         <div style={{ padding: '0 15px' }}>
           <StalenessBanner filingDate={new Date(filingDate)} />
         </div>
       )}
 
+      <EmailLeadHeader
+        ticker={displayTicker}
+        companyName={companyName}
+        filingDate={filingDate}
+        headline={headlineDisplay || `${filerName} filed a Form 4 for ${displayTicker}`}
+        filerName={filerName}
+        filerRole={filerRole}
+      />
+
+      {/* Form badge + signal badge row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || '4'}
+        signal={{
+          label: `${signal.icon} ${signal.level} — ${signal.verdict}`,
+          colorKey: signalColorKey,
+        }}
+      />
+
       {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-
-              {/* Signal badge — FIRST element */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: signalBadgeColors.bg,
-                  color: signalBadgeColors.text,
-                }}>
-                  {signal.icon} {signal.level} — {signal.verdict}
-                </span>
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {headlineDisplay || `${filerName} filed a Form 4 for ${displayTicker}`}
-              </h1>
 
               {/* Why it matters */}
               <p style={EmailStyles.whyItMatters}>

@@ -22,44 +22,81 @@ import { Form11KMinimalistTemplate } from '../../components/ui/email/templates/1
 import { FormS1MinimalistTemplate } from '../../components/ui/email/templates/s1-minimalist-template';
 import { FormS3MinimalistTemplate } from '../../components/ui/email/templates/s3-minimalist-template';
 import { GenericMinimalistTemplate } from '../../components/ui/email/templates/generic-minimalist-template';
+import Schedule13DEmailTemplate from '../../components/ui/email/templates/13d-template';
 import * as React from 'react';
 
 /**
  * Template registry for O(1) lookup - Morning Brew style minimalist templates
- * Maps filing types to their corresponding minimalist template components
+ * Each entry pairs a component with a canonical template name used in analytics tags.
  */
-const MINIMALIST_TEMPLATE_REGISTRY: Record<string, React.ComponentType<{ filing: FilingTemplateData }>> = {
-  'FORM4': Form4MinimalistTemplate,
-  'FORM 4': Form4MinimalistTemplate,
-  '4': Form4MinimalistTemplate,
-  '10-K': Form10KMinimalistTemplate,
-  '10K': Form10KMinimalistTemplate,
-  '10-Q': Form10QMinimalistTemplate,
-  '10Q': Form10QMinimalistTemplate,
-  '8-K': Form8KMinimalistTemplate,
-  '8K': Form8KMinimalistTemplate,
-  'FORM 8-K': Form8KMinimalistTemplate,
-  'FORM8-K': Form8KMinimalistTemplate,
-  '144': Form144MinimalistTemplate,
-  'FORM 144': Form144MinimalistTemplate,
-  'FORM144': Form144MinimalistTemplate,
-  'DEF 14A': FormDEF14AMinimalistTemplate,
-  'FORM DEF 14A': FormDEF14AMinimalistTemplate,
-  '11-K': Form11KMinimalistTemplate,
-  'FORM 11-K': Form11KMinimalistTemplate,
-  'S-1': FormS1MinimalistTemplate,
-  'FORM S-1': FormS1MinimalistTemplate,
-  'S-3': FormS3MinimalistTemplate,
-  'FORM S-3': FormS3MinimalistTemplate,
+type MinimalistTemplateEntry = {
+  component: React.ComponentType<{ filing: FilingTemplateData }>;
+  name: string;
 };
+
+const FORM4_ENTRY: MinimalistTemplateEntry = { component: Form4MinimalistTemplate, name: 'form4_minimalist' };
+const FORM10K_ENTRY: MinimalistTemplateEntry = { component: Form10KMinimalistTemplate, name: '10k_minimalist' };
+const FORM10Q_ENTRY: MinimalistTemplateEntry = { component: Form10QMinimalistTemplate, name: '10q_minimalist' };
+const FORM8K_ENTRY: MinimalistTemplateEntry = { component: Form8KMinimalistTemplate, name: '8k_minimalist' };
+const FORM144_ENTRY: MinimalistTemplateEntry = { component: Form144MinimalistTemplate, name: 'form144_minimalist' };
+const DEF14A_ENTRY: MinimalistTemplateEntry = { component: FormDEF14AMinimalistTemplate, name: 'def14a_minimalist' };
+const FORM11K_ENTRY: MinimalistTemplateEntry = { component: Form11KMinimalistTemplate, name: '11k_minimalist' };
+const FORMS1_ENTRY: MinimalistTemplateEntry = { component: FormS1MinimalistTemplate, name: 's1_minimalist' };
+const FORMS3_ENTRY: MinimalistTemplateEntry = { component: FormS3MinimalistTemplate, name: 's3_minimalist' };
+const GENERIC_ENTRY: MinimalistTemplateEntry = { component: GenericMinimalistTemplate, name: 'generic_minimalist' };
+// Legacy 13D template — no layout change per Step 9, but routed here so outbound
+// tags carry an accurate `template` value (instead of falling back to generic).
+const SCHEDULE13D_ENTRY: MinimalistTemplateEntry = { component: Schedule13DEmailTemplate, name: '13d_legacy' };
+
+const MINIMALIST_TEMPLATE_REGISTRY: Record<string, MinimalistTemplateEntry> = {
+  'FORM4': FORM4_ENTRY,
+  'FORM 4': FORM4_ENTRY,
+  '4': FORM4_ENTRY,
+  '10-K': FORM10K_ENTRY,
+  '10K': FORM10K_ENTRY,
+  '10-Q': FORM10Q_ENTRY,
+  '10Q': FORM10Q_ENTRY,
+  '8-K': FORM8K_ENTRY,
+  '8K': FORM8K_ENTRY,
+  'FORM 8-K': FORM8K_ENTRY,
+  'FORM8-K': FORM8K_ENTRY,
+  '144': FORM144_ENTRY,
+  'FORM 144': FORM144_ENTRY,
+  'FORM144': FORM144_ENTRY,
+  'DEF 14A': DEF14A_ENTRY,
+  'FORM DEF 14A': DEF14A_ENTRY,
+  '11-K': FORM11K_ENTRY,
+  'FORM 11-K': FORM11K_ENTRY,
+  'S-1': FORMS1_ENTRY,
+  'FORM S-1': FORMS1_ENTRY,
+  'S-3': FORMS3_ENTRY,
+  'FORM S-3': FORMS3_ENTRY,
+  'SCHEDULE 13D': SCHEDULE13D_ENTRY,
+  'SCHEDULE13D': SCHEDULE13D_ENTRY,
+  '13D': SCHEDULE13D_ENTRY,
+  'SC 13D': SCHEDULE13D_ENTRY,
+  'SC13D': SCHEDULE13D_ENTRY,
+};
+
+function lookupMinimalistEntry(filingType: string): MinimalistTemplateEntry {
+  const normalizedType = filingType?.toUpperCase().trim() || '';
+  return MINIMALIST_TEMPLATE_REGISTRY[normalizedType] || GENERIC_ENTRY;
+}
 
 /**
  * Get the appropriate minimalist template for a filing type
  * Falls back to generic template if no specific template exists
  */
 function getMinimalistTemplate(filingType: string): React.ComponentType<{ filing: FilingTemplateData }> {
-  const normalizedType = filingType?.toUpperCase().trim() || '';
-  return MINIMALIST_TEMPLATE_REGISTRY[normalizedType] || GenericMinimalistTemplate;
+  return lookupMinimalistEntry(filingType).component;
+}
+
+/**
+ * Canonical template name for a filing type — used in outbound analytics tags
+ * so PostHog events carry the actual template that rendered the email.
+ */
+export function getMinimalistTemplateName(filingType: string): string {
+  return lookupMinimalistEntry(filingType).name;
 }
 
 // Helper function to generate plain text version of email

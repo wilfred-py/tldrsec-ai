@@ -5,6 +5,7 @@ import { getPrismaClient } from "@/lib/db/prisma";
 import { mapTickersToCompanies } from "@/lib/db/dashboard-queries";
 import { THREE_TIER_LIMITS } from "@/lib/subscription/three-tier-limits";
 import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
+import { PostOnboardingHeroCard } from "@/components/dashboard/post-onboarding-hero-card";
 import { TickersPanel } from "@/components/dashboard/tickers-panel";
 import { DashboardStatsSection } from "@/components/dashboard/sections/dashboard-stats-section";
 import { DashboardActivitySection } from "@/components/dashboard/sections/dashboard-activity-section";
@@ -82,6 +83,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         sessionId={sessionId}
         subscriptionTier={subscriptionTier}
       />
+
+      {isFirstVisit && initialCompanies.length > 0 && email && (
+        <PostOnboardingHeroCard
+          tickers={initialCompanies.map((c) => ({ symbol: c.symbol, name: c.name }))}
+          userEmail={email}
+          firstName={user.firstName ?? undefined}
+        />
+      )}
 
       {/* Stats — streams independently */}
       <SectionErrorBoundary sectionName="stats">

@@ -16,7 +16,6 @@ import {
 import { SUBSCRIPTION_PLANS } from '@/lib/stripe/plans';
 
 const PRO = SUBSCRIPTION_PLANS.PRO;
-const MAX = SUBSCRIPTION_PLANS.MAX;
 
 type FaqItem = {
   id: string;
@@ -27,23 +26,23 @@ type FaqItem = {
   answerPlain: string;
 };
 
-const PRO_VS_MAX = `Pro ($${PRO.monthlyPrice}/mo) tracks up to ${PRO.tickerLimit} companies on a priority queue. Max ($${MAX.monthlyPrice}/mo) is unlimited companies with first-priority processing — built for analysts covering large watchlists.`;
+const PRO_VS_MAX = `Pro is built for focused investors tracking a specific watchlist — up to ${PRO.tickerLimit} companies on a priority queue. Max is built for analysts and research teams covering large universes — unlimited companies with first-priority processing ahead of every other tier.`;
 
-const COMPANIES = `Pro tracks up to ${PRO.tickerLimit} companies. Max and Free are unlimited. You can change your watchlist anytime from the dashboard.`;
+const TRIAL_ANSWER =
+  'Every paid plan starts with a 7-day trial at $0. You get full access to every Max-tier feature during the trial — unlimited company tracking, first-priority filing processing, and every filing type we support.';
 
-/**
- * FAQ copy reviewed via /autoplan adversarial review (see .claude/tasks/landing-faq-section.md).
- * Pricing numbers sourced from SUBSCRIPTION_PLANS to prevent drift.
- * Order: trial → cancel → accuracy → Pro/Max → filings → speed → companies → advice → data.
- */
+const FILINGS_ANSWER =
+  'All major SEC filings — annual reports (10-K, 20-F, 40-F), quarterlies (10-Q, 6-K), material events (8-K), insider transactions (Forms 3, 4, 5, 144), beneficial ownership (SC 13D/G, 13F), proxies (DEF 14A, PRE 14A), and registrations (S-1, S-3, F-1, 424B). If EDGAR publishes it, we cover it.';
+
+const SPEED_ANSWER =
+  'Filings are processed on a priority queue as soon as EDGAR publishes. Speed depends on EDGAR availability and filing size.';
+
 export const faqItems: FaqItem[] = [
   {
     id: 'trial',
     question: 'Is there a free trial?',
-    answer:
-      'Every paid plan starts with a 7-day free trial. No charge until day 8, and you can cancel with one click during the trial.',
-    answerPlain:
-      'Every paid plan starts with a 7-day free trial. No charge until day 8, and you can cancel with one click during the trial.',
+    answer: TRIAL_ANSWER,
+    answerPlain: TRIAL_ANSWER,
   },
   {
     id: 'cancel',
@@ -70,50 +69,17 @@ export const faqItems: FaqItem[] = [
   {
     id: 'filings',
     question: 'Which SEC filings do you cover?',
-    answer:
-      '10-K (annual), 10-Q (quarterly), 8-K (material events), and Form 4 (insider transactions). Coverage may expand as we add new filing types.',
-    answerPlain:
-      '10-K (annual), 10-Q (quarterly), 8-K (material events), and Form 4 (insider transactions). Coverage may expand as we add new filing types.',
+    answer: FILINGS_ANSWER,
+    answerPlain: FILINGS_ANSWER,
   },
   {
     id: 'speed',
     question: 'How quickly are filings processed?',
-    answer:
-      'Paid tiers are processed on a priority queue as soon as EDGAR publishes; the free tier runs in batches through the day. Speed depends on EDGAR availability and filing size.',
-    answerPlain:
-      'Paid tiers are processed on a priority queue as soon as EDGAR publishes; the free tier runs in batches through the day. Speed depends on EDGAR availability and filing size.',
-  },
-  {
-    id: 'companies',
-    question: 'How many companies can I track?',
-    answer: COMPANIES,
-    answerPlain: COMPANIES,
-  },
-  {
-    id: 'advice',
-    question: 'Is this investment advice?',
-    answer:
-      "No. tldrSEC summarizes public SEC filings. We don't recommend trades, rate securities, or provide personalized advice.",
-    answerPlain:
-      "No. tldrSEC summarizes public SEC filings. We don't recommend trades, rate securities, or provide personalized advice.",
-  },
-  {
-    id: 'data',
-    question: 'How do you handle my data?',
-    answer:
-      'Your email and watchlist are encrypted at rest and never sold to third parties. Billing is handled by Stripe; we never see your card number.',
-    answerPlain:
-      'Your email and watchlist are encrypted at rest and never sold to third parties. Billing is handled by Stripe; we never see your card number.',
+    answer: SPEED_ANSWER,
+    answerPlain: SPEED_ANSWER,
   },
 ];
 
-/**
- * FAQ Section V2
- *
- * Placed below PricingSectionV2 to address post-pricing objections (trial safety,
- * cancellation, accuracy) before the final CTA. First item default-expanded to
- * teach the accordion pattern and answer the highest-priority question immediately.
- */
 export function FAQSectionV2() {
   return (
     <section
@@ -130,9 +96,6 @@ export function FAQSectionV2() {
           className="text-center mb-12"
         >
           <h2 className="brand-heading mb-4">Before you start your trial</h2>
-          <p className="brand-body max-w-2xl mx-auto">
-            Answers to the questions most prospects ask before signing up.
-          </p>
         </motion.div>
 
         {/* FAQ Accordion */}
@@ -143,12 +106,7 @@ export function FAQSectionV2() {
           viewport={viewportOnce}
           className="max-w-3xl mx-auto"
         >
-          <Accordion
-            type="single"
-            collapsible
-            defaultValue={faqItems[0].id}
-            className="w-full"
-          >
+          <Accordion type="single" collapsible className="w-full">
             {faqItems.map((item) => (
               <motion.div key={item.id} variants={staggerItem}>
                 <AccordionItem value={item.id}>

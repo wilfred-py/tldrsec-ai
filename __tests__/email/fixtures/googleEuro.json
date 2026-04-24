@@ -1,0 +1,19 @@
+{
+  "headline": "Alphabet priced €6.5B of senior notes across 6 EUR tranches.",
+  "summary": "Alphabet's debut euro-denominated issuance consisted of 6 tranches totaling €6.5B.",
+  "eventType": "Debt Issuance",
+  "sentiment": "neutral",
+  "itemNumbers": ["2.03"],
+  "keyHighlights": [
+    "First euro-denominated debt issuance for the company.",
+    "Proceeds for general corporate purposes in Europe."
+  ],
+  "tranches": [
+    { "amountDisplay": "€1.0B", "currency": "EUR", "coupon": "3.125%", "maturity": "2028" },
+    { "amountDisplay": "€1.0B", "currency": "EUR", "coupon": "3.250%", "maturity": "2030" },
+    { "amountDisplay": "€1.25B", "currency": "EUR", "coupon": "3.500%", "maturity": "2032" },
+    { "amountDisplay": "€1.25B", "currency": "EUR", "coupon": "3.750%", "maturity": "2035" },
+    { "amountDisplay": "€1.0B", "currency": "EUR", "coupon": "4.000%", "maturity": "2040" },
+    { "amountDisplay": "€1.0B", "currency": "EUR", "coupon": "4.250%", "maturity": "2050" }
+  ]
+}

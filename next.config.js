@@ -53,6 +53,15 @@ const nextConfig = {
     }
 
     if (!isServer) {
+      // Strip `node:` prefix on client so fallbacks below catch them.
+      // Some deps (e.g. cssstyle -> lru-cache) use `node:diagnostics_channel`
+      // which webpack treats as an unhandled scheme unless we rewrite it.
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
+          resource.request = resource.request.replace(/^node:/, '');
+        })
+      );
+
       // Don't resolve server-side modules on the client
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -71,6 +80,12 @@ const nextConfig = {
         http: false,
         https: false,
         zlib: false,
+        diagnostics_channel: false,
+        async_hooks: false,
+        worker_threads: false,
+        events: false,
+        buffer: false,
+        assert: false,
         // Add canvas fallback for client-side rendering
         canvas: false,
         'canvas/lib/bindings': false,

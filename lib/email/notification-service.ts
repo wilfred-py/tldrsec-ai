@@ -13,10 +13,11 @@ import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { SecureEmailLogger } from './security-helpers';
 import { JobQueueService, JobType } from '../job-queue';
-import { 
-  getEmailTemplate, 
-  FilingTemplateData, 
-  BaseTemplateData 
+import {
+  getEmailTemplate,
+  getMinimalistTemplateName,
+  FilingTemplateData,
+  BaseTemplateData
 } from './templates';
 // Import prisma with lazy loading pattern to avoid initialization issues
 import { getPrismaClient } from '../db/prisma';
@@ -453,21 +454,29 @@ export class NotificationService implements NotificationServiceInterface {
       // Get subject line
       const subject = this.getNotificationSubject(payload);
       
-      // Send the email using the injected email sender
+      // Send the email using the injected email sender.
+      // Tags use stable {name, value} object form so PostHog can filter by
+      // template / userId / filingId / formType / ticker as first-class properties
+      // rather than parsing prefix-encoded strings. All values survive
+      // sanitizeTagValue (no colons; underscores and dashes are preserved).
+      const templateName = getMinimalistTemplateName(payload.formType);
       const result = await this.emailSender.sendEmail({
         to: recipient.email,
         subject,
         html,
         text,
-        tags: ['type:filing_notification', `ticker:${payload.ticker}`, `form:${payload.formType}`],
+        tags: [
+          { name: 'type', value: 'filing_notification' },
+          { name: 'template', value: templateName },
+          { name: 'userId', value: recipient.userId },
+          { name: 'filingId', value: payload.filingId },
+          { name: 'formType', value: payload.formType },
+          { name: 'ticker', value: payload.ticker },
+        ],
         metadata: {
-          userId: recipient.userId,
           type: 'immediate',
           summaryCount: 1,
           tickerCount: 1,
-          tickerId: payload.ticker,
-          filingId: payload.filingId,
-          formType: payload.formType
         }
       });
       

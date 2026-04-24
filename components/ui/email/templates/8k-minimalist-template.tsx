@@ -1,7 +1,10 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, markdownToHtml, getSentimentColor, getSentimentEmoji } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, markdownToHtml, getSentimentEmoji } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
+import { TranchesList, Tranche } from './sections/TranchesList';
+import { DealTermsCard, DealTerms } from './sections/DealTermsCard';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
 import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
@@ -278,9 +281,25 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   // Merge data sources
   const eventType = (data?.eventType || extractedData?.eventType || '') as string;
   const itemNumbers = (data?.itemNumbers || extractedData?.itemNumbers || []) as string[];
-  const keyHighlights = (data?.keyHighlights || extractedData?.keyHighlights || []) as string[];
   const financialImpact = (data?.financialImpact || extractedData?.financialImpact || '') as string;
   const sentiment = (data?.sentiment || extractedData?.sentiment || '') as string;
+
+  // Structured 8-K blocks (item-gated). Validation already ran at the service
+  // layer (summaryGenerationService) — tranches/dealTerms are Zod-checked
+  // upstream or stripped entirely before they land in the DB.
+  const tranches = itemNumbers.includes('2.03')
+    ? (data?.tranches as Tranche[] | undefined)
+    : undefined;
+  const dealTerms = (itemNumbers.includes('1.01') || itemNumbers.includes('2.01'))
+    ? (data?.dealTerms as DealTerms | undefined)
+    : undefined;
+
+  // Filter keyHighlights: when structured tranches render, drop bullets that
+  // duplicate tranche data (currency symbol + percent in the same line).
+  const rawKeyHighlights = (data?.keyHighlights || extractedData?.keyHighlights || []) as string[];
+  const keyHighlights = tranches && tranches.length > 0
+    ? rawKeyHighlights.filter(h => !(/[¥$€£]/.test(h) && /%/.test(h)))
+    : rawKeyHighlights;
 
   const displayTicker = symbol || ticker || 'N/A';
 
@@ -302,8 +321,13 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   // Build preheader text for inbox preview
   const preheaderText = `${signal.level}: ${signal.verdict} — ${(summaryText || '').substring(0, 100)}`;
 
-  // Pick badge colors from the muted palette
-  const signalBadgeColors = isMaterial ? BadgeColors.high : BadgeColors.low;
+  // Signal colorKey for material/routine badge
+  const signalColorKey = isMaterial ? 'high' : 'low';
+  const sentimentKey = sentiment.toLowerCase();
+  const sentimentColorKey = (sentimentKey === 'positive' || sentimentKey === 'negative' || sentimentKey === 'mixed')
+    ? sentimentKey
+    : 'neutral';
+  const suppressSentiment = isMaterial && sentimentKey === 'neutral';
 
   // Remaining summary: decouple from headline — find first sentence boundary in original text
   const sentenceBoundary = findFirstSentenceBoundary(summaryText || '');
@@ -313,15 +337,6 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
 
   // "Why it matters" — use financialImpact when available, drop boilerplate
   const whyItMattersText = financialImpact || signal.description;
-
-  // Build data snapshot rows
-  const dataRows: { label: string; value: string }[] = [];
-  if (eventType) {
-    dataRows.push({ label: 'Event', value: eventType });
-  }
-  if (filingDate) {
-    dataRows.push({ label: 'Filed', value: filingDate });
-  }
 
   // Build watch-for items from key highlights + items reported
   const watchFor: string[] = [];
@@ -354,21 +369,34 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
-        ticker={displayTicker}
-        companyName={companyName}
-        filingType={filingType || '8-K'}
-        filingDate={filingDate}
-        filingCategory={eventType || (isMaterial ? 'Material' : 'Routine')}
-      />
-
-      {/* Staleness warning */}
+      {/* Staleness warning (above header) */}
       {filingDate && (
         <div style={{ padding: '0 15px' }}>
           <StalenessBanner filingDate={new Date(filingDate)} />
         </div>
       )}
+
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
+        ticker={displayTicker}
+        companyName={companyName}
+        filingDate={filingDate}
+        headline={headline}
+      />
+
+      {/* Form badge + materiality + sentiment row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || '8-K'}
+        filingCategory={eventType || (isMaterial ? 'Material' : 'Routine')}
+        signal={{
+          label: `${signal.icon} ${signal.level}`,
+          colorKey: signalColorKey,
+        }}
+        secondarySignal={sentiment && !suppressSentiment ? {
+          label: `${getSentimentEmoji(sentiment)} ${sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}`,
+          colorKey: sentimentColorKey,
+        } : undefined}
+      />
 
       {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
@@ -376,59 +404,16 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* Signal badge + sentiment — one row, no duplicate category badge */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: signalBadgeColors.bg,
-                  color: signalBadgeColors.text,
-                }}>
-                  {signal.icon} {signal.level}
-                </span>
-
-                {/* Sentiment badge — inline, muted colors */}
-                {sentiment && !(isMaterial && sentiment.toLowerCase() === 'neutral') && (
-                  <span style={{
-                    ...EmailStyles.pillBadge,
-                    marginLeft: '8px',
-                    backgroundColor: getSentimentColor(sentiment).bg,
-                    color: getSentimentColor(sentiment).text,
-                  }}>
-                    {getSentimentEmoji(sentiment)} {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
-                  </span>
-                )}
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {headline}
-              </h1>
-
-              {/* Data snapshot — after headline, before why-it-matters */}
-              {dataRows.length > 0 && (
-                <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '12px' }}>
-                  <tbody>
-                    {dataRows.map((row, idx) => (
-                      <tr key={idx}>
-                        <td style={{
-                          ...EmailStyles.dataLabel,
-                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
-                        }}>{row.label}</td>
-                        <td style={{
-                          ...EmailStyles.dataValue,
-                          borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
-                        }}>{row.value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
               {/* Why it matters */}
               <p style={EmailStyles.whyItMatters}>
                 <strong style={{ color: '#000000' }}>Why it matters: </strong>
                 {whyItMattersText}
               </p>
+
+              {/* Structured 8-K blocks — DealTermsCard (1.01/2.01) before TranchesList (2.03)
+                  so co-filed M&A + financing shows the deal context first. */}
+              {dealTerms && <DealTermsCard dealTerms={dealTerms} />}
+              {tranches && tranches.length > 0 && <TranchesList tranches={tranches} />}
 
               {/* Thin divider */}
               {remainingSummary && (

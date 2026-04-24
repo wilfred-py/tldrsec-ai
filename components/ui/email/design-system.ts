@@ -493,6 +493,25 @@ export function formatDatesInText(text: string | undefined): string {
 }
 
 /**
+ * Escape a string for safe inclusion as HTML text content or attribute value.
+ * Covers the standard OWASP HTML-encoding set: & < > " ' /
+ *
+ * Use for any LLM-extracted or user-derived string interpolated into
+ * `dangerouslySetInnerHTML` payloads. React JSX expressions (`{value}`)
+ * auto-escape and do NOT need this helper.
+ */
+export function escapeHtml(value: string | undefined | null): string {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\//g, '&#x2F;');
+}
+
+/**
  * Convert markdown text to email-safe HTML with inline styles
  * Handles: headers, bold, italic, bullet lists, numbered lists, tables, line breaks
  */
@@ -564,4 +583,60 @@ export function markdownToHtml(markdown: string | undefined): string {
   }
 
   return html;
+}
+
+/**
+ * Default category labels for the filing-type badge ("FORM 4 | Insider").
+ * Used by EmailHeader and FormPlusMaterialityBadgeRow.
+ */
+export const DEFAULT_FILING_CATEGORY_MAP: Record<string, string> = {
+  '4': 'Insider',
+  'FORM 4': 'Insider',
+  'FORM4': 'Insider',
+  '10-K': 'Annual',
+  '10K': 'Annual',
+  '10-Q': 'Quarterly',
+  '10Q': 'Quarterly',
+  '8-K': 'Current Report',
+  '8K': 'Current Report',
+  'FORM 8-K': 'Current Report',
+  'FORM8-K': 'Current Report',
+  '144': 'Sale Notice',
+  'FORM 144': 'Sale Notice',
+  'FORM144': 'Sale Notice',
+  'DEF 14A': 'Proxy',
+  'S-1': 'IPO',
+  'S-3': 'Offering',
+  '11-K': 'Employee Plan',
+  'SC 13D': 'Activist Stake',
+  'SC 13G': 'Passive Stake',
+};
+
+/**
+ * Cap a headline to a maximum length, breaking at the nearest word boundary.
+ * Adds an ellipsis when truncated. Returns the original string if already short enough.
+ */
+export function capHeadline(text: string | undefined, max: number = 90): string {
+  if (!text) return '';
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  const slice = trimmed.slice(0, max);
+  const lastSpace = slice.lastIndexOf(' ');
+  const cut = lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice;
+  return cut.replace(/[.,;:!?\s]+$/, '') + '…';
+}
+
+/**
+ * Ensure a headline begins with the ticker. If the headline already mentions the
+ * ticker (case-insensitive, word-boundary), return as-is. Otherwise prefix with
+ * "TICKER: ". Skips when ticker is missing or generic ("N/A").
+ */
+export function ensureTickerPrefix(headline: string | undefined, ticker: string | undefined): string {
+  const h = (headline || '').trim();
+  if (!h) return '';
+  if (!ticker || ticker === 'N/A') return h;
+  const t = ticker.trim();
+  const tickerRegex = new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  if (tickerRegex.test(h)) return h;
+  return `${t}: ${h}`;
 }

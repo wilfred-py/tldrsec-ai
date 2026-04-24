@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, markdownToHtml } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, markdownToHtml } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
@@ -124,12 +125,18 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
         ticker={displayTicker}
         companyName={companyName}
-        filingType={filingType || 'S-3'}
         filingDate={filingDate}
+        headline={headline || `${companyName} filed an S-3 registration for a secondary offering`}
+      />
+
+      {/* Form badge + signal badge row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || 'S-3'}
+        signal={{ label: offeringType || 'OFFERING', colorKey: 'neutral' }}
       />
 
       {/* Smart Brevity body */}
@@ -137,22 +144,6 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
         <tbody>
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
-
-              {/* Signal badge -- FIRST element */}
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{
-                  ...EmailStyles.pillBadge,
-                  backgroundColor: BadgeColors.neutral.bg,
-                  color: BadgeColors.neutral.text,
-                }}>
-                  {offeringType || 'OFFERING'}
-                </span>
-              </div>
-
-              {/* Lead sentence */}
-              <h1 style={EmailStyles.leadSentence}>
-                {headline || `${companyName} filed an S-3 registration for a secondary offering`}
-              </h1>
 
               {/* Why it matters */}
               <p style={EmailStyles.whyItMatters}>

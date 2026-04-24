@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.1] - 2026-04-25
+
+### Added
+- `components/dashboard/post-onboarding-hero-card.tsx` — inline hero card shown on the first dashboard visit after a user completes onboarding. Announces that AI-generated SEC filing summaries are being emailed (naming the target address and listing the tracked tickers as chips), with an `Open Inbox` CTA that deep-links to Gmail/Outlook/Yahoo/iCloud or falls back to `mailto:`. Dismissal writes `postOnboardingHeroDismissed` to localStorage; the server-side `isFirstVisit` flag also flips off once `tutorialCompletedAt` is set, so the card does not reappear after navigation. Wired into `app/dashboard/page.tsx` behind `isFirstVisit && initialCompanies.length > 0 && email`. Fixes HIGH #1 in `.gstack/qa-reports/qa-report-onboarding-notification-2026-04-24.md` (new users had no in-app signal that sample summaries were being emailed).
+- 12 unit tests in `__tests__/components/dashboard/post-onboarding-hero-card.test.tsx` covering headline personalization, empty-ticker guard, X-dismiss persistence, overflow chip (`+N more` past 6 tickers), and inbox URL resolution for each provider.
+
+## [0.0.24.0] - 2026-04-24
+
+### Changed
+- All nine minimalist filing email templates (10-K, 10-Q, 8-K, Form 4, Form 144, DEF 14A, 11-K, S-1, S-3, generic) now lead with the AI-generated headline on line 1. Prior layout rendered logo+date, then ticker line, then body copy — the headline lived inside the body, buried. New order: staleness banner (when applicable) → EmailLeadHeader (logo, date, H1 headline, ticker line) → FormPlusMaterialityBadgeRow (`<form> | <category>` badge + materiality/signal pill) → body. Driven by two new section components (`components/ui/email/templates/sections/EmailLeadHeader.tsx`, `FormPlusMaterialityBadgeRow.tsx`) so rearranging the block never drifts across templates.
+- 8-K template drops the standalone `Event` and `Filed` data rows from the body table. Event category moves into the FormPlusMaterialityBadgeRow pill (`8-K | Capital Return`), and the filing date is already rendered by EmailLeadHeader — the duplicate rows were wasted vertical space.
+- StalenessBanner now renders ABOVE the EmailLeadHeader, not below it. Stale filings push the date-delay warning to the top of the email where the reader can't miss it; prior position put it under the ticker line and readers scrolled past it.
+- PostHog email tags migrated from prefix-encoded strings (e.g. `t-filing_notification`, `u-abc123`) to stable `{name, value}` object form. PostHog now filters by `template`, `userId`, `filingId`, `formType`, `ticker` as first-class properties. Legacy 13D template path in `lib/email/templates.ts` updated to match.
+
+### Added
+- `capHeadline(text, maxLen)` in `components/ui/email/design-system.ts` truncates long headlines at word boundaries with ellipsis, so the H1 never wraps past two lines on mobile. Default cap is 90 chars, word-boundary aware.
+- `ensureTickerPrefix(ticker, symbol)` in the same file guarantees the ticker line starts with the `$TICKER` prefix (e.g. `$AAPL · Apple Inc.`). Idempotent — running twice doesn't double-prefix.
+- `DEFAULT_FILING_CATEGORY_MAP` default-labels each filing type for the `<form> | <category>` badge (e.g. `S-1 | IPO`, `Form 144 | Insider Sale Notice`). Overridable per-filing via the `filingCategory` prop.
+- Resend webhook handler in `app/api/webhook/route.ts` ingests `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained` events. Signature is verified via `svix`; events are mapped to PostHog with `distinct_id` derived from the `userId` tag so email engagement joins the same user timeline as app events. Missing `userId` tag logs a warning rather than crashing (backfill path). New analytics event types added to `lib/analytics/events.ts`.
+- Six new test files: `__tests__/email/email-lead-header.test.tsx`, `headline-cap.test.ts`, `headline-ticker-prefix.test.ts`, `template-layout-order.test.tsx`, `resend-tag-schema.test.ts`, `__tests__/api/webhook-resend.test.ts`. The layout-order test is the important one — it renders every minimalist template with realistic AI-headline input and asserts (via `container.innerHTML.indexOf()`) that the order is logo → headline → ticker line → badge row → body. Pill text splits across DOM nodes, so index-of on serialized HTML is the only reliable check.
+
+### Fixed
+- Duplicate-signal suppression in FormPlusMaterialityBadgeRow: if the form-type badge fully covers the signal (e.g. `S-1 | IPO` + `IPO FILING`), the redundant signal pill is omitted. Prevents two badges saying the same thing on IPO/acquisition filings.
+
+## [0.0.23.3] - 2026-04-24
+
+### Changed
+- `components/landing/sections-v2/faq-section-v2.tsx` — FAQ copy rewrite on the "Before you start your trial" section. Trial answer leads with "7-day trial at $0" and what the trial includes (unlimited tracking, first-priority processing, all filing types). Pro-vs-Max answer drops the monthly-price mirror (pricing cards own that number) and focuses on audience fit: Pro = focused investors on a watchlist up to `PRO.tickerLimit`, Max = analysts/research teams covering large universes. Filings answer enumerates the full EDGAR coverage (annual/quarterly/events/insider/ownership/proxy/registration) backed by `lib/user/preference-types.ts`, closing "If EDGAR publishes it, we cover it." Speed answer drops the now-defunct free-tier reference.
+- FAQ accordion defaults to fully collapsed. Previously opened item 1 via `defaultValue={faqItems[0].id}` — removed so the section reads as a scan-first list.
+- Header subtitle ("Answers to the questions most prospects ask before signing up.") removed. Section heading carries the intent on its own.
+
+### Removed
+- Three FAQ items: "How many companies can I track?" (owned by pricing cards), "Is this investment advice?" (footer disclaimer owns this independently — see `__tests__/components/landing/footer-section-v2.test.tsx:32`), "How do you handle my data?" (not the question prospects actually ask on a paid trial flow). `faqItems` reduced from 9 → 6.
+
+### Notes
+- `components/structured-data.tsx` consumes `faqItems` directly for FAQPage JSON-LD — no edit needed; structured data auto-reflects the 6-item list.
+- `__tests__/landing/faq-section-v2.test.tsx` updated: trigger count 9 → 6, "first item open" assertion replaced with all-collapsed loop, new regression guards for (1) Pro ticker limit sourced from `SUBSCRIPTION_PLANS.PRO.tickerLimit`, (2) no monthly-price leakage into FAQ copy, (3) removed IDs stay removed, (4) `answer`/`answerPlain` stay 1:1 for all-string items.
+
 ## [0.0.23.2] - 2026-04-24
 
 ### Added
@@ -13,7 +51,19 @@ All notable changes to this project will be documented in this file.
 
 ## [0.0.23.1] - 2026-04-24
 
+### Added
+- Event-type-aware structured rendering for 8-K summaries. Item 2.03 (debt issuance) now emits a `tranches[]` array (amountDisplay, currency, coupon, yield, maturity, spread) that renders as a tranche table grouped by currency with a totals line. Item 1.01 / 2.01 (M&A and material contracts) emits a `dealTerms` object (counterparty, dealValue, consideration, closeDate, approvals[], rationale) that renders as a deal-terms card. Falls back cleanly to the existing prose block when structured fields are absent, so cached summaries keep rendering.
+- Zod validation on LLM output at save time in `services/filing/summaryGenerationService.ts`. Bad `tranches`/`dealTerms` shapes are stripped with a structured `logger.warn` payload rather than persisted to the DB or surfaced to the reader.
+- `itemNumbers` schema field with a prose-parse fallback regex so the structured renderer can gate strictly on the filing's 8-K item, not on heuristics over the subject line.
+- New email template sections under `components/ui/email/templates/sections/`: `TranchesList.tsx`, `DealTermsCard.tsx`, `TotalsLine.tsx`. JSX-only interpolation — no `dangerouslySetInnerHTML`.
+- Passing tests across 13 test files covering tranche rendering (single/multi-currency, malformed amounts, XSS payloads), deal-terms rendering, extractor validation, legacy `counterpartyContext` backwards-compat, item-number regex variants, subject-line terseness, and end-to-end integration. 4 live-LLM eval tests gated on `RUN_LIVE_LLM_EVALS=true`.
+- `__tests__/email/form4-watch-for.test.tsx` with 4 tests: award-only filing suppresses the section, `vestingDetails` renders only the vesting bullet, transactions-without-vesting suppresses the section, and S-3 `Use of proceeds:` rendering regression guard.
+
 ### Changed
+- Subject line targeting for Item 2.03 and 1.01: drops filler verbs ("Issued", "Announced"); leads with ticker + materiality; hard cap ≤55 chars.
+- Consolidated three HTML-escapers in `components/ui/email/design-system.ts` into a single `escapeHtml` helper that also escapes `"` and `'`, closing an attribute-injection gap.
+- Removed `counterpartyContext` prompt field; its rationale now lives in `dealTerms.rationale`.
+- Removed `Record<string, unknown>` cast in `8k-minimalist-template.tsx` — structured fields flow through typed props.
 - Form 4 insider-transaction emails no longer render a generic "Watch for: SEC transaction code: Grant/Award, Option Exercise, Tax Withholding" bullet. Those labels were hardcoded from the transaction-code letter (A/M/F) via `getTransactionCodeDescription()`, describing what already happened instead of anything forward-looking. Every routine Form 4 was getting the same uninformative line.
 - `Watch for:` section on Form 4 now renders only the `vestingDetails` bullet when the AI extracts a vesting schedule. If absent, the entire section is suppressed via the existing `watchFor.length > 0` guard. No empty headers, no orphaned bullets.
 - Transaction-code descriptions still render in the data-snapshot table via `getTransactionCodeDescription()` in `components/ui/email/design-system.ts:463` — this change only removes the duplicated, non-actionable mention in `Watch for:`.
@@ -21,11 +71,8 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - Dead `codeDescription` field on the internal `AggregatedTransaction` interface in `form4-minimalist-template.tsx` — no consumers after the watchFor deletion. Removed the `@deprecated` wrapper `getTransactionCodeDescription` that re-exported the canonical function with no additional logic.
 
-### Added
-- `__tests__/email/form4-watch-for.test.tsx` with 4 tests: award-only filing suppresses the section, `vestingDetails` renders only the vesting bullet, transactions-without-vesting suppresses the section, and S-3 `Use of proceeds:` rendering regression guard.
-
 ### Fixed
-- `.nvmrc` bumped to `20.18.0`. Cloudflare Workers Builds runner dropped support for the old `20.11.0` pin (Jan 2024), causing CI to fail at `Installing nodejs 20.11.0 → Failed: error occurred while installing tools or dependencies` across all branches and main.
+- `.nvmrc` bumped to `20.20.2`. Cloudflare Workers Builds runner dropped support for the old `20.11.0` pin (Jan 2024), causing CI to fail at `Installing nodejs 20.11.0 → Failed: error occurred while installing tools or dependencies` across all branches and main.
 
 ## [0.0.23.0] - 2026-04-22
 

@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, BadgeColors, markdownToHtml } from '../design-system';
-import { EmailHeader } from './sections/EmailHeader';
+import { EmailColors, EmailStyles, markdownToHtml } from '../design-system';
+import { EmailLeadHeader } from './sections/EmailLeadHeader';
+import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
@@ -242,12 +243,18 @@ export function FormDEF14AMinimalistTemplate({ filing }: FormDEF14AMinimalistTem
         {preheaderText}
       </div>
 
-      {/* Header */}
-      <EmailHeader
+      {/* Lead-with-headline header */}
+      <EmailLeadHeader
         ticker={displayTicker}
         companyName={companyName}
-        filingType={filingType || 'DEF 14A'}
         filingDate={filingDate}
+        headline={hasStructuredData ? buildLeadSentence() : `${companyName} filed a proxy statement`}
+      />
+
+      {/* Form badge + signal badge row */}
+      <FormPlusMaterialityBadgeRow
+        filingType={filingType || 'DEF 14A'}
+        signal={{ label: 'PROXY VOTE', colorKey: 'moderate' }}
       />
 
       {/* Smart Brevity body */}
@@ -258,30 +265,6 @@ export function FormDEF14AMinimalistTemplate({ filing }: FormDEF14AMinimalistTem
 
               {hasStructuredData ? (
                 <>
-                  {/* [PROXY VOTE] pill badge with meeting date */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <span style={{
-                      ...EmailStyles.pillBadge,
-                      backgroundColor: BadgeColors.moderate.bg,
-                      color: BadgeColors.moderate.text,
-                    }}>
-                      PROXY VOTE
-                    </span>
-                    {meetingDate && (
-                      <span style={{
-                        ...EmailStyles.categoryBadge,
-                        marginLeft: '8px',
-                      }}>
-                        {meetingType || 'Annual Meeting'} &middot; {meetingDate}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Lead sentence */}
-                  <h1 style={EmailStyles.leadSentence}>
-                    {buildLeadSentence()}
-                  </h1>
-
                   {/* Why it matters */}
                   <p style={EmailStyles.whyItMatters}>
                     <strong style={{ color: '#000000' }}>Why it matters: </strong>
@@ -420,17 +403,6 @@ export function FormDEF14AMinimalistTemplate({ filing }: FormDEF14AMinimalistTem
               ) : (
                 /* Fallback — no structured data, render summaryText via markdownToHtml */
                 <>
-                  {/* Still show the pill badge */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <span style={{
-                      ...EmailStyles.pillBadge,
-                      backgroundColor: BadgeColors.moderate.bg,
-                      color: BadgeColors.moderate.text,
-                    }}>
-                      PROXY VOTE
-                    </span>
-                  </div>
-
                   {summaryText ? (
                     <div
                       style={EmailStyles.prose}
