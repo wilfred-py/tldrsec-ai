@@ -6,7 +6,6 @@
  * fallback copy always renders.
  */
 
-import { getServerPostHog } from '../analytics/posthog-server';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 
@@ -31,12 +30,15 @@ const PROVIDER_FLAGS: Record<string, string> = {
 };
 
 async function evaluateFlag(flagKey: string, distinctId: string): Promise<boolean> {
-  const posthog = getServerPostHog();
-  if (!posthog) {
-    // No PostHog configured — keep feature off by default.
-    return false;
-  }
   try {
+    // Dynamic import prevents posthog-node (Node-only deps like `readline`)
+    // from being pulled into any client bundle that transitively imports
+    // this module via the summarize pipeline.
+    const { getServerPostHog } = await import('../analytics/posthog-server');
+    const posthog = getServerPostHog();
+    if (!posthog) {
+      return false;
+    }
     const value = await posthog.getFeatureFlag(flagKey, distinctId);
     return value === true || value === 'true';
   } catch (error) {
