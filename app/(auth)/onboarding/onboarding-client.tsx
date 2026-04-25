@@ -18,17 +18,20 @@ import { OnboardingTransition } from "@/components/onboarding/onboarding-transit
 import { VerticalProgress } from "@/components/onboarding/vertical-progress";
 import { SectorStep } from "@/components/onboarding/sector-step";
 import { CompanyStep } from "@/components/onboarding/company-step";
-import { ProfileStep } from "@/components/onboarding/profile-step";
+import { ProfileStep, type ProfileSubStep } from "@/components/onboarding/profile-step";
+import { ConfirmStep } from "@/components/onboarding/confirm-step";
+import { InlineEmailNotice } from "@/components/onboarding/inline-email-notice";
 import type { CompanyItem } from "./types";
 import type { UserRole, AumBracket } from "@/components/onboarding/profile-step";
-import { TOTAL_STEPS } from "./types";
+import { getOnboardingSteps } from "./types";
 import { useAnalytics } from "@/lib/hooks/use-analytics";
 import { EVENTS } from "@/lib/analytics/events";
+import { useOnboardingVariant } from "@/lib/hooks/use-onboarding-variant";
 
-const STEP_NAMES = ["sectors", "companies", "profile"] as const;
+const STEP_NAMES = ["sectors", "companies", "profile", "confirm"] as const;
 
 export default function OnboardingPage() {
-  const { isLoading } = useAuthContext();
+  const { isLoading, userId, userEmail, userName } = useAuthContext();
   const { session } = useSession();
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,17 +43,30 @@ export default function OnboardingPage() {
   const [selectedEquities, setSelectedEquities] = useState<string[]>([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
+  // Lifted profile state (was inside ProfileStep) — required for Variant A
+  // Back-from-step-4 to preserve role/AUM/customRoleText.
+  const [profileSubStep, setProfileSubStep] = useState<ProfileSubStep>(1);
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [customRoleText, setCustomRoleText] = useState("");
+  const [selectedAum, setSelectedAum] = useState<AumBracket | null>(null);
+
   const equityNamesRef = useRef<Map<string, string>>(new Map());
   const submittingRef = useRef(false);
-  const lastProfileRef = useRef<{ role: UserRole; aumBracket?: AumBracket; customRoleText?: string } | null>(null);
 
-  // Track onboarding funnel timing.
+  // Onboarding funnel timing.
   const onboardingStartRef = useRef<number>(Date.now());
   const stepStartRef = useRef<number>(Date.now());
-  const { trackEvent } = useAnalytics();
+  const { trackEvent, identifyUser } = useAnalytics();
 
-  // Default preferences
-  const [emailFrequency] = useState<NotificationPreference>(
+  // A/B variant — resolved async, bucket-stable on Clerk userId.
+  const { variant, resolved } = useOnboardingVariant(userId);
+  const steps = getOnboardingSteps(variant ?? "inline");
+  const TOTAL_STEPS_FOR_VARIANT = steps.length;
+
+  // Email frequency — wired as real state (was readonly before). Variant A
+  // toggle mutates this; Variant B inherits the default and redirects to
+  // Settings for changes (per plan §667).
+  const [emailFrequency, setEmailFrequency] = useState<NotificationPreference>(
     DEFAULT_NOTIFICATION_PREFERENCES.emailFrequency
   );
   const [filingTypes] = useState<FilingTypePreferences>(
@@ -60,6 +76,13 @@ export default function OnboardingPage() {
     DEFAULT_NOTIFICATION_PREFERENCES.contentPreferences
   );
   const [uiPreferences] = useState<UIPreferences>(DEFAULT_UI_PREFERENCES);
+
+  // Identify PostHog user once Clerk hydrates — required for valid A/B
+  // bucketing (§3A in review notes).
+  useEffect(() => {
+    if (!userId) return;
+    identifyUser({ id: userId, email: userEmail, name: userName });
+  }, [userId, userEmail, userName, identifyUser]);
 
   useEffect(() => {
     try {
@@ -99,8 +122,7 @@ export default function OnboardingPage() {
   // Navigation
   // -----------------------------------------------------------------------
   const handleNext = () => {
-    if (currentStep < TOTAL_STEPS) {
-      // Fire onboarding_step_completed for the step being left behind.
+    if (currentStep < TOTAL_STEPS_FOR_VARIANT) {
       const now = Date.now();
       const stepName = STEP_NAMES[currentStep - 1];
       if (stepName) {
@@ -130,13 +152,29 @@ export default function OnboardingPage() {
     }
   };
 
-  // -----------------------------------------------------------------------
-  // Complete onboarding
-  // -----------------------------------------------------------------------
-  const handleCompleteOnboarding = async (profile: { role: UserRole; aumBracket?: AumBracket; customRoleText?: string }) => {
+  // Called from ProfileStep (Variant B — last step) or from ConfirmStep
+  // Finish (Variant A). Variant A's Finish doesn't supply a profile — we
+  // read from lifted state.
+  const handleCompleteOnboarding = async (profileOverride?: {
+    role: UserRole;
+    aumBracket?: AumBracket;
+    customRoleText?: string;
+  }) => {
     if (submittingRef.current) return;
+
+    const profile = profileOverride ?? {
+      role: selectedRole!,
+      aumBracket: selectedAum ?? undefined,
+      customRoleText:
+        selectedRole === "other" ? customRoleText : undefined,
+    };
+
+    if (!profile.role) {
+      setError("Missing role. Please return to the profile step.");
+      return;
+    }
+
     submittingRef.current = true;
-    lastProfileRef.current = profile;
     try {
       setIsSubmitting(true);
       setError(null);
@@ -149,7 +187,6 @@ export default function OnboardingPage() {
         companyName: equityNamesRef.current.get(symbol) || symbol,
       }));
 
-      // Capture UTM params if present
       const params = new URLSearchParams(window.location.search);
       const utmParams = {
         utm_source: params.get("utm_source") || undefined,
@@ -175,17 +212,27 @@ export default function OnboardingPage() {
         throw new Error(result.error || "Failed to complete onboarding");
       }
 
-      // Fire step_completed for profile step and onboarding_completed for funnel.
+      // Funnel events — variant-aware.
       const now = Date.now();
+      const resolvedVariant = variant ?? "inline";
+      const lastStepName = STEP_NAMES[currentStep - 1] ?? "profile";
       trackEvent(EVENTS.ONBOARDING_STEP_COMPLETED, {
-        step_name: "profile",
-        step_index: TOTAL_STEPS,
+        step_name: lastStepName,
+        step_index: currentStep,
         duration_ms: now - stepStartRef.current,
       });
       trackEvent(EVENTS.ONBOARDING_COMPLETED, {
         total_duration_ms: now - onboardingStartRef.current,
         companies_count: formattedTickers.length,
         sectors_count: selectedSectors.length,
+        variant: resolvedVariant,
+        step_count: TOTAL_STEPS_FOR_VARIANT as 3 | 4,
+        email_frequency: emailFrequency.toUpperCase() as
+          | "IMMEDIATE"
+          | "DAILY"
+          | "NONE",
+        ticker_count: formattedTickers.length,
+        duration_ms: now - onboardingStartRef.current,
       });
 
       setShowTransition(true);
@@ -205,6 +252,35 @@ export default function OnboardingPage() {
     }
   };
 
+  // Variant B: ProfileStep's Complete CTA fires submit directly.
+  // Variant A: ProfileStep's Complete CTA advances to step 4 instead.
+  const handleProfileComplete = (profile: {
+    role: UserRole;
+    aumBracket?: AumBracket;
+    customRoleText?: string;
+  }) => {
+    if (variant === "step4") {
+      // Lift-state is authoritative; ignore the profile payload (it's the
+      // same data). Advance to the Confirm step.
+      handleNext();
+    } else {
+      void handleCompleteOnboarding(profile);
+    }
+  };
+
+  const handleConfirmFinish = () => {
+    void handleCompleteOnboarding();
+  };
+
+  const handleZeroTickers = () => {
+    toast.error("You need at least one ticker before finishing onboarding.");
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCurrentStep(2); // Companies step
+      setIsTransitioning(false);
+    }, 300);
+  };
+
   // Auto-redirect to sign-in on error after 3 seconds
   useEffect(() => {
     if (!error || showTransition) return;
@@ -217,7 +293,7 @@ export default function OnboardingPage() {
   // -----------------------------------------------------------------------
   // Render guards
   // -----------------------------------------------------------------------
-  if (isLoading || initializing) {
+  if (isLoading || initializing || !resolved) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -247,13 +323,18 @@ export default function OnboardingPage() {
   // -----------------------------------------------------------------------
   // Main render — two-column layout with vertical progress
   // -----------------------------------------------------------------------
+  const inlineDisclosure =
+    variant === "inline" ? (
+      <InlineEmailNotice tickers={selectedEquities} />
+    ) : undefined;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="flex gap-6 sm:gap-10 w-full max-w-4xl">
           {/* Left: vertical progress */}
           <div className="flex-shrink-0 flex items-center">
-            <VerticalProgress currentStep={currentStep} />
+            <VerticalProgress currentStep={currentStep} steps={steps} />
           </div>
 
           {/* Right: main content */}
@@ -290,10 +371,37 @@ export default function OnboardingPage() {
 
                 {currentStep === 3 && (
                   <ProfileStep
-                    onComplete={handleCompleteOnboarding}
+                    subStep={profileSubStep}
+                    onSubStepChange={setProfileSubStep}
+                    selectedRole={selectedRole}
+                    onRoleChange={setSelectedRole}
+                    customRoleText={customRoleText}
+                    onCustomRoleChange={setCustomRoleText}
+                    selectedAum={selectedAum}
+                    onAumChange={setSelectedAum}
+                    onComplete={handleProfileComplete}
                     onBack={handleBack}
-                    isSubmitting={isSubmitting}
+                    isSubmitting={isSubmitting && variant === "inline"}
                     isTransitioning={isTransitioning}
+                    inlineDisclosure={inlineDisclosure}
+                  />
+                )}
+
+                {currentStep === 4 && variant === "step4" && (
+                  <ConfirmStep
+                    tickers={selectedEquities}
+                    emailFrequency={emailFrequency}
+                    onFrequencyChange={setEmailFrequency}
+                    onFinish={handleConfirmFinish}
+                    onBack={() => {
+                      // Back to ProfileStep, restore to sub-step 2 so AUM is
+                      // immediately visible (user was on AUM when they
+                      // advanced).
+                      setProfileSubStep(2);
+                      handleBack();
+                    }}
+                    onZeroTickers={handleZeroTickers}
+                    isSubmitting={isSubmitting}
                   />
                 )}
               </div>

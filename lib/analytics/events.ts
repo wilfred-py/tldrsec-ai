@@ -18,6 +18,7 @@ export const EVENTS = {
   // Onboarding funnel
   ONBOARDING_STEP_COMPLETED: 'onboarding_step_completed',
   ONBOARDING_COMPLETED: 'onboarding_completed',
+  ONBOARDING_VARIANT_ASSIGNED: 'onboarding_variant_assigned',
 
   // Conversion funnel
   CHECKOUT_INITIATED: 'checkout_initiated',
@@ -54,7 +55,7 @@ export type EventProps = {
     billing_period: BillingPeriod;
   };
   [EVENTS.ONBOARDING_STEP_COMPLETED]: {
-    step_name: 'profile' | 'sectors' | 'companies' | 'email' | 'tutorial';
+    step_name: 'profile' | 'sectors' | 'companies' | 'confirm' | 'email' | 'tutorial';
     step_index: number;
     duration_ms: number;
   };
@@ -62,6 +63,15 @@ export type EventProps = {
     total_duration_ms: number;
     companies_count: number;
     sectors_count: number;
+    variant: 'step4' | 'inline';
+    step_count: 3 | 4;
+    email_frequency: 'IMMEDIATE' | 'DAILY' | 'NONE';
+    ticker_count: number;
+    duration_ms: number;
+  };
+  [EVENTS.ONBOARDING_VARIANT_ASSIGNED]: {
+    variant: 'step4' | 'inline';
+    source: 'posthog' | 'session' | 'cookie' | 'fallback';
   };
   [EVENTS.CHECKOUT_INITIATED]: {
     plan: PlanTier;

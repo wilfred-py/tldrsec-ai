@@ -17,6 +17,7 @@ import { getDefaultModel } from '../../ai/config';
 import { sendEmail } from '../../email/email-core';
 import { resendConfig } from '../../email/config';
 import { generateFeedbackToken } from '../../email/feedback-tokens';
+import { escapeHtml } from '../../email/security-helpers';
 
 const digestLogger = logger.child('weekly-digest-handler');
 
@@ -599,13 +600,6 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen - 3) + '...';
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
