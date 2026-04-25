@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.2] - 2026-04-25
+
+### Added
+- **Onboarding A/B test — email-notice placement** (`lib/hooks/use-onboarding-variant.ts`, `lib/onboarding/email-notice-constants.ts`): PostHog feature-flag `onboarding-email-notice` buckets users into two variants. Variant B ("inline", default) — 3-step wizard: email-notice copy renders inline on ProfileStep sub-step 2 (AUM screen) via `InlineEmailNotice`. Variant A ("step4") — 4-step wizard: a dedicated `ConfirmStep` follows ProfileStep and surfaces email-frequency controls (Immediate / Daily / None) plus the notice. Bucket assignment is stable: resolved flag is cached in `sessionStorage` plus a short-lived cookie to survive hard-reloads.
+- `components/onboarding/confirm-step.tsx` — step 4 card for Variant A. Shows tracked-ticker count, email-frequency radio group (bound to lifted state), legal-notice copy, and two CTAs (Finish, Back). Emits `onZeroTickers` guard when user reaches it with no tickers selected.
+- `components/onboarding/inline-email-notice.tsx` — compact disclosure rendered below AUM brackets on ProfileStep sub-step 2 in Variant B. Shows personalised ticker count and settings deep-link.
+- `components/onboarding/profile-step.tsx` — accepts `inlineDisclosure?: ReactNode` slot (injected by orchestrator for Variant B) and 6 new lifted-state props (`subStep`, `onSubStepChange`, `selectedRole`, `onRoleChange`, `customRoleText`, `onCustomRoleChange`, `selectedAum`, `onAumChange`) so `OnboardingPage` preserves selections when the user navigates back from step 4.
+- `components/onboarding/vertical-progress.tsx` — accepts optional `steps` prop (`ReadonlyArray<{label,key}>`). Defaults to `ONBOARDING_STEPS_BASE` (3 items); Variant A passes `ONBOARDING_STEPS_WITH_CONFIRM` (4 items). Each step renders its number as a visible indicator so tests can assert step count without brittle text matching.
+- `app/(auth)/onboarding/types.ts` — exports `ONBOARDING_STEPS_BASE`, `ONBOARDING_STEPS_WITH_CONFIRM`, and `getOnboardingSteps(variant)` helper.
+- `app/(auth)/onboarding/onboarding-client.tsx` — orchestrator overhauled: profile sub-step and role/AUM fields lifted to orchestrator state; `handleProfileComplete` branches on variant (Variant A → `handleNext()`, Variant B → `handleCompleteOnboarding(profile)`); `handleConfirmFinish` reads from lifted state; `handleZeroTickers` toasts and navigates back to step 2.
+- 75 unit tests across 9 suites covering variant resolution, InlineEmailNotice, ConfirmStep, ProfileStep lifted-state props, VerticalProgress step counts, onboarding-client A/B routing, and email-notice constants.
+
 ## [0.0.24.1] - 2026-04-25
 
 ### Added
