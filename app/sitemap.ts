@@ -3,20 +3,23 @@ import { getRecentFilingsForSitemap } from '@/lib/seo/summary-preview';
 import { getTickersWithSummaries } from '@/lib/seo/company-page';
 import { getAllFilingTypeGuides } from '@/lib/seo/filing-type-content';
 
-// Fixed date for static routes — update on each deploy that changes these pages.
+// Fixed date for static routes — bump on each deploy that changes sitemap structure.
 // Using new Date() causes crawlers to see a different lastModified every request,
 // which wastes crawl budget and signals false freshness.
-const STATIC_LAST_MODIFIED = '2026-04-16';
+const STATIC_LAST_MODIFIED = '2026-04-21';
 
 /**
- * Sitemap priority hierarchy (explicit, per review decision 15A):
+ * Sitemap priority hierarchy:
  *   1.0  homepage
  *   0.8  company hub pages (most unique content per page)
  *   0.7  filing-type guide pages, /companies directory
- *   0.7  /sign-up (lowered from 0.8 to avoid competing with content)
  *   0.6  individual /s/ preview pages (templated)
- *   0.5  /waitlist
  *   0.3  privacy, terms
+ *
+ * Auth and transactional routes (/sign-up, /sign-in, /subscribe, /waitlist) are
+ * intentionally excluded — they remain crawlable (not in robots.txt disallow)
+ * but are not promoted to Google. They have no unique SEO content and would
+ * only compete with content pages for crawl budget.
  *
  * Growth note: When the total URL count exceeds ~45k, split into a sitemap
  * index with sub-sitemaps (sitemap-companies.xml, sitemap-filings.xml,
@@ -37,30 +40,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: STATIC_LAST_MODIFIED,
       changeFrequency: 'weekly',
       priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/sign-up`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/sign-in`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/subscribe`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: 'weekly',
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/waitlist`,
-      lastModified: STATIC_LAST_MODIFIED,
-      changeFrequency: 'monthly',
-      priority: 0.5,
     },
     {
       url: `${baseUrl}/privacy`,

@@ -26,8 +26,6 @@ export function Navigation() {
             <nav className="hidden md:flex items-center space-x-1">
               <NavLink href="#features">Features</NavLink>
               <NavLink href="#pricing">Pricing</NavLink>
-              <NavLink href="/changelog">Changelog</NavLink>
-              <NavLink href="/contact">Contact</NavLink>
             </nav>
           )}
 
