@@ -9,6 +9,7 @@ import { convertUserPrefsToTickerPrefs, getDefaultTickerPreferences } from '@/li
 import { UserPreferences } from '@/lib/user/preference-types';
 import { sendQuarterlyEarningsEmail } from '@/lib/email/quarterly-earnings-service';
 import { logger } from '@/lib/logging';
+import { resolveTicker } from '@/lib/sec-edgar/cik-resolver';
 
 // Input validation schema for ticker creation
 const createTickerSchema = z.object({
@@ -233,6 +234,13 @@ export async function POST(request: Request) {
         }
       });
 
+      // Without a CikMapping row, fast-poll filters this symbol out and never creates
+      // a TickerMonitoring record. Fire-and-forget so the response stays fast even if
+      // SEC EDGAR is slow or unreachable.
+      void resolveTicker(symbol).catch(err => {
+        logger.warn(`Background CIK resolution failed for ${symbol}: ${err instanceof Error ? err.message : String(err)}`);
+      });
+
       // Return the new ticker
       return NextResponse.json({
         id: newTicker.id,
@@ -298,6 +306,10 @@ export async function POST(request: Request) {
         userId: dbUser.id,
         preferences: tickerPrefs,
       }
+    });
+
+    void resolveTicker(symbol).catch(err => {
+      logger.warn(`Background CIK resolution failed for ${symbol}: ${err instanceof Error ? err.message : String(err)}`);
     });
 
     // Make sure cache is refreshed
