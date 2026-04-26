@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, markdownToHtml, formatDatesInText } from '../design-system';
+import { EmailColors, EmailStyles, markdownToHtml, formatDatesInText, getWhyItMattersLabel, type WhyItMattersBucket } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
@@ -547,7 +547,14 @@ function getAggregatedTransactionConfig(type: 'gift' | 'sale' | 'purchase' | 'tr
 /**
  * Determine signal level and get appropriate styling
  */
-function getSignalConfig(signalStrength: string, summaryText: string, isSale: boolean, percentChange: string, isAwardOnly: boolean = false) {
+export function getSignalConfig(
+  signalStrength: string,
+  summaryText: string,
+  isSale: boolean,
+  percentChange: string,
+  isAwardOnly: boolean = false,
+  has10b51Plan: boolean = false,
+) {
   const signalLower = signalStrength.toLowerCase();
   const summaryLower = summaryText?.toLowerCase() || '';
 
@@ -581,8 +588,9 @@ function getSignalConfig(signalStrength: string, summaryText: string, isSale: bo
     };
   }
 
-  // Check for 10b5-1 plan (reduces signal significance)
-  const has10b51 = signalLower.includes('10b5-1') || summaryLower.includes('10b5-1');
+  // 10b5-1 plan detection comes from the schema boolean (source of truth),
+  // not free-text scan of signalStrength / summary.
+  const has10b51 = has10b51Plan;
 
   // Check for strong signals
   const isStrong = signalLower.includes('strong') ||
@@ -748,7 +756,20 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const hasTransactionData = transactions.length > 0 || percentChange;
 
   // Get signal configuration
-  const signal = getSignalConfig(signalStrength, summaryText || '', primaryIsSale, percentChange, isAwardOnly);
+  const has10b51Plan = normalizedData?.has10b51Plan ?? false;
+  const signal = getSignalConfig(signalStrength, summaryText || '', primaryIsSale, percentChange, isAwardOnly, has10b51Plan);
+
+  // "Why it matters" label bucket and UTM variant for click-through attribution.
+  // Form 4 uses hardcoded signal copy (no AI whyItMatters consumed), so
+  // material → `fallback`, routine (incl. 10b5-1) → `note`, descriptive (trust/award) → `neutral`.
+  const whyItMattersBucket: WhyItMattersBucket =
+    signal.level === 'HIGH' || signal.level === 'MODERATE' ? 'material'
+      : signal.level === 'LOW' ? 'routine'
+      : 'descriptive';
+  const utmVariant: 'fallback' | 'note' | 'neutral' =
+    whyItMattersBucket === 'routine' ? 'note'
+      : whyItMattersBucket === 'descriptive' ? 'neutral'
+      : 'fallback';
 
   // Prefer AI-provided headline, fall back to sentence extraction
   const aiHeadline = typeof rawData?.headline === 'string' ? rawData.headline : '';
@@ -886,11 +907,16 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* Why it matters */}
-              <p style={EmailStyles.whyItMatters}>
-                <strong style={{ color: '#000000' }}>Why it matters: </strong>
-                {signal.description}
-              </p>
+              {/* Why it matters / Note / What happened — label + styling depends on signal bucket */}
+              {(() => {
+                const label = getWhyItMattersLabel(whyItMattersBucket);
+                return (
+                  <p style={label.paragraphStyle}>
+                    <strong style={label.labelStyle}>{label.text}</strong>
+                    {signal.description}
+                  </p>
+                );
+              })()}
 
               {/* Thin divider */}
               {dataRows.length > 0 && (
@@ -1001,6 +1027,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || 'Form 4'}
+        utmVariant={utmVariant}
       />
     </div>
   );

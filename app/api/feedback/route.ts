@@ -6,6 +6,17 @@ export const dynamic = 'force-dynamic';
 
 const VALID_VOTES = ['up', 'down'] as const;
 
+// Shared headers for 410 responses: tell crawlers not to cache, and indicate HTML body.
+const GONE_HEADERS = {
+  'Content-Type': 'text/html; charset=utf-8',
+  'Cache-Control': 'no-store',
+} as const;
+
+function goneResponse(message: string): NextResponse {
+  const body = `<!doctype html><meta charset="utf-8"><title>Link expired</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#111}</style><h1>${message}</h1><p>This feedback link is no longer valid. Visit <a href="https://tldrsec.app/">tldrsec.app</a> for the latest.</p>`;
+  return new NextResponse(body, { status: 410, headers: GONE_HEADERS });
+}
+
 /**
  * GET /api/feedback?token=...&vote=up|down
  *
@@ -21,24 +32,20 @@ export async function GET(request: NextRequest) {
 
   // Validate required parameters
   if (!token || !vote) {
-    return NextResponse.redirect(
-      new URL('/feedback/error?reason=missing_params', baseUrl)
-    );
+    // 410 Gone (not 302 to a noindex page) so Google drops stale bot hits
+    // from the index immediately instead of seeing a redirect-to-noindex chain.
+    return goneResponse('Invalid feedback link.');
   }
 
   // Validate vote value
   if (!VALID_VOTES.includes(vote as typeof VALID_VOTES[number])) {
-    return NextResponse.redirect(
-      new URL('/feedback/error?reason=invalid_vote', baseUrl)
-    );
+    return goneResponse('Invalid feedback link.');
   }
 
   // Validate and decode the HMAC token
   const payload = validateFeedbackToken(token);
   if (!payload) {
-    return NextResponse.redirect(
-      new URL('/feedback/error?reason=invalid_token', baseUrl)
-    );
+    return goneResponse('Feedback link expired.');
   }
 
   const { userId, summaryId } = payload;
@@ -66,8 +73,8 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error('Failed to save email feedback:', error);
-    return NextResponse.redirect(
-      new URL('/feedback/error?reason=server_error', baseUrl)
-    );
+    return new NextResponse('Unable to save feedback. Please try again later.', {
+      status: 500,
+    });
   }
 }

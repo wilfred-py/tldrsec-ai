@@ -108,6 +108,17 @@ const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
 // =============================================================================
 
 /**
+ * Interpretive "why it matters" property reused across target schemas.
+ * Opt-in per schema — not in BASE_SCHEMA_PROPERTIES because Form 4, Form 3, Form 144,
+ * SC 13D/G, and Generic rely on label-based copy rather than AI interpretation.
+ */
+const WHY_IT_MATTERS_PROPERTY: SchemaProperty = {
+  type: 'string',
+  description: 'ONE SENTENCE (40-180 chars). If the reader reads only this line, what should they know that ISN\'T already in headline or summary? Add interpretation, not restatement — e.g., why terms are notable, what this means for the company, what comes next. If web-search ENRICHMENT context is provided above, use it to ground claims (rates, spreads, consensus, peer context). If you can\'t produce something specific and non-obvious, return empty string — the parser will coerce it to an absent field and a template fallback will render.',
+  maxLength: 180
+};
+
+/**
  * Financial highlight item schema with label, value, and optional change fields.
  * Used in 10-K and 10-Q schemas for consistent financial metric representation.
  */
@@ -204,7 +215,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         maxItems: 5,
         description: 'Additional key takeaways (fallback if financialHighlights sparse)',
         items: KEY_POINT_ITEM
-      }
+      },
+      whyItMatters: WHY_IT_MATTERS_PROPERTY
     }
   },
 
@@ -263,7 +275,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         maxItems: 5,
         description: 'Additional key takeaways (fallback if financialHighlights sparse)',
         items: KEY_POINT_ITEM
-      }
+      },
+      whyItMatters: WHY_IT_MATTERS_PROPERTY
     }
   },
 
@@ -365,6 +378,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         description: 'For governance filings (Item 5.02, 5.07): Who are the directors involved, their background, and why the change matters to shareholders',
         maxLength: 300
       },
+      whyItMatters: WHY_IT_MATTERS_PROPERTY,
       headline: {
         type: 'string',
         description: 'One compelling sentence (max 200 chars) summarizing the most material fact for email display. Be specific with names and numbers. Never start with "This filing..." or generic prefixes.',
@@ -639,7 +653,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'Interest rate if applicable (e.g., "5.25%")',
         maxLength: 20
-      }
+      },
+      whyItMatters: WHY_IT_MATTERS_PROPERTY
     }
   },
 
@@ -710,7 +725,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'Exchange where shares will be listed (e.g., "NYSE", "NASDAQ")',
         maxLength: 30
-      }
+      },
+      whyItMatters: WHY_IT_MATTERS_PROPERTY
     }
   },
 
@@ -776,7 +792,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'string',
         description: 'Price per share if fixed (e.g., "$45.00")',
         maxLength: 30
-      }
+      },
+      whyItMatters: WHY_IT_MATTERS_PROPERTY
     }
   },
 
@@ -882,7 +899,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
           firm: { type: 'string', description: 'Audit firm name', maxLength: 100 },
           fees: { type: 'string', description: 'Audit fees paid', maxLength: 30 }
         }
-      }
+      },
+      whyItMatters: WHY_IT_MATTERS_PROPERTY
     }
   },
 

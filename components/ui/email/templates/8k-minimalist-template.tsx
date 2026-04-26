@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, markdownToHtml, getSentimentEmoji } from '../design-system';
+import { EmailColors, EmailStyles, markdownToHtml, getSentimentEmoji, getWhyItMattersLabel, type WhyItMattersBucket } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
@@ -335,8 +335,18 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
     ? (summaryText || '').slice(sentenceBoundary).trim()
     : '';
 
-  // "Why it matters" — use financialImpact when available, drop boilerplate
-  const whyItMattersText = financialImpact || signal.description;
+  // "Why it matters" bucket selection: material (AI or fallback) vs routine (mechanistic copy)
+  const whyItMattersBucket: WhyItMattersBucket = isMaterial ? 'material' : 'routine';
+  const aiWhyItMatters = typeof data?.whyItMatters === 'string' ? data.whyItMatters : '';
+  // Consume AI whyItMatters only for material events; otherwise drop to financialImpact / signal copy.
+  const usedAiWhyItMatters = whyItMattersBucket === 'material' && Boolean(aiWhyItMatters);
+  const whyItMattersText = usedAiWhyItMatters
+    ? aiWhyItMatters
+    : (financialImpact || signal.description);
+
+  // UTM variant for click-through attribution — reflects what was rendered above.
+  const utmVariant: 'ai' | 'fallback' | 'note' =
+    whyItMattersBucket === 'routine' ? 'note' : usedAiWhyItMatters ? 'ai' : 'fallback';
 
   // Build watch-for items from key highlights + items reported
   const watchFor: string[] = [];
@@ -404,11 +414,16 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* Why it matters */}
-              <p style={EmailStyles.whyItMatters}>
-                <strong style={{ color: '#000000' }}>Why it matters: </strong>
-                {whyItMattersText}
-              </p>
+              {/* Why it matters / Note — label + styling depends on materiality bucket */}
+              {(() => {
+                const label = getWhyItMattersLabel(whyItMattersBucket);
+                return (
+                  <p style={label.paragraphStyle}>
+                    <strong style={label.labelStyle}>{label.text}</strong>
+                    {whyItMattersText}
+                  </p>
+                );
+              })()}
 
               {/* Structured 8-K blocks — DealTermsCard (1.01/2.01) before TranchesList (2.03)
                   so co-filed M&A + financing shows the deal context first. */}
@@ -472,6 +487,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || '8-K'}
+        utmVariant={utmVariant}
       />
     </div>
   );

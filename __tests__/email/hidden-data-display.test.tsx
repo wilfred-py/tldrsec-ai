@@ -161,8 +161,10 @@ describe('Hidden Data Display', () => {
 
       // Should display the financial impact value in the "Why it matters" prose
       expect(container.textContent).toContain('$2.5B');
-      // Financial impact is now woven into "Why it matters" narrative, not a separate section
-      expect(container.textContent).toMatch(/Why it matters/i);
+      // Financial impact is woven into the matters paragraph — label is either
+      // "Why it matters" (material) or "Note:" (routine), per W2 bucket rules.
+      // No itemNumbers/summaryText → isMaterial=false → "Note:" label applies.
+      expect(container.textContent).toMatch(/Why it matters|Note:/i);
     });
   });
 

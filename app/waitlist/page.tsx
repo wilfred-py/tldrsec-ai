@@ -67,6 +67,12 @@ export const metadata: Metadata = {
   alternates: {
     canonical: 'https://tldrsec.app/waitlist',
   },
+  // Transactional page. Keep crawlable but out of Google's index so content
+  // pages don't lose crawl budget competing with it.
+  robots: {
+    index: false,
+    follow: true,
+  },
 };
 
 export default async function WaitlistPage() {
