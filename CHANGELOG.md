@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.24.6] - 2026-04-26
+## [0.0.24.7] - 2026-04-26
 
 ### Added
 - **10-Q financial scorecard — pill deltas** (`components/ui/email/templates/10q-minimalist-template.tsx`): redesigned earnings table to a 4-column grid (METRIC | LATEST | YoY | QoQ) with mono-font pill chips for YoY/QoQ deltas. Positive deltas render green, negative red (with Unicode minus `U+2212`, not ASCII hyphen — visually heavier so `-3.5%` reads instantly), zero/unparseable values fall back to a neutral gray pill. Numbered list rendering for "What to Watch". Spacer rows added before "EARNINGS SCORECARD" and "What to Watch" black bars (email-safe — `marginTop` on `<td>` doesn't render in Outlook).
