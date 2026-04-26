@@ -125,10 +125,26 @@ export const SECTORS: SectorDef[] = [
 // ---------------------------------------------------------------------------
 // Step definitions for vertical progress
 // ---------------------------------------------------------------------------
-export const ONBOARDING_STEPS = [
+export const ONBOARDING_STEPS_BASE = [
   { label: "Sectors", key: "sectors" },
   { label: "Companies", key: "companies" },
   { label: "Profile", key: "profile" },
 ] as const;
 
-export const TOTAL_STEPS = ONBOARDING_STEPS.length;
+export const ONBOARDING_STEPS_WITH_CONFIRM = [
+  ...ONBOARDING_STEPS_BASE,
+  { label: "Review", key: "confirm" },
+] as const;
+
+/**
+ * @deprecated Use {@link getOnboardingSteps} — step count now depends on A/B variant.
+ * Kept as the base 3-step layout for callers that render outside the A/B flow.
+ */
+export const ONBOARDING_STEPS = ONBOARDING_STEPS_BASE;
+export const TOTAL_STEPS = ONBOARDING_STEPS_BASE.length;
+
+export type OnboardingVariantKey = "step4" | "inline";
+
+export function getOnboardingSteps(variant: OnboardingVariantKey) {
+  return variant === "step4" ? ONBOARDING_STEPS_WITH_CONFIRM : ONBOARDING_STEPS_BASE;
+}

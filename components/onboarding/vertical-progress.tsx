@@ -2,23 +2,24 @@
 
 import { CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ONBOARDING_STEPS } from "@/app/(auth)/onboarding/types";
+import { ONBOARDING_STEPS_BASE } from "@/app/(auth)/onboarding/types";
 
 interface VerticalProgressProps {
   currentStep: number; // 1-indexed
+  steps?: ReadonlyArray<{ readonly label: string; readonly key: string }>;
 }
 
-export function VerticalProgress({ currentStep }: VerticalProgressProps) {
+export function VerticalProgress({ currentStep, steps = ONBOARDING_STEPS_BASE }: VerticalProgressProps) {
   return (
     <nav
       aria-label="Onboarding progress"
       className="flex flex-col items-center sm:items-start gap-0"
     >
-      {ONBOARDING_STEPS.map((step, index) => {
+      {steps.map((step, index) => {
         const stepNum = index + 1;
         const isCompleted = currentStep > stepNum;
         const isActive = currentStep === stepNum;
-        const isLast = index === ONBOARDING_STEPS.length - 1;
+        const isLast = index === steps.length - 1;
 
         return (
           <div key={step.key} className="flex flex-col items-center sm:items-start">
