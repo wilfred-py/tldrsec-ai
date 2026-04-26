@@ -709,7 +709,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
 
             <motion.div
               variants={staggerItem}
-              className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2 sm:gap-5 mb-4"
+              className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2 sm:gap-5 mb-10"
             >
               {trustMetrics.map((metric) => (
                 <div key={metric.label} className="flex items-center gap-1.5">
