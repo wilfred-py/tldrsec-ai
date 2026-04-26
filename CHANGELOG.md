@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.6] - 2026-04-26
+
+### Fixed
+- `app/robots.ts`: extended `disallow` to include `/feedback/` and `/unsubscribe/`. These dead-end transactional pages already carried `<meta name="robots" content="noindex,nofollow">` (via `app/feedback/{thanks,error}/page.tsx` and `app/unsubscribe/layout.tsx`), but Bing crawled them anyway and indexed them — `noindex` only takes effect once the crawler reads the page, and the meta tag was being treated inconsistently. Adding the paths to robots.txt stops crawl entirely so Bing/Google decay the index entries, and PostHog stops recording bot hits as engaged sessions on those routes.
+- `__tests__/seo/metadata-validation.test.ts`: added test asserting `/feedback/` and `/unsubscribe/` are present in the robots.txt disallow list.
+
 ## [0.0.24.5] - 2026-04-26
 
 ### Changed
