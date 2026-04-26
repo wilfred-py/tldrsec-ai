@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.6] - 2026-04-26
+
+### Added
+- **10-Q financial scorecard — pill deltas** (`components/ui/email/templates/10q-minimalist-template.tsx`): redesigned earnings table to a 4-column grid (METRIC | LATEST | YoY | QoQ) with mono-font pill chips for YoY/QoQ deltas. Positive deltas render green, negative red (with Unicode minus `U+2212`, not ASCII hyphen — visually heavier so `-3.5%` reads instantly), zero/unparseable values fall back to a neutral gray pill. Numbered list rendering for "What to Watch". Spacer rows added before "EARNINGS SCORECARD" and "What to Watch" black bars (email-safe — `marginTop` on `<td>` doesn't render in Outlook).
+- `EmailColors.semantic.pill{Positive,Negative,Neutral}{Bg,Fg}` (`components/ui/email/design-system.ts`): six new design tokens for pill chip colors so the scorecard, and any future template that needs delta indicators, all reach for the same source of truth instead of inlining hexes.
+- `__tests__/email/10q-pill-delta.test.tsx` — 8 regression tests rendering the full template with realistic financial data and asserting pill background/foreground colors per tone (positive green, negative red with U+2212, zero gray, unparseable "N/A" gray, basis-point "+5 points" gray, missing → em-dash, dual YoY+QoQ pills, no pill bleed onto the dollar-value cell).
+
+### Fixed
+- **`parseDelta` was rendering unparseable strings as positive (green)** — `parseFloat("N/A")` returns `NaN` but the old code path treated `>= 0` as positive, so any non-numeric change string ("N/A", "+5 points", basis-point measures) painted green. Replaced loose parse with strict regex (`/^-?\d+(\.\d+)?$/`) over a stripped form (no `%`, `+`, `,`, `$`); unparseable values now correctly route to the neutral gray pill via a discriminated `DeltaTone = 'positive' | 'negative' | 'zero' | 'unparseable'` union.
+
 ## [0.0.24.5] - 2026-04-26
 
 ### Changed
