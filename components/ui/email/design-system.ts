@@ -38,6 +38,14 @@ export const EmailColors = {
     negative: '#EF4444',      // Red 500 for negative changes (sells, losses)
     neutral: '#6B7280',       // Gray 500 for no change
     accent: '#7C3AED',        // Purple for CTAs only (minimal use)
+    // Filled pill chip tokens — deeper text on lighter bg than the line-color
+    // tokens above. Used for ±% delta chips in financial scorecards.
+    pillPositiveBg: '#ECFDF5',
+    pillPositiveFg: '#047857',
+    pillNegativeBg: '#FEF2F2',
+    pillNegativeFg: '#B91C1C',
+    pillNeutralBg: '#F3F4F6',
+    pillNeutralFg: '#6B7280',
   },
   brand: {
     primary: '#7C3AED',       // Purple - use sparingly
