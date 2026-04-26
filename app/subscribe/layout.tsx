@@ -13,6 +13,12 @@ export const metadata: Metadata = {
       'AI-powered SEC filing analysis starting free. Upgrade for more companies and faster alerts.',
     type: 'website',
   },
+  // Transactional page. Already crawlable; this signals Google not to promote
+  // it above content pages, which were losing crawl budget to this route.
+  robots: {
+    index: false,
+    follow: true,
+  },
 };
 
 export default function SubscribeLayout({

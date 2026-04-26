@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.3] - 2026-04-25
+
+### Fixed
+- Google Search Console reported 16 known URLs but only 1 indexed for tldrsec.app, with 6 URLs in the **Redirect error** category. Root cause was `/api/unsubscribe?token=...` and `/api/feedback?token=...&vote=...` returning 302 redirects to noindex pages on invalid/missing tokens — Google flags redirect-to-noindex chains. Both routes now return **410 Gone** with `Cache-Control: no-store` and a minimal HTML body (linking to homepage) on every error path; valid tokens still redirect to the existing confirmation pages. 410 tells crawlers to drop stale URLs immediately rather than re-fetching them.
+- `components/navigation.tsx` rendered `<NavLink href="/changelog">` and `<NavLink href="/contact">` to routes that don't exist. The nav is mounted on auth pages (`app/(auth)/layout.tsx`), so Googlebot crawled the auth chrome and recorded the 404s. Removed both entries; only `#features` and `#pricing` remain.
+
+### Changed
+- `app/sitemap.ts` no longer lists `/sign-up`, `/sign-in`, `/subscribe`, or `/waitlist`. These routes have no unique SEO content and were competing with content pages for crawl budget. They remain crawlable (not in robots.txt disallow), just no longer promoted to Google. `STATIC_LAST_MODIFIED` bumped to `2026-04-21`.
+- `app/(auth)/sign-in/layout.tsx`, `app/(auth)/sign-up/layout.tsx` (new), plus `app/subscribe/layout.tsx` and `app/waitlist/page.tsx` now declare `robots: { index: false, follow: true }`. Sitemap-trim alone only stops new discovery; explicit noindex actively drops already-indexed transactional URLs.
+
+### Added
+- `__tests__/api/unsubscribe.test.ts` and `__tests__/api/feedback.test.ts` — full 410/302/500 matrix per route (missing token → 410, invalid HMAC → 410, success → 307 redirect, DB error → 500). Locks the SEO contract this fix relies on so a future refactor can't silently regress to the redirect-chain shape.
+- `__tests__/components/navigation.test.tsx` — asserts no `/changelog` or `/contact` hrefs render, preventing silent re-introduction of the dead links.
+- `__tests__/seo/metadata-validation.test.ts` — added two assertions: robots.txt disallow list contains `/api/`, and the sitemap contains zero `/api/` URLs.
+
+### Notes
+- Post-deploy operational steps (manual): submit `sitemap.xml` in GSC, click Validate fix on the Redirect error and Not found (404) categories, request indexing on 5 representative content URLs (`/`, `/companies`, one ticker hub, one filing-type guide, one preview).
+- 6-week kill criterion (per `/Users/wilf/.claude/plans/deep-bubbling-dolphin.md`): if non-brand impressions stay <20/week through 2026-06-06, stop investing in SEO and redeploy hours to FinTwit/newsletter distribution.
+
 ## [0.0.24.2] - 2026-04-25
 
 ### Fixed
