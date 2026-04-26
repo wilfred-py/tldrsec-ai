@@ -43,8 +43,8 @@ jest.mock('next/link', () => {
 describe('GmailInboxHero', () => {
   it('renders without crashing', () => {
     render(<GmailInboxHero />);
-    expect(screen.getByText(/SEC filings, read/i)).toBeInTheDocument();
-    expect(screen.getByText(/in minutes instead of hours/i)).toBeInTheDocument();
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1.textContent).toMatch(/SEC filings, read in minutes instead of hours/);
   });
 
   it('displays the main heading', () => {
@@ -60,7 +60,7 @@ describe('GmailInboxHero', () => {
 
   it('shows descriptive text', () => {
     render(<GmailInboxHero />);
-    expect(screen.getByText(/AI summaries of every 10-K/i)).toBeInTheDocument();
+    expect(screen.getByText(/Summaries of every 10-K/i)).toBeInTheDocument();
   });
 
   it('handles empty state gracefully', () => {

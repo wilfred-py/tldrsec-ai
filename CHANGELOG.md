@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.5] - 2026-04-26
+
+### Changed
+- Hero (`components/landing/sections-v2/gmail-inbox-hero.tsx`): visual refresh applying Variant C ("Stripe Showcase") direction from the hero wireframes. Added "For investors and analysts" eyebrow above the headline. Headline rewritten as `SEC filings, read in <gradient>minutes</gradient> instead of <gradient>hours</gradient>.` — body in `text-black`, only the time-comparison nouns get the brand gradient (sharper focus than gradienting the whole tail clause). Subhead drops the "AI" qualifier ("AI summaries of every…" → "Summaries of every…") to lead with the deliverable, not the technology. Top padding bumped (`pt-20 lg:pt-24` → `pt-32 lg:pt-40`) so the headline sits off the top edge. Trust metrics row shrunk (`gap-6` w-5 icons → `gap-2 sm:gap-5` w-3.5 icons, `text-lg` value → `text-xs`) and now stacks vertically on `<sm` viewports. Removed the redundant "A real inbox with real AI summaries — click any email." caption (the Gmail toolbar already says "Click any email to preview"). Caption removal closed a vertical gap; restored ~16px breathing room before the Gmail widget via `mb-4` on the trust row.
+- Hero CTA: removed the "Go to Dashboard" branch by wrapping the entire CTA block in `{!isOnboarded && (…)}`. Already-onboarded users hitting the marketing page no longer see a redundant button — the Gmail widget itself becomes the implicit CTA for that audience.
+
+### Fixed
+- `__tests__/components/landing/gmail-inbox-hero.test.tsx`, `__tests__/components/gmail-inbox-hero.test.tsx`: updated copy assertions to match the new headline span structure (now reads via `screen.getByRole('heading', { level: 1 }).textContent`) and the dropped "AI" qualifier in the subhead.
+
 ## [0.0.24.4] - 2026-04-26
 
 ### Added
