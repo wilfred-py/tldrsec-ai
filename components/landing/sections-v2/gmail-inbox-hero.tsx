@@ -650,7 +650,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
     <section
       ref={combinedRef}
       id="hero"
-      className={`relative min-h-[100vh] flex flex-col items-center justify-center overflow-hidden pt-20 pb-12 lg:pt-24 lg:pb-8 ${className}`}
+      className={`relative min-h-[100vh] flex flex-col items-center justify-center overflow-hidden pt-32 pb-12 lg:pt-40 lg:pb-8 ${className}`}
       style={meshGradientStyle}
     >
       <div className="container mx-auto px-4 relative z-10">
@@ -662,48 +662,46 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
             animate="animate"
             className="text-center max-w-4xl mx-auto"
           >
-            <motion.h1 variants={staggerItem} className="brand-hero-display mb-6 text-center">
-              SEC filings, read{' '}
-              <span className="brand-gradient-text">in minutes instead of hours.</span>
-            </motion.h1>
-
-            <motion.p variants={staggerItem} className="brand-body-large mb-8 max-w-2xl mx-auto text-center">
-              AI summaries of every 10-K, 10-Q, 8-K, and Form 4 in your portfolio — delivered to your inbox minutes after filing.
+            <motion.p
+              variants={staggerItem}
+              className="mb-5 text-center text-[13px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: 'var(--brand-primary)' }}
+            >
+              For investors and analysts
             </motion.p>
 
-            <motion.div
-              variants={staggerItem}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6"
-            >
-              {!isLoaded ? (
-                // Loading state - show skeleton button
-                <Skeleton className="h-11 w-48 rounded-lg" />
-              ) : isOnboarded ? (
-                // State 3: Authenticated AND onboarded → Dashboard
-                <Link href="/dashboard">
-                  <Button className="brand-button-gradient">
-                    Go to Dashboard
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </Button>
-                </Link>
-              ) : isSignedIn ? (
-                // State 2: Authenticated but NOT onboarded → Onboarding
-                <Link href="/onboarding">
-                  <Button className="brand-button-gradient">
-                    Complete Setup
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </Button>
-                </Link>
-              ) : (
-                // State 1: Unauthenticated → Sign Up
-                <Link href="/sign-up">
-                  <Button className="brand-button-gradient">
-                    Get Summaries Like This
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </Button>
-                </Link>
-              )}
-            </motion.div>
+            <motion.h1 variants={staggerItem} className="brand-hero-display mb-5 text-center text-black lg:!text-[3.5rem]">
+              SEC filings, read in <span className="brand-gradient-text">minutes</span> instead of <span className="brand-gradient-text">hours</span>.
+            </motion.h1>
+
+            <motion.p variants={staggerItem} className="brand-body-large mb-7 max-w-2xl mx-auto text-center">
+              Summaries of every 10-K, 10-Q, 8-K, and Form 4 in your portfolio — delivered to your inbox minutes after filing.
+            </motion.p>
+
+            {!isOnboarded && (
+              <motion.div
+                variants={staggerItem}
+                className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6"
+              >
+                {!isLoaded ? (
+                  <Skeleton className="h-11 w-48 rounded-lg" />
+                ) : isSignedIn ? (
+                  <Link href="/onboarding">
+                    <Button className="brand-button-gradient">
+                      Complete Setup
+                      <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href="/sign-up">
+                    <Button className="brand-button-gradient">
+                      Get Summaries Like This
+                      <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                  </Link>
+                )}
+              </motion.div>
+            )}
 
             <motion.p variants={staggerItem} className="brand-caption mb-8">
               {getCaptionText()}
@@ -711,24 +709,16 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
 
             <motion.div
               variants={staggerItem}
-              className="flex flex-wrap justify-center gap-6 mb-6"
+              className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2 sm:gap-5 mb-24"
             >
               {trustMetrics.map((metric) => (
-                <div key={metric.label} className="brand-metric">
-                  <CheckCircle2 className="w-5 h-5 text-[var(--brand-success)]" />
-                  <span className="brand-metric-value">{metric.value}</span>
-                  <span className="brand-metric-label">{metric.label}</span>
+                <div key={metric.label} className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[var(--brand-success)]" />
+                  <span className="text-xs font-semibold" style={{ color: 'var(--brand-secondary)' }}>{metric.value}</span>
+                  <span className="text-xs" style={{ color: 'var(--brand-text-muted)' }}>{metric.label}</span>
                 </div>
               ))}
             </motion.div>
-
-            <motion.p
-              variants={staggerItem}
-              className="text-sm text-center mb-4"
-              style={{ color: 'var(--brand-text-muted)' }}
-            >
-              A real inbox with real AI summaries — click any email.
-            </motion.p>
           </motion.div>
 
           {/* SR-only heading for accessibility */}
