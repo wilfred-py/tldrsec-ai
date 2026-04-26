@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.5] - 2026-04-26
+
+### Changed
+- Hero (`components/landing/sections-v2/gmail-inbox-hero.tsx`): visual refresh applying Variant C ("Stripe Showcase") direction from the hero wireframes. Added "For investors and analysts" eyebrow above the headline. Headline rewritten as `SEC filings, read in <gradient>minutes</gradient> instead of <gradient>hours</gradient>.` — body in `text-black`, only the time-comparison nouns get the brand gradient (sharper focus than gradienting the whole tail clause). Subhead drops the "AI" qualifier ("AI summaries of every…" → "Summaries of every…") to lead with the deliverable, not the technology. Top padding bumped (`pt-20 lg:pt-24` → `pt-32 lg:pt-40`) so the headline sits off the top edge. Trust metrics row shrunk (`gap-6` w-5 icons → `gap-2 sm:gap-5` w-3.5 icons, `text-lg` value → `text-xs`) and now stacks vertically on `<sm` viewports. Removed the redundant "A real inbox with real AI summaries — click any email." caption (the Gmail toolbar already says "Click any email to preview"). Caption removal closed a vertical gap; restored ~16px breathing room before the Gmail widget via `mb-4` on the trust row.
+- Hero CTA: removed the "Go to Dashboard" branch by wrapping the entire CTA block in `{!isOnboarded && (…)}`. Already-onboarded users hitting the marketing page no longer see a redundant button — the Gmail widget itself becomes the implicit CTA for that audience.
+
+### Fixed
+- `__tests__/components/landing/gmail-inbox-hero.test.tsx`, `__tests__/components/gmail-inbox-hero.test.tsx`: updated copy assertions to match the new headline span structure (now reads via `screen.getByRole('heading', { level: 1 }).textContent`) and the dropped "AI" qualifier in the subhead.
+
+## [0.0.24.4] - 2026-04-26
+
+### Added
+- **Onboarding A/B test — email-notice placement** (`lib/hooks/use-onboarding-variant.ts`, `lib/onboarding/email-notice-constants.ts`): PostHog feature-flag `onboarding-email-notice` buckets users into two variants. Variant B ("inline", default) — 3-step wizard: email-notice copy renders inline on ProfileStep sub-step 2 (AUM screen) via `InlineEmailNotice`. Variant A ("step4") — 4-step wizard: a dedicated `ConfirmStep` follows ProfileStep and surfaces email-frequency controls (Immediate / Daily / None) plus the notice. Bucket assignment is stable: resolved flag is cached in `sessionStorage` plus a short-lived cookie to survive hard-reloads.
+- `components/onboarding/confirm-step.tsx` — step 4 card for Variant A. Shows tracked-ticker count, email-frequency radio group (bound to lifted state), legal-notice copy, and two CTAs (Finish, Back). Emits `onZeroTickers` guard when user reaches it with no tickers selected.
+- `components/onboarding/inline-email-notice.tsx` — compact disclosure rendered below AUM brackets on ProfileStep sub-step 2 in Variant B. Shows personalised ticker count and settings deep-link.
+- `components/onboarding/profile-step.tsx` — accepts `inlineDisclosure?: ReactNode` slot (injected by orchestrator for Variant B) and 6 new lifted-state props (`subStep`, `onSubStepChange`, `selectedRole`, `onRoleChange`, `customRoleText`, `onCustomRoleChange`, `selectedAum`, `onAumChange`) so `OnboardingPage` preserves selections when the user navigates back from step 4.
+- `components/onboarding/vertical-progress.tsx` — accepts optional `steps` prop (`ReadonlyArray<{label,key}>`). Defaults to `ONBOARDING_STEPS_BASE` (3 items); Variant A passes `ONBOARDING_STEPS_WITH_CONFIRM` (4 items). Each step renders its number as a visible indicator so tests can assert step count without brittle text matching.
+- `app/(auth)/onboarding/types.ts` — exports `ONBOARDING_STEPS_BASE`, `ONBOARDING_STEPS_WITH_CONFIRM`, and `getOnboardingSteps(variant)` helper.
+- `app/(auth)/onboarding/onboarding-client.tsx` — orchestrator overhauled: profile sub-step and role/AUM fields lifted to orchestrator state; `handleProfileComplete` branches on variant (Variant A → `handleNext()`, Variant B → `handleCompleteOnboarding(profile)`); `handleConfirmFinish` reads from lifted state; `handleZeroTickers` toasts and navigates back to step 2.
+- 75 unit tests across 9 suites covering variant resolution, InlineEmailNotice, ConfirmStep, ProfileStep lifted-state props, VerticalProgress step counts, onboarding-client A/B routing, and email-notice constants.
+
+## [0.0.24.3] - 2026-04-25
+
+### Fixed
+- Google Search Console reported 16 known URLs but only 1 indexed for tldrsec.app, with 6 URLs in the **Redirect error** category. Root cause was `/api/unsubscribe?token=...` and `/api/feedback?token=...&vote=...` returning 302 redirects to noindex pages on invalid/missing tokens — Google flags redirect-to-noindex chains. Both routes now return **410 Gone** with `Cache-Control: no-store` and a minimal HTML body (linking to homepage) on every error path; valid tokens still redirect to the existing confirmation pages. 410 tells crawlers to drop stale URLs immediately rather than re-fetching them.
+- `components/navigation.tsx` rendered `<NavLink href="/changelog">` and `<NavLink href="/contact">` to routes that don't exist. The nav is mounted on auth pages (`app/(auth)/layout.tsx`), so Googlebot crawled the auth chrome and recorded the 404s. Removed both entries; only `#features` and `#pricing` remain.
+
+### Changed
+- `app/sitemap.ts` no longer lists `/sign-up`, `/sign-in`, `/subscribe`, or `/waitlist`. These routes have no unique SEO content and were competing with content pages for crawl budget. They remain crawlable (not in robots.txt disallow), just no longer promoted to Google. `STATIC_LAST_MODIFIED` bumped to `2026-04-21`.
+- `app/(auth)/sign-in/layout.tsx`, `app/(auth)/sign-up/layout.tsx` (new), plus `app/subscribe/layout.tsx` and `app/waitlist/page.tsx` now declare `robots: { index: false, follow: true }`. Sitemap-trim alone only stops new discovery; explicit noindex actively drops already-indexed transactional URLs.
+
+### Added
+- `__tests__/api/unsubscribe.test.ts` and `__tests__/api/feedback.test.ts` — full 410/302/500 matrix per route (missing token → 410, invalid HMAC → 410, success → 307 redirect, DB error → 500). Locks the SEO contract this fix relies on so a future refactor can't silently regress to the redirect-chain shape.
+- `__tests__/components/navigation.test.tsx` — asserts no `/changelog` or `/contact` hrefs render, preventing silent re-introduction of the dead links.
+- `__tests__/seo/metadata-validation.test.ts` — added two assertions: robots.txt disallow list contains `/api/`, and the sitemap contains zero `/api/` URLs.
+
+### Notes
+- Post-deploy operational steps (manual): submit `sitemap.xml` in GSC, click Validate fix on the Redirect error and Not found (404) categories, request indexing on 5 representative content URLs (`/`, `/companies`, one ticker hub, one filing-type guide, one preview).
+- 6-week kill criterion (per `/Users/wilf/.claude/plans/deep-bubbling-dolphin.md`): if non-brand impressions stay <20/week through 2026-06-06, stop investing in SEO and redeploy hours to FinTwit/newsletter distribution.
+
 ## [0.0.24.2] - 2026-04-25
 
 ### Fixed
@@ -90,6 +130,16 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Pricing/FAQ answer text pulls live from `SUBSCRIPTION_PLANS` instead of hardcoding dollar amounts, so plan-config changes propagate automatically.
+
+## [0.0.22.7] - 2026-04-23
+
+### Added
+- `ResendClient.prepareEmailParams` now auto-injects `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers on every single-recipient transactional send (RFC 8058, Gmail/Yahoo Feb-2024 bulk-sender requirement). Caller-supplied headers win on collision, so campaign routes that set their own unsubscribe token continue to work. Bulk sends (array `to`) skip auto-injection because per-recipient tokens cannot be derived from a shared envelope.
+- `EmailMessage.headers?: Record<string, string>` field on the shared email type so callers can pass custom headers through the shared send path.
+- `lib/email/__tests__/frequency-gate-regression.test.ts`: six SDK-only regression tests proving `NotificationService.getImmediateNotificationRecipients()` filters at the Prisma query level with `emailFrequency equals IMMEDIATE`. Guards against a class of regressions where NONE/DAILY users leak into the immediate cron fan-out.
+
+### Changed
+- Header merge logic prefers caller-supplied headers over auto-injected defaults, preserving existing campaign-side unsubscribe flows while closing the gap for transactional sends that had no unsubscribe header at all.
 
 ## [0.0.22.6] - 2026-04-23
 

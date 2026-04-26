@@ -6,6 +6,7 @@
  */
 
 import { EmailType, FilingTemplateData } from './types';
+import { escapeHtml } from './security-helpers';
 import { renderAsync } from '@react-email/render';
 import * as SECFilingEmailTemplate from '../../components/email/templates/SECFilingEmailTemplate';
 const { default: _SECFilingEmailTemplateComponent } = SECFilingEmailTemplate;
@@ -734,65 +735,72 @@ Unsubscribe: ${data.unsubscribeUrl}
  * Template for welcome email
  */
 export function welcomeTemplate(
-  data: BaseTemplateData & { 
-    selectedTickers?: string[] 
+  data: BaseTemplateData & {
+    selectedTickers?: string[]
   }
 ): { html: string; text: string } {
-  const { recipientName, selectedTickers } = data;
-  const name = recipientName || 'there';
-  
+  const { recipientName, selectedTickers, preferencesUrl } = data;
+  const name = escapeHtml(recipientName || 'there');
+  const tickers = selectedTickers ?? [];
+  const count = tickers.length;
+  const safeTickers = tickers.map(escapeHtml);
+  const noun = count === 1 ? 'company' : 'companies';
+
+  const promise = count > 0
+    ? `We'll email you when new filings are posted for ${count} ${noun}.`
+    : `We'll email you when new filings are posted for the companies you track.`;
+
   // HTML Version
   const htmlContent = `
     <h1>Welcome to tldrSEC!</h1>
     <p>Hello ${name},</p>
-    <p>Thank you for signing up for tldrSEC. We're excited to help you stay informed about SEC filings for the companies you care about.</p>
-    
-    ${selectedTickers && selectedTickers.length > 0 ? `
-    <h2>Your Selected Tickers</h2>
-    <p>You've selected the following tickers to track:</p>
+    <p>${promise} Your first email will arrive the moment a new SEC filing hits.</p>
+
+    ${count > 0 ? `
+    <h2>Companies you're tracking</h2>
     <ul>
-      ${selectedTickers.map(ticker => `<li>${ticker}</li>`).join('')}
+      ${safeTickers.map(ticker => `<li>${ticker}</li>`).join('')}
     </ul>
-    <p>You can add or remove tickers at any time from your dashboard.</p>
+    <p>You can add or remove tickers anytime from your dashboard.</p>
     ` : ''}
-    
-    <h2>Getting Started</h2>
-    <ol>
-      <li><strong>Add more tickers</strong> - Search and add more companies to track.</li>
-      <li><strong>Set preferences</strong> - Choose how and when you receive updates.</li>
-    </ol>
 
     <p style="margin-top:25px">
-      <a href="https://tldrsec.app/dashboard" class="button">Go to Your Dashboard</a>
+      <a href="https://tldrsec.app/dashboard" class="button">Go to your dashboard</a>
     </p>
+
+    <div style="margin-top:28px;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;">
+      <p style="margin:0 0 4px 0;font-size:14px;color:#111827;"><strong>Getting too many?</strong></p>
+      <p style="margin:0 0 10px 0;font-size:13px;color:#6b7280;">Switch to a daily digest &mdash; one email per day instead of one per filing.</p>
+      <p style="margin:0;">
+        <a href="${preferencesUrl}" style="font-size:13px;color:#4f46e5;text-decoration:underline;">Switch to daily digest</a>
+      </p>
+    </div>
 
     <p style="margin-top:25px">Questions or feedback? Just reply to this email.</p>
     <p>Welcome aboard!</p>
     <p>The tldrSEC Team</p>
   `;
-  
+
   // Text Version
   const textContent = `
 WELCOME TO TLDRSEC!
 
-Hello ${name},
+Hello ${recipientName || 'there'},
 
-Thank you for signing up for tldrSEC. We're excited to help you stay informed about SEC filings for the companies you care about.
+${promise} Your first email will arrive the moment a new SEC filing hits.
 
-${selectedTickers && selectedTickers.length > 0 ? `
-YOUR SELECTED TICKERS
-You've selected the following tickers to track:
-${selectedTickers.map(ticker => `- ${ticker}`).join('\n')}
+${count > 0 ? `
+COMPANIES YOU'RE TRACKING
+${tickers.map(ticker => `- ${ticker}`).join('\n')}
 
-You can add or remove tickers at any time from your dashboard.
+You can add or remove tickers anytime from your dashboard.
 ` : ''}
 
-GETTING STARTED
+Go to your dashboard: https://tldrsec.app/dashboard
 
-1. Add more tickers - Search and add more companies to track.
-2. Set preferences - Choose how and when you receive updates.
-
-Go to Your Dashboard: https://tldrsec.app/dashboard
+GETTING TOO MANY?
+Switch to a daily digest — one email per day instead of one per filing.
+Switch to daily digest: ${preferencesUrl}
 
 Questions or feedback? Just reply to this email.
 
@@ -801,9 +809,9 @@ The tldrSEC Team
 
 --
 You received this email because you signed up for tldrSEC.
-Manage preferences: ${data.preferencesUrl}
+Manage preferences: ${preferencesUrl}
   `.trim();
-  
+
   return {
     html: baseTemplate(htmlContent, data),
     text: textContent

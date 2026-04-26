@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,36 +26,49 @@ const AUM_BRACKETS = [
 export type UserRole = (typeof ROLES)[number]["id"];
 export type AumBracket = (typeof AUM_BRACKETS)[number]["id"];
 
+export type ProfileSubStep = 1 | 2;
+
 interface ProfileStepProps {
+  subStep: ProfileSubStep;
+  onSubStepChange: (step: ProfileSubStep) => void;
+  selectedRole: UserRole | null;
+  onRoleChange: (role: UserRole | null) => void;
+  customRoleText: string;
+  onCustomRoleChange: (text: string) => void;
+  selectedAum: AumBracket | null;
+  onAumChange: (aum: AumBracket | null) => void;
   onComplete: (profile: { role: UserRole; aumBracket?: AumBracket; customRoleText?: string }) => void;
   onBack: () => void;
   isSubmitting: boolean;
   isTransitioning: boolean;
+  /** When present (Variant B), renders below AUM radios, above footer. */
+  inlineDisclosure?: ReactNode;
 }
 
-export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning }: ProfileStepProps) {
-  const [subStep, setSubStep] = useState<1 | 2>(1);
-  const [subStepTransitioning, setSubStepTransitioning] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
-  const [customRoleText, setCustomRoleText] = useState("");
-  const [selectedAum, setSelectedAum] = useState<AumBracket | null>(null);
+export function ProfileStep({
+  subStep,
+  onSubStepChange,
+  selectedRole,
+  onRoleChange,
+  customRoleText,
+  onCustomRoleChange,
+  selectedAum,
+  onAumChange,
+  onComplete,
+  onBack,
+  isSubmitting,
+  isTransitioning,
+  inlineDisclosure,
+}: ProfileStepProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   const canAdvanceFromRole =
     selectedRole !== null &&
     (selectedRole !== "other" || customRoleText.trim().length > 0);
 
-  const goToSubStep = useCallback((target: 1 | 2) => {
-    setSubStepTransitioning(true);
-    setTimeout(() => {
-      setSubStep(target);
-      setSubStepTransitioning(false);
-    }, 300);
-  }, []);
-
   const advanceToAum = useCallback(() => {
-    if (canAdvanceFromRole) goToSubStep(2);
-  }, [canAdvanceFromRole, goToSubStep]);
+    if (canAdvanceFromRole) onSubStepChange(2);
+  }, [canAdvanceFromRole, onSubStepChange]);
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -76,11 +89,11 @@ export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning 
 
   const handleRoleSelect = (roleId: UserRole) => {
     if (roleId === "other") {
-      setSelectedRole(roleId);
+      onRoleChange(roleId);
       return;
     }
-    setSelectedRole(roleId);
-    setCustomRoleText("");
+    onRoleChange(roleId);
+    onCustomRoleChange("");
   };
 
   const handleComplete = () => {
@@ -94,7 +107,7 @@ export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning 
 
   const handleBack = () => {
     if (subStep === 2) {
-      goToSubStep(1);
+      onSubStepChange(1);
     } else {
       onBack();
     }
@@ -112,15 +125,9 @@ export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning 
           </p>
         </div>
 
-        {/* Content area with transition animation */}
+        {/* Content area */}
         <div className="flex-1 min-h-0 relative overflow-hidden">
-          <div
-            className={`transition-all duration-300 ease-in-out ${
-              subStepTransitioning
-                ? "translate-x-[-100%] opacity-0 pointer-events-none"
-                : "translate-x-0 opacity-100"
-            }`}
-          >
+          <div className="motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-in-out translate-x-0 opacity-100">
             {subStep === 1 && (
               <div className="mb-8">
                 <h3 className="text-sm font-semibold mb-3 text-foreground">
@@ -140,7 +147,7 @@ export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning 
                           <Input
                             placeholder="Tell us your role..."
                             value={customRoleText}
-                            onChange={(e) => setCustomRoleText(e.target.value)}
+                            onChange={(e) => onCustomRoleChange(e.target.value)}
                             className="border-0 bg-transparent p-0 h-auto text-sm font-medium focus-visible:ring-0 placeholder:text-muted-foreground/60"
                             autoFocus
                           />
@@ -189,7 +196,7 @@ export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning 
                             ? "border-primary bg-primary/10 font-medium"
                             : "border-gray-200 hover:border-primary/50 dark:border-gray-700"
                         }`}
-                        onClick={() => setSelectedAum(isSelected ? null : bracket.id)}
+                        onClick={() => onAumChange(isSelected ? null : bracket.id)}
                       >
                         <div className="flex items-center justify-between">
                           <span>{bracket.label}</span>
@@ -199,6 +206,7 @@ export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning 
                     );
                   })}
                 </div>
+                {inlineDisclosure}
               </div>
             )}
           </div>
@@ -206,16 +214,13 @@ export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning 
 
         {/* Footer — stable position */}
         <div className="mt-auto pt-4 flex items-center justify-between">
-          <Button variant="ghost" onClick={handleBack} disabled={isTransitioning || isSubmitting || subStepTransitioning}>
+          <Button variant="ghost" onClick={handleBack} disabled={isTransitioning || isSubmitting}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
 
           {subStep === 1 && (
-            <Button
-              onClick={advanceToAum}
-              disabled={!canAdvanceFromRole || subStepTransitioning}
-            >
+            <Button onClick={advanceToAum} disabled={!canAdvanceFromRole}>
               Next
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -224,7 +229,7 @@ export function ProfileStep({ onComplete, onBack, isSubmitting, isTransitioning 
           {subStep === 2 && (
             <Button
               onClick={handleComplete}
-              disabled={!selectedRole || isSubmitting || isTransitioning || subStepTransitioning}
+              disabled={!selectedRole || isSubmitting || isTransitioning}
             >
               {isSubmitting ? (
                 <>

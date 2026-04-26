@@ -41,12 +41,12 @@ describe('GmailInboxHero', () => {
   it('should render new headline, subhead, trust metrics, CTAs, and widget caption', () => {
     render(<GmailInboxHero />);
 
-    // Headline
-    expect(screen.getByText(/SEC filings, read/i)).toBeInTheDocument();
-    expect(screen.getByText(/in minutes instead of hours/i)).toBeInTheDocument();
+    // Headline (text broken across spans for selective gradient)
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1.textContent).toMatch(/SEC filings, read in minutes instead of hours/);
 
     // Subhead
-    expect(screen.getByText(/AI summaries of every 10-K/i)).toBeInTheDocument();
+    expect(screen.getByText(/Summaries of every 10-K/i)).toBeInTheDocument();
 
     // Trust metrics (use getAllByText since "10 min" matches headline too)
     expect(screen.getByText(/filing-to-inbox/i)).toBeInTheDocument();

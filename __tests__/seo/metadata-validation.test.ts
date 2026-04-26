@@ -111,6 +111,47 @@ describe('SEO Metadata Validation', () => {
         expect(url).not.toMatch(/\/filing\//); // singular
       }
     });
+
+    it('should not promote auth or transactional routes', async () => {
+      // These routes remain crawlable (not in robots.txt disallow) but should
+      // not be listed in the sitemap — they have no unique SEO content and
+      // would compete with content pages for Google's crawl budget.
+      const sitemap = await import('../../app/sitemap');
+      const routes = await sitemap.default();
+      const urls = routes.map((r: { url: string }) => r.url);
+
+      const excluded = ['/sign-up', '/sign-in', '/subscribe', '/waitlist'];
+      for (const path of excluded) {
+        expect(urls).not.toContain(`https://tldrsec.app${path}`);
+      }
+    });
+
+    it('should use tldrsec.app as the canonical host on every URL', async () => {
+      const sitemap = await import('../../app/sitemap');
+      const routes = await sitemap.default();
+
+      for (const route of routes) {
+        expect(route.url).toMatch(/^https:\/\/tldrsec\.app(\/|$)/);
+      }
+    });
+
+    it('should not contain duplicate URLs', async () => {
+      const sitemap = await import('../../app/sitemap');
+      const routes = await sitemap.default();
+      const urls = routes.map((r: { url: string }) => r.url);
+
+      expect(urls.length).toBe(new Set(urls).size);
+    });
+
+    it('should not contain any /api/ URLs', async () => {
+      // /api/ is disallowed in robots.txt and must never appear in the sitemap.
+      // Guards against an accidental refactor that promotes an API endpoint.
+      const sitemap = await import('../../app/sitemap');
+      const routes = await sitemap.default();
+      for (const route of routes) {
+        expect(route.url).not.toMatch(/\/api\//);
+      }
+    });
   });
 
   describe('robots.txt', () => {
@@ -141,6 +182,23 @@ describe('SEO Metadata Validation', () => {
 
       expect(disallowed).toContain('/summary/');
       expect(disallowed).toContain('/filing/');
+    });
+
+    it('should block all /api/ endpoints', async () => {
+      // Load-bearing invariant: /api/ must stay disallowed. Email-link routes
+      // (/api/unsubscribe, /api/feedback) rely on this so they can return 410
+      // without Google treating them as indexable redirect chains.
+      const robots = await import('../../app/robots');
+      const config = robots.default();
+      const disallowed = Array.isArray(config.rules)
+        ? config.rules.flatMap((r: { disallow?: string | string[] }) =>
+            Array.isArray(r.disallow) ? r.disallow : [r.disallow]
+          )
+        : Array.isArray(config.rules.disallow)
+          ? config.rules.disallow
+          : [config.rules.disallow];
+
+      expect(disallowed).toContain('/api/');
     });
 
     it('should reference the correct sitemap URL', async () => {
