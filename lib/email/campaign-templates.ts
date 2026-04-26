@@ -119,7 +119,7 @@ const RARITY_BONUS: Record<string, number> = {
   'S-1': 5,       // IPO, extremely rare
 };
 
-function scoreFiling(f: { importance: string | null; filingType: string; tokensUsed?: number | null }): number {
+export function scoreFiling(f: { importance: string | null; filingType: string; tokensUsed?: number | null }): number {
   const importanceScore = IMPORTANCE_RANK[f.importance || 'low'] || 1;
   const rarityScore = RARITY_BONUS[f.filingType] || 2;
   const sizeScore = Math.min((f.tokensUsed || 0) / 5000, 3); // larger filings = more substance
@@ -127,23 +127,54 @@ function scoreFiling(f: { importance: string | null; filingType: string; tokensU
 }
 
 /**
- * Query the database for the best recent summaries to feature in campaign emails.
- * Ranked by: importance (critical > high > medium > low), rarity of filing type,
- * and filing size (larger = more substance).
- *
- * Returns up to `count` filings, or empty array if none are found.
+ * Raw scored summary row — wider shape than CampaignFiling so other consumers
+ * (e.g. landing-page fixture refresh script) can access summaryJSON, smartSubject,
+ * tokensUsed, etc. without a second query.
  */
-export async function fetchCampaignFilings(count: number = 3): Promise<CampaignFiling[]> {
+export interface ScoredSummaryRow {
+  filingType: string;
+  filingDate: Date;
+  summaryText: string;
+  summaryJSON: unknown;
+  importance: string | null;
+  smartSubject: string | null;
+  tokensUsed: number | null;
+  ticker: { symbol: string; companyName: string };
+  score: number;
+}
+
+/**
+ * Status values that indicate a definitively-failed summary. Modern pipeline
+ * writes leave processingStatus null on success (the success gates are
+ * non-empty summaryText + non-null importance), but a row with status
+ * 'ERROR' / 'FAILED' should always be excluded.
+ */
+const SUMMARY_FAILED_STATUSES = ['ERROR', 'FAILED'];
+
+/**
+ * Query the database for usable summaries from the last 30 days, score them,
+ * and return them sorted by composite score descending. No deduplication.
+ *
+ * Success is gated by non-empty summaryText + non-null importance — these
+ * are populated by the success path only. processingStatus is filtered to
+ * exclude ERROR/FAILED but allowed to be null (modern path doesn't set it).
+ *
+ * Returns at most `limit` rows. Caller is responsible for dedup + slicing.
+ */
+export async function fetchScoredSummariesLast30Days(limit: number = 50): Promise<ScoredSummaryRow[]> {
   try {
     const prisma = getPrismaClient();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const summaries = await prisma.summary.findMany({
       where: {
-        processingStatus: 'completed',
         filingDate: { gte: thirtyDaysAgo },
         summaryText: { not: '' },
         importance: { not: null },
+        OR: [
+          { processingStatus: null },
+          { processingStatus: { notIn: SUMMARY_FAILED_STATUSES } },
+        ],
       },
       select: {
         filingType: true,
@@ -158,63 +189,88 @@ export async function fetchCampaignFilings(count: number = 3): Promise<CampaignF
         },
       },
       orderBy: { filingDate: 'desc' },
-      take: 50, // fetch more than needed so we can rank and deduplicate
+      take: limit,
     });
 
     if (summaries.length === 0) return [];
 
-    // Score and rank
-    const scored = summaries.map(s => ({
+    const scored: ScoredSummaryRow[] = summaries.map(s => ({
       ...s,
       score: scoreFiling({ importance: s.importance, filingType: s.filingType, tokensUsed: s.tokensUsed }),
     }));
     scored.sort((a, b) => b.score - a.score);
-
-    // Deduplicate by ticker (show one filing per company for variety)
-    const seen = new Set<string>();
-    const results: CampaignFiling[] = [];
-    for (const s of scored) {
-      if (results.length >= count) break;
-      const key = s.ticker.symbol;
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      // Extract a title from summaryJSON or filingType
-      const json = s.summaryJSON as Record<string, unknown> | null;
-      let title = s.smartSubject || '';
-      if (!title && json) {
-        title = (json.eventType as string) || (json.transactionType as string) || '';
-      }
-      if (!title) title = s.filingType;
-
-      // Truncate summary to ~200 chars for email display
-      const summaryText = s.summaryText.length > 200
-        ? s.summaryText.substring(0, 197) + '...'
-        : s.summaryText;
-
-      results.push({
-        ticker: s.ticker.symbol,
-        companyName: s.ticker.companyName,
-        filingType: s.filingType,
-        filingDate: s.filingDate,
-        importance: (s.importance as CampaignFiling['importance']) || 'medium',
-        summary: summaryText,
-        title,
-      });
-    }
-
-    campaignLogger.info(`Fetched ${results.length} campaign filings`, {
-      total: summaries.length,
-      topScore: scored[0]?.score,
-    });
-
-    return results;
+    return scored;
   } catch (err) {
-    campaignLogger.error('Failed to fetch campaign filings', {
+    campaignLogger.error('Failed to fetch scored summaries', {
       error: err instanceof Error ? err.message : 'Unknown',
     });
     return [];
   }
+}
+
+/**
+ * Limit per-ticker frequency. Preserves input order, so when called on a
+ * score-sorted list the highest-scoring filing per ticker survives first.
+ */
+export function dedupeByTicker<T extends { ticker: { symbol: string } }>(
+  rows: T[],
+  maxPerTicker: number = 1
+): T[] {
+  const counts = new Map<string, number>();
+  const out: T[] = [];
+  for (const row of rows) {
+    const key = row.ticker.symbol;
+    const seen = counts.get(key) ?? 0;
+    if (seen >= maxPerTicker) continue;
+    counts.set(key, seen + 1);
+    out.push(row);
+  }
+  return out;
+}
+
+function toCampaignFiling(s: ScoredSummaryRow): CampaignFiling {
+  const json = s.summaryJSON as Record<string, unknown> | null;
+  let title = s.smartSubject || '';
+  if (!title && json) {
+    title = (json.eventType as string) || (json.transactionType as string) || '';
+  }
+  if (!title) title = s.filingType;
+
+  const summaryText = s.summaryText.length > 200
+    ? s.summaryText.substring(0, 197) + '...'
+    : s.summaryText;
+
+  return {
+    ticker: s.ticker.symbol,
+    companyName: s.ticker.companyName,
+    filingType: s.filingType,
+    filingDate: s.filingDate,
+    importance: (s.importance as CampaignFiling['importance']) || 'medium',
+    summary: summaryText,
+    title,
+  };
+}
+
+/**
+ * Query the database for the best recent summaries to feature in campaign emails.
+ * Ranked by: importance (critical > high > medium > low), rarity of filing type,
+ * and filing size (larger = more substance). One filing per ticker.
+ *
+ * Returns up to `count` filings, or empty array if none are found.
+ */
+export async function fetchCampaignFilings(count: number = 3): Promise<CampaignFiling[]> {
+  const scored = await fetchScoredSummariesLast30Days(50);
+  if (scored.length === 0) return [];
+
+  const deduped = dedupeByTicker(scored, 1).slice(0, count);
+  const results = deduped.map(toCampaignFiling);
+
+  campaignLogger.info(`Fetched ${results.length} campaign filings`, {
+    total: scored.length,
+    topScore: scored[0]?.score,
+  });
+
+  return results;
 }
 
 // --- Importance to color mapping ---
