@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.10] - 2026-04-26
+
+### Changed
+- **Landing-page Gmail hero — re-curated fixtures (`lib/landing/gmail-mock-summaries.ts`)**: refreshed the 15 hand-curated Gmail mock summaries from the prod DB's last-30-day scoring run. Distribution: 7×8-K, 6×Form 4, 2×10-Q across 9 distinct tickers (AAPL×2, AMZN×2, TSLA×2, META×2, GOOGL×2, JNJ×2, BRK-B, VRT, COIN). Removed unused `TrendingDown` icon import — no bearish-sentiment entries this cycle.
+- `components/landing/sections-v2/gmail-inbox-hero.tsx` — footer copy "Updated in real-time" / "Live" → "Updated weekly" / "Weekly" so visitor expectations match the actual cadence of the hand-curation process.
+
+### Added
+- `scripts/refresh-landing-fixtures.ts` — operator helper that pulls the top 30 scored summaries from the last 30 days (re-using `fetchScoredSummariesLast30Days` + `dedupeByTicker` so the heuristic isn't duplicated), prints a markdown triage table to stdout, and writes raw fields (smartSubject, summaryText, whyItMatters, dates) to `/tmp/landing-fixture-candidates.json` for fixture authoring. Whitelisted in `.gitignore`.
+- `__tests__/lib/email/campaign-templates.test.ts` — 14 regression tests across 4 describe blocks (`scoreFiling`, `dedupeByTicker`, `fetchScoredSummariesLast30Days`, `fetchCampaignFilings`) locking the post-refactor contract: score formula (`importance×3 + rarity×2 + min(tokens/5000, 3)`), dedup-by-ticker order preservation, last-30-day query shape (allows null `processingStatus`, excludes ERROR/FAILED, requires non-empty `summaryText` and non-null `importance`), top-N selection, 200-char ellipsis truncation, and smartSubject → eventType → filingType title fallback chain.
+- **`CLAUDE.md` "Recurring Manual Tasks"** subsection — documents the weekly fixture-refresh cadence (run script against prod DB → pick 15 → curate for editorial voice + brand recognition + news verification → ship PR; ~25 min). Footer copy now sets the visitor expectation that this cadence cannot silently slip.
+
+### Refactored
+- `lib/email/campaign-templates.ts` — extracted `fetchScoredSummariesLast30Days(take)` and `dedupeByTicker(rows, maxPerTicker)` from the monolithic `fetchCampaignFilings`. Same score formula and final email-output shape; the new helpers are now reusable by `scripts/refresh-landing-fixtures.ts` without duplicating heuristics. The 14-test regression suite locks the contract.
+
 ## [0.0.24.9] - 2026-04-27
 
 ### Added

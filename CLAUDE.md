@@ -124,6 +124,10 @@ Apply these steps IN ORDER to every task:
 16. **SVG elements need explicit pixel dimensions** - Use `width={px} height={px} viewBox` with React state
 17. **Verify correct dev server port in worktrees** - Check `lsof -Pi :3000 -sTCP:LISTEN` and `:3001`
 
+### Recurring Manual Tasks
+
+- **Landing-page Gmail fixtures (`lib/landing/gmail-mock-summaries.ts`) — refresh weekly.** The hero component renders hardcoded summaries; they go stale. Each Monday: run `npx tsx scripts/refresh-landing-fixtures.ts` against prod DB (uses `.env.local`), pick 15 from the candidate output, hand-curate (editorial voice, news-verified, ≥8 brand-recognition tickers), and ship a PR. ~25 min. The `Updated weekly` footer copy (`components/landing/sections-v2/gmail-inbox-hero.tsx`) sets visitor expectations so this cadence cannot silently slip without breaking the promise.
+
 ## Knowledge Base (Obsidian Vault)
 
 **IMPORTANT: This project's knowledge base lives in an Obsidian vault, NOT in `.context/wiki/`.**

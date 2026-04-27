@@ -934,8 +934,8 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                   </span>
                   <div className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-400 flex-shrink-0">
                     <Clock className="w-3 h-3" />
-                    <span className="hidden sm:inline">Updated in real-time</span>
-                    <span className="sm:hidden">Live</span>
+                    <span className="hidden sm:inline">Updated weekly</span>
+                    <span className="sm:hidden">Weekly</span>
                   </div>
                 </div>
               </motion.div>
