@@ -7,7 +7,12 @@ import { validateUserId, validateAccessType, validateSummaryId, validateCacheAcc
 import { PrivacyConsentService, ConsentType, ConsentMethod } from '@/lib/privacy/consent-service';
 import { trackCacheAccess } from '@/services/filings/database/filingDatabase';
 
-// Mock dependencies
+// PrivacyConsentService imports `prisma` from @/lib/db; mock the barrel so the
+// service and the test share the same jest.fn instances. trackCacheAccess uses
+// getPrismaClient() from @/lib/db/prisma — bridged at runtime in beforeEach
+// (mockGetPrismaClient.mockReturnValue(mockPrisma)) since __tests__/setup.js
+// globally mocks that path with a sharedMockPrisma lacking summary.update and
+// summaryCacheAccess. See CLAUDE.md items 2 and 14.
 jest.mock('@/lib/db', () => ({
   prisma: {
     user: {
@@ -40,12 +45,19 @@ jest.mock('@/lib/auth/access-control', () => ({
   checkSummaryAccess: jest.fn()
 }));
 
-// Import mocked modules
 import { prisma } from '@/lib/db';
 import { checkSummaryAccess } from '@/lib/auth/access-control';
+// Bridge the source's getPrismaClient() (from @/lib/db/prisma) to the same
+// mock object the test inspects via `mockPrisma`. The global setup.js mocks
+// @/lib/db/prisma with a sharedMockPrisma that lacks .summary.update and
+// .summaryCacheAccess; we override getPrismaClient at test time to return
+// THIS file's mockPrisma so the trackCacheAccess source code and the test
+// assertions land on the same jest.fn instances.
+import { getPrismaClient } from '@/lib/db/prisma';
 
 const mockPrisma = prisma as any;
 const mockCheckSummaryAccess = checkSummaryAccess as jest.MockedFunction<typeof checkSummaryAccess>;
+const mockGetPrismaClient = getPrismaClient as jest.MockedFunction<typeof getPrismaClient>;
 
 describe('Security Validation', () => {
   beforeEach(() => {
@@ -306,18 +318,14 @@ describe('trackCacheAccess Security Integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCheckSummaryAccess.mockResolvedValue(true);
-    mockPrisma.summary = {
-      ...mockPrisma.summary,
-      update: jest.fn().mockResolvedValue({})
-    };
-    mockPrisma.summaryCacheAccess = {
-      ...mockPrisma.summaryCacheAccess,
-      create: jest.fn().mockResolvedValue({})
-    };
-    mockPrisma.user = {
-      ...mockPrisma.user,
-      findUnique: jest.fn()
-    };
+    // Augment mockPrisma with the methods trackCacheAccess uses. setup.js's
+    // global mock supplies a shared object that lacks these; we attach fresh
+    // jest.fns and route source-side getPrismaClient() to this same object.
+    mockPrisma.summary = mockPrisma.summary || {};
+    mockPrisma.summary.update = jest.fn().mockResolvedValue({});
+    mockPrisma.summaryCacheAccess = mockPrisma.summaryCacheAccess || {};
+    mockPrisma.summaryCacheAccess.create = jest.fn().mockResolvedValue({});
+    mockGetPrismaClient.mockReturnValue(mockPrisma);
   });
 
   test('should reject invalid summary IDs', async () => {
@@ -348,7 +356,7 @@ describe('trackCacheAccess Security Integration', () => {
       '123e4567-e89b-12d3-a456-426614174000',
       'SYSTEM'
     );
-    
+
     expect(result).toBe(true);
     expect(mockPrisma.summary.update).toHaveBeenCalled();
     expect(mockPrisma.summaryCacheAccess.create).not.toHaveBeenCalled();
