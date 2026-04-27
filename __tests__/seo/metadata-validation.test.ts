@@ -223,7 +223,10 @@ describe('SEO Metadata Validation', () => {
           : [config.rules.disallow];
 
       expect(disallowed).toContain('/feedback/');
-      expect(disallowed).toContain('/unsubscribe/');
+      // No trailing slash on /unsubscribe — email links are /unsubscribe?token=...
+      // (bare path with query string). Per RFC 9309, Disallow: /unsubscribe/ would
+      // only match paths starting with /unsubscribe/, missing the bare path.
+      expect(disallowed).toContain('/unsubscribe');
     });
 
     it('should NOT block the public preview route /s/', async () => {
