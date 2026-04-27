@@ -6,35 +6,44 @@
  * through metadata markers.
  */
 
-// Create a mock prisma client
-const mockPrisma = {
+// Variables referenced inside jest.mock factories must be `mock`-prefixed
+// (Jest enforces this) because mock factories are hoisted above `const`
+// declarations but capture outer-scope vars at call time.
+// See CLAUDE.md item 14 / __tests__/cron/handlers/summarize-cached-handler-validation.test.ts.
+//
+// $transaction(cb) invokes cb(mockPrisma) so the callback's `tx.summary.upsert`
+// lands on the same mock instance the test inspects.
+type MockPrisma = {
+  ticker: { findMany: jest.Mock; findFirst: jest.Mock };
+  summary: { upsert: jest.Mock; findFirst: jest.Mock };
+  summaryCacheAccess: { create: jest.Mock };
+  $transaction: jest.Mock;
+};
+
+const mockPrisma: MockPrisma = {
   ticker: {
     findMany: jest.fn(),
     findFirst: jest.fn(),
   },
   summary: {
-    create: jest.fn(),
+    upsert: jest.fn(),
     findFirst: jest.fn(),
-    update: jest.fn(),
   },
   summaryCacheAccess: {
     create: jest.fn(),
   },
+  $transaction: jest.fn((cb: (tx: unknown) => unknown) => Promise.resolve(cb(mockPrisma))),
 };
 
-// Mock the prisma module - the filingDatabase imports from '../../../lib/db'
-// which re-exports from './prisma'. Use the @ alias which maps to project root.
-jest.mock('@/lib/db/prisma', () => ({
-  prisma: mockPrisma,
-  getPrismaClient: () => mockPrisma,
+// filingDatabase.ts imports `getPrismaClient` from '../../../lib/db/prisma'.
+// Mock that path. References to mockPrisma must be lazy because jest.mock
+// is hoisted above the const declaration (TDZ).
+jest.mock('../../../../lib/db/prisma', () => ({
+  get prisma() { return mockPrisma; },
+  getPrismaClient: jest.fn(() => mockPrisma),
 }));
 
-jest.mock('@/lib/db', () => ({
-  prisma: mockPrisma,
-  getPrismaClient: () => mockPrisma,
-}));
-
-// Import after mock is set up
+// Import after mocks are registered
 import { storeSummary } from '../../../../services/filings/database/filingDatabase';
 
 describe('storeSummary', () => {
@@ -54,7 +63,7 @@ describe('storeSummary', () => {
       };
 
       mockPrisma.ticker.findMany.mockResolvedValue([mockTickerRecord]);
-      mockPrisma.summary.create.mockResolvedValue({
+      mockPrisma.summary.upsert.mockResolvedValue({
         id: 'test-summary-id',
         tickerId: mockTickerRecord.id,
       });
@@ -73,11 +82,11 @@ describe('storeSummary', () => {
 
       // Assert
       expect(result.stored).toBe(1);
-      expect(mockPrisma.summary.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.summary.upsert).toHaveBeenCalledTimes(1);
 
-      // Verify the metadata was passed correctly
-      const createCall = mockPrisma.summary.create.mock.calls[0][0];
-      expect(createCall.data.metadata).toEqual({
+      // Verify the test marker landed in the create branch of the upsert
+      const upsertArgs = mockPrisma.summary.upsert.mock.calls[0][0];
+      expect(upsertArgs.create.metadata).toEqual({
         source: 'e2e-test',
         isTestData: true,
         createdAt: expect.any(String), // ISO date string
@@ -95,7 +104,7 @@ describe('storeSummary', () => {
       };
 
       mockPrisma.ticker.findMany.mockResolvedValue([mockTickerRecord]);
-      mockPrisma.summary.create.mockResolvedValue({
+      mockPrisma.summary.upsert.mockResolvedValue({
         id: 'test-summary-id-2',
         tickerId: mockTickerRecord.id,
       });
@@ -114,11 +123,11 @@ describe('storeSummary', () => {
 
       // Assert
       expect(result.stored).toBe(1);
-      expect(mockPrisma.summary.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.summary.upsert).toHaveBeenCalledTimes(1);
 
-      // Verify metadata is undefined (not set for production data)
-      const createCall = mockPrisma.summary.create.mock.calls[0][0];
-      expect(createCall.data.metadata).toBeUndefined();
+      // Verify metadata is undefined in the create branch (no test marker for production data)
+      const upsertArgs = mockPrisma.summary.upsert.mock.calls[0][0];
+      expect(upsertArgs.create.metadata).toBeUndefined();
     });
 
     it('should use default testSource when isTestData is true but testSource is omitted', async () => {
@@ -132,7 +141,7 @@ describe('storeSummary', () => {
       };
 
       mockPrisma.ticker.findMany.mockResolvedValue([mockTickerRecord]);
-      mockPrisma.summary.create.mockResolvedValue({
+      mockPrisma.summary.upsert.mockResolvedValue({
         id: 'test-summary-id-3',
         tickerId: mockTickerRecord.id,
       });
@@ -153,8 +162,8 @@ describe('storeSummary', () => {
       expect(result.stored).toBe(1);
 
       // Verify metadata uses default source
-      const createCall = mockPrisma.summary.create.mock.calls[0][0];
-      expect(createCall.data.metadata).toEqual({
+      const upsertArgs = mockPrisma.summary.upsert.mock.calls[0][0];
+      expect(upsertArgs.create.metadata).toEqual({
         source: 'test',
         isTestData: true,
         createdAt: expect.any(String),

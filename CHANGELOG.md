@@ -16,6 +16,25 @@ All notable changes to this project will be documented in this file.
 - `lib/ai/summarize.ts` — passes `accessionNumber` into the X-sentiment provider for log/counter correlation, appends the `--- X SENTIMENT ---` block to the summarize prompt when the provider returns enrichment, persists the full structured `XSentiment` object on `summaryJSON.xSentiment` for downstream dashboard / email-template surfaces.
 - `lib/ai/enrichment-flags.ts` — registers `x_sentiment` in the per-provider PostHog flag map (`x_sentiment_enrichment`). The shared daily-budget accumulator (`tryDebitEnrichmentBudget`) is reused for x_sentiment debits at ~$0.05/call (vs ~$0.003/call for "why it matters" providers); cap-envelope split, multi-instance counter, and refund-on-retryable are deferred to a follow-up architecture pass — see `tasks/x-sentiment-budget-architecture.md`.
 
+## [0.0.24.12] - 2026-04-27
+
+### Fixed
+- **`storeSummary` was failing for all tickers with `tokensUsed is not defined`** — DB persistence was silently broken even though emails delivered fine via the in-memory path. Restored the missing `tokensUsed` declaration in `services/filings/database/filingDatabase.ts:213`, falling back to `inputTokens + outputTokens` when `metadata.tokensUsed` isn't provided. Filing summaries now persist to the DB again.
+- **Migrated `filingDatabase.ts` from direct `import { prisma }` to `getPrismaClient()`** in 6 functions (`findExistingSummary`, `storeSummary`, `storeSummaryForTicker`, `getFilingLogs`, `trackCacheAccess`, `trackEmailDelivery`). Direct prisma imports are captured at module-load time and cannot be intercepted by Jest mocks; the `getPrismaClient()` indirection (already the project convention per CLAUDE.md item 2) lets the test suite mock the client cleanly. Side-benefit: clears 8 pre-existing `'prisma' is possibly 'undefined'` typecheck errors in this file.
+
+### Changed
+- **`__tests__/services/filings/database/filingDatabase.test.ts`** — repaired the 3 mock-dependent test cases. Mock factory now uses a getter pattern (`get prisma() { return mockPrisma; }`) to defer reference until after the const initialization, sidestepping the TDZ trap that Jest's hoisting creates. Added `$transaction` to the mock so `storeSummaryForTicker`'s upsert (wrapped in a transaction) lands on the inspected mock. Switched assertions from `summary.create` to `summary.upsert.create` to match the actual code path.
+- **`__tests__/security/cache-access-security.test.ts`** — bridged the test's local `prisma` mock (used by `PrivacyConsentService`) with the global `getPrismaClient()` mock from `__tests__/setup.js` (used by the migrated `trackCacheAccess`). Added `mockGetPrismaClient.mockReturnValue(mockPrisma)` in `beforeEach` plus runtime augmentation of `summary.update` and `summaryCacheAccess.create` since the `@prisma/client` auto-mock doesn't supply them. All 25 tests pass.
+
+## [0.0.24.11] - 2026-04-27
+
+### Fixed
+- **Hanging indent on wrapped bullet lines in minimalist email templates** (`components/ui/email/templates/sections/BulletList.tsx`, `components/ui/email/design-system.ts`, all 9 minimalist templates: 8-K, 10-K, 11-K, S-1, S-3, DEF 14A, Form 4, Form 144, generic): the second line of any wrapped bullet was previously aligning to the LEFT of the first character (where the bullet glyph sat), producing a visibly broken outdent in the "Watch for:" / "Use of proceeds:" sections — most noticeable on long risk-factor strings in 8-K filings. Replaced the inline `<div>` + `text-indent` hack with a canonical 2-cell email-table pattern (16px fixed bullet cell + flexible text cell, both `valign="top"`) so wrapped lines align under the first text character on Gmail, Outlook, Apple Mail, and mobile clients. Same fix applied to `markdownToHtml` so AI-authored prose with `-`, `*`, or `1.` markdown lists also renders with proper hanging indent.
+
+### Added
+- `components/ui/email/templates/sections/BulletList.tsx` — new exported `HangingBulletItem` component (single bullet row using the canonical 2-cell pattern; supports `glyph`, `text`/`html` discriminated union, optional `highlight` for green/red value chips). Existing `BulletList` wrapper now composes `HangingBulletItem` so callers get the fix for free.
+- `__tests__/email/list-hanging-indent.test.tsx` — 26 regression tests across 6 describe blocks covering: 2-cell table structure, `width="16"` Outlook attribute, `valign="top"`, `wordBreak: break-word`, bullet color stays `meta` even on highlight rows, `markdownToHtml` regex emits the same 2-cell shape for `-`/`*`/`1.` syntax, and skip behavior for empty/whitespace items.
+
 ## [0.0.24.10] - 2026-04-26
 
 ### Changed
