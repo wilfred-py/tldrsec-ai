@@ -4,6 +4,7 @@ import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
+import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface Form10KMinimalistTemplateProps {
@@ -239,15 +240,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                   </table>
                   <div style={EmailStyles.watchForHeader}>Watch for:</div>
                   {watchForItems.map((risk, idx) => (
-                    <div key={idx} style={{
-                      padding: '3px 0 3px 16px',
-                      fontSize: '14px',
-                      color: EmailColors.text.body,
-                      lineHeight: '1.5',
-                    }}>
-                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
-                      {risk}
-                    </div>
+                    <HangingBulletItem key={idx} text={risk} />
                   ))}
                 </>
               )}

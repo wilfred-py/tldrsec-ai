@@ -3,6 +3,7 @@ import { EmailColors, EmailStyles, markdownToHtml } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
+import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface FormDEF14AMinimalistTemplateProps {
@@ -387,15 +388,7 @@ export function FormDEF14AMinimalistTemplate({ filing }: FormDEF14AMinimalistTem
                       </table>
                       <div style={EmailStyles.watchForHeader}>Watch for:</div>
                       {watchFor.map((item, idx) => (
-                        <div key={idx} style={{
-                          padding: '3px 0 3px 16px',
-                          fontSize: '14px',
-                          color: EmailColors.text.body,
-                          lineHeight: '1.5',
-                        }}>
-                          <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
-                          {item}
-                        </div>
+                        <HangingBulletItem key={idx} text={item} />
                       ))}
                     </>
                   )}

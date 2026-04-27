@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.11] - 2026-04-27
+
+### Fixed
+- **Hanging indent on wrapped bullet lines in minimalist email templates** (`components/ui/email/templates/sections/BulletList.tsx`, `components/ui/email/design-system.ts`, all 9 minimalist templates: 8-K, 10-K, 11-K, S-1, S-3, DEF 14A, Form 4, Form 144, generic): the second line of any wrapped bullet was previously aligning to the LEFT of the first character (where the bullet glyph sat), producing a visibly broken outdent in the "Watch for:" / "Use of proceeds:" sections — most noticeable on long risk-factor strings in 8-K filings. Replaced the inline `<div>` + `text-indent` hack with a canonical 2-cell email-table pattern (16px fixed bullet cell + flexible text cell, both `valign="top"`) so wrapped lines align under the first text character on Gmail, Outlook, Apple Mail, and mobile clients. Same fix applied to `markdownToHtml` so AI-authored prose with `-`, `*`, or `1.` markdown lists also renders with proper hanging indent.
+
+### Added
+- `components/ui/email/templates/sections/BulletList.tsx` — new exported `HangingBulletItem` component (single bullet row using the canonical 2-cell pattern; supports `glyph`, `text`/`html` discriminated union, optional `highlight` for green/red value chips). Existing `BulletList` wrapper now composes `HangingBulletItem` so callers get the fix for free.
+- `__tests__/email/list-hanging-indent.test.tsx` — 26 regression tests across 6 describe blocks covering: 2-cell table structure, `width="16"` Outlook attribute, `valign="top"`, `wordBreak: break-word`, bullet color stays `meta` even on highlight rows, `markdownToHtml` regex emits the same 2-cell shape for `-`/`*`/`1.` syntax, and skip behavior for empty/whitespace items.
+
 ## [0.0.24.10] - 2026-04-26
 
 ### Changed

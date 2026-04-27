@@ -5,6 +5,7 @@ import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadge
 import { EmailFooter } from './sections/EmailFooter';
 import { TranchesList, Tranche } from './sections/TranchesList';
 import { DealTermsCard, DealTerms } from './sections/DealTermsCard';
+import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
 import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
@@ -453,15 +454,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
                   </table>
                   <div style={EmailStyles.watchForHeader}>Watch for:</div>
                   {watchFor.map((item, idx) => (
-                    <div key={idx} style={{
-                      padding: '3px 0 3px 16px',
-                      fontSize: '14px',
-                      color: EmailColors.text.body,
-                      lineHeight: '1.5',
-                    }}>
-                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
-                      <span dangerouslySetInnerHTML={{ __html: formatText(item) }} />
-                    </div>
+                    <HangingBulletItem key={idx} html={formatText(item)} />
                   ))}
                 </>
               )}
