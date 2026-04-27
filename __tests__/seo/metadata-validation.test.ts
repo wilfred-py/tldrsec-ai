@@ -208,6 +208,27 @@ describe('SEO Metadata Validation', () => {
       expect(config.sitemap).toBe('https://tldrsec.app/sitemap.xml');
     });
 
+    it('should block transactional email-link routes (/feedback/, /unsubscribe/)', async () => {
+      // These pages are noindex'd via meta but Bing crawled them anyway and
+      // indexed despite the directive. robots.txt Disallow stops crawl entirely
+      // so the meta tag is read on the way out and the index entries decay.
+      const robots = await import('../../app/robots');
+      const config = robots.default();
+      const disallowed = Array.isArray(config.rules)
+        ? config.rules.flatMap((r: { disallow?: string | string[] }) =>
+            Array.isArray(r.disallow) ? r.disallow : [r.disallow]
+          )
+        : Array.isArray(config.rules.disallow)
+          ? config.rules.disallow
+          : [config.rules.disallow];
+
+      expect(disallowed).toContain('/feedback/');
+      // No trailing slash on /unsubscribe — email links are /unsubscribe?token=...
+      // (bare path with query string). Per RFC 9309, Disallow: /unsubscribe/ would
+      // only match paths starting with /unsubscribe/, missing the bare path.
+      expect(disallowed).toContain('/unsubscribe');
+    });
+
     it('should NOT block the public preview route /s/', async () => {
       const robots = await import('../../app/robots');
       const config = robots.default();
