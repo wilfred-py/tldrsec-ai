@@ -13,8 +13,22 @@ jest.mock('../xai-direct-client', () => ({
   },
 }));
 
-jest.mock('../enrichment-flags', () => ({
-  tryDebitEnrichmentBudget: jest.fn(() => true),
+jest.mock('../enrichment-spend', () => ({
+  tryDebitEnrichment: jest.fn(async () => ({
+    ok: true,
+    spendId: 'spend_1',
+    entryId: 'entry_1',
+    newTotalUsd: 0.05,
+  })),
+  recordRetryableFailure: jest.fn(async () => ({
+    refundedUsd: 0.05,
+    circuitState: 'closed',
+    failureCount: 1,
+  })),
+  recordEnrichmentFailureNoRefund: jest.fn(async () => ({
+    circuitState: 'closed',
+    failureCount: 1,
+  })),
 }));
 
 jest.mock('../../logging', () => ({
@@ -25,12 +39,18 @@ jest.mock('../../monitoring', () => ({
   monitoring: { incrementCounter: jest.fn(), recordValue: jest.fn() },
 }));
 
-import { callXaiResponses } from '../xai-direct-client';
-import { tryDebitEnrichmentBudget } from '../enrichment-flags';
+import { callXaiResponses, XaiDirectError } from '../xai-direct-client';
+import {
+  tryDebitEnrichment,
+  recordRetryableFailure,
+  recordEnrichmentFailureNoRefund,
+} from '../enrichment-spend';
 import { getXSentiment, _internal } from '../x-sentiment-provider';
 
 const mockCallXai = callXaiResponses as jest.MockedFunction<typeof callXaiResponses>;
-const mockDebit = tryDebitEnrichmentBudget as jest.MockedFunction<typeof tryDebitEnrichmentBudget>;
+const mockDebit = tryDebitEnrichment as jest.MockedFunction<typeof tryDebitEnrichment>;
+const mockRetryableFailure = recordRetryableFailure as jest.MockedFunction<typeof recordRetryableFailure>;
+const mockNoRefundFailure = recordEnrichmentFailureNoRefund as jest.MockedFunction<typeof recordEnrichmentFailureNoRefund>;
 
 function buildXaiResponse(overrides: Partial<Awaited<ReturnType<typeof callXaiResponses>>> = {}) {
   return {
@@ -68,7 +88,12 @@ function buildXaiResponse(overrides: Partial<Awaited<ReturnType<typeof callXaiRe
 describe('getXSentiment', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockDebit.mockReturnValue(true);
+    mockDebit.mockResolvedValue({
+      ok: true,
+      spendId: 'spend_1',
+      entryId: 'entry_1',
+      newTotalUsd: 0.05,
+    });
   });
 
   describe('eligibility skipping', () => {
@@ -102,8 +127,8 @@ describe('getXSentiment', () => {
   });
 
   describe('budget cap', () => {
-    it('skips when daily budget exhausted (no xAI call)', async () => {
-      mockDebit.mockReturnValue(false);
+    it('skips with budget_exhausted when ledger reports cap_reached', async () => {
+      mockDebit.mockResolvedValue({ ok: false, reason: 'cap_reached' });
       const result = await getXSentiment({
         ticker: 'AAPL',
         formType: '8-K',
@@ -114,12 +139,39 @@ describe('getXSentiment', () => {
       expect(mockCallXai).not.toHaveBeenCalled();
     });
 
+    it('skips with circuit_open when breaker is open', async () => {
+      mockDebit.mockResolvedValue({ ok: false, reason: 'circuit_open' });
+      const result = await getXSentiment({
+        ticker: 'AAPL',
+        formType: '8-K',
+        companyName: 'Apple Inc',
+      });
+      expect(result.enrichment).toBeNull();
+      expect(result.skipReason).toBe('circuit_open');
+      expect(mockCallXai).not.toHaveBeenCalled();
+    });
+
     it('debits before calling xAI (debit precedes call)', async () => {
       mockCallXai.mockResolvedValue(buildXaiResponse());
       await getXSentiment({ ticker: 'AAPL', formType: '8-K', companyName: 'Apple Inc' });
       const debitOrder = mockDebit.mock.invocationCallOrder[0];
       const callOrder = mockCallXai.mock.invocationCallOrder[0];
       expect(debitOrder).toBeLessThan(callOrder);
+    });
+
+    it('passes a stable accession+ticker requestId so retries are idempotent', async () => {
+      mockCallXai.mockResolvedValue(buildXaiResponse());
+      await getXSentiment({
+        ticker: 'AAPL',
+        formType: '8-K',
+        companyName: 'Apple Inc',
+        accessionNumber: '0000320193-26-000001',
+      });
+      expect(mockDebit).toHaveBeenCalledWith(
+        'x_sentiment',
+        _internal.APPROX_COST_PER_CALL_USD,
+        '0000320193-26-000001-AAPL-x_sentiment',
+      );
     });
   });
 
@@ -179,6 +231,47 @@ describe('getXSentiment', () => {
       expect(result.enrichment).toBeNull();
       expect(result.skipReason).toBe('xai_error');
       expect(result.errorMessage).toContain('xAI fetch failed');
+    });
+
+    it('refunds debit when xAI throws a retryable XaiDirectError', async () => {
+      mockCallXai.mockRejectedValue(new XaiDirectError('xAI 503', 503, 'upstream_error', true));
+      await getXSentiment({
+        ticker: 'AAPL',
+        formType: '8-K',
+        companyName: 'Apple Inc',
+        accessionNumber: '0000320193-26-000002',
+      });
+      expect(mockRetryableFailure).toHaveBeenCalledWith(
+        'x_sentiment',
+        '0000320193-26-000002-AAPL-x_sentiment',
+      );
+      expect(mockNoRefundFailure).not.toHaveBeenCalled();
+    });
+
+    it('does NOT refund when xAI throws a non-retryable XaiDirectError', async () => {
+      mockCallXai.mockRejectedValue(new XaiDirectError('xAI 401 unauthorized', 401, 'auth_error', false));
+      await getXSentiment({
+        ticker: 'AAPL',
+        formType: '8-K',
+        companyName: 'Apple Inc',
+        accessionNumber: '0000320193-26-000003',
+      });
+      expect(mockNoRefundFailure).toHaveBeenCalledWith('x_sentiment');
+      expect(mockRetryableFailure).not.toHaveBeenCalled();
+    });
+
+    it('treats unknown errors as retryable (refund + breaker)', async () => {
+      mockCallXai.mockRejectedValue(new Error('ECONNRESET'));
+      await getXSentiment({
+        ticker: 'AAPL',
+        formType: '8-K',
+        companyName: 'Apple Inc',
+        accessionNumber: '0000320193-26-000004',
+      });
+      expect(mockRetryableFailure).toHaveBeenCalledWith(
+        'x_sentiment',
+        '0000320193-26-000004-AAPL-x_sentiment',
+      );
     });
   });
 

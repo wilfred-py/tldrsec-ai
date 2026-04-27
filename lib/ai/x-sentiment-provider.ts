@@ -27,7 +27,12 @@
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { callXaiResponses, XaiDirectError } from './xai-direct-client';
-import { tryDebitEnrichmentBudget } from './enrichment-flags';
+import {
+  tryDebitEnrichment,
+  recordRetryableFailure,
+  recordEnrichmentFailureNoRefund,
+} from './enrichment-spend';
+import type { EnvelopeKind } from '@prisma/client';
 import { checkXSentimentEligibility, type EligibilityReason } from './x-sentiment-eligibility';
 import {
   validateXSentiment,
@@ -67,6 +72,7 @@ export interface XSentimentInput {
 export type XSentimentSkipReason =
   | EligibilityReason
   | 'budget_exhausted'
+  | 'circuit_open'
   | 'xai_error'
   | 'invalid_payload';
 
@@ -191,12 +197,24 @@ export async function getXSentiment(input: XSentimentInput): Promise<XSentimentR
     return { enrichment: null, skipReason: eligibility.reason };
   }
 
-  if (!tryDebitEnrichmentBudget(APPROX_COST_PER_CALL_USD)) {
-    componentLogger.info('Daily enrichment budget exhausted, skipping x_sentiment', {
+  // Stable requestId — accession+ticker is unique per filing, so retries
+  // (handler retry, isolate replay, manual re-summarize) hit the idempotent
+  // ledger entry instead of double-debiting. `noacc` fallback only matters
+  // for ad-hoc calls outside the cron path.
+  const requestId = `${accessionNumber ?? 'noacc'}-${eligibility.ticker}-x_sentiment`;
+  const debit = await tryDebitEnrichment(
+    'x_sentiment' as EnvelopeKind,
+    APPROX_COST_PER_CALL_USD,
+    requestId,
+  );
+  if (!debit.ok) {
+    const skipReason: XSentimentSkipReason = debit.reason === 'cap_reached' ? 'budget_exhausted' : 'circuit_open';
+    componentLogger.info('x_sentiment debit rejected', {
       ticker: eligibility.ticker,
       accessionNumber,
+      reason: debit.reason,
     });
-    return { enrichment: null, skipReason: 'budget_exhausted' };
+    return { enrichment: null, skipReason };
   }
 
   const ticker = eligibility.ticker;
@@ -216,13 +234,23 @@ export async function getXSentiment(input: XSentimentInput): Promise<XSentimentR
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const isRetryable = err instanceof XaiDirectError ? err.retryable : true;
     monitoring.incrementCounter(`ai.${PROVIDER_NAME}_xai_error`, 1);
     componentLogger.warn('xAI x_search call failed', {
       ticker,
       accessionNumber,
       error: message,
-      retryable: err instanceof XaiDirectError ? err.retryable : false,
+      retryable: isRetryable,
     });
+    if (isRetryable) {
+      const refund = await recordRetryableFailure('x_sentiment' as EnvelopeKind, requestId);
+      if (refund.refundedUsd > 0) {
+        monitoring.incrementCounter(`ai.${PROVIDER_NAME}_refunded`, 1);
+      }
+    } else {
+      // Non-retryable (auth/programmer error): drain budget so the breaker eventually opens.
+      await recordEnrichmentFailureNoRefund('x_sentiment' as EnvelopeKind);
+    }
     return { enrichment: null, skipReason: 'xai_error', errorMessage: message };
   }
 
@@ -234,6 +262,9 @@ export async function getXSentiment(input: XSentimentInput): Promise<XSentimentR
       accessionNumber,
       sample: response.text.slice(0, 200),
     });
+    // Slow-loss: cost was spent but output is unusable. No refund — let the
+    // breaker open if this keeps happening.
+    await recordEnrichmentFailureNoRefund('x_sentiment' as EnvelopeKind);
     return { enrichment: null, skipReason: 'invalid_payload' };
   }
 
@@ -252,6 +283,9 @@ export async function getXSentiment(input: XSentimentInput): Promise<XSentimentR
       accessionNumber,
       reason: validation.rejectionReason,
     });
+    // Slow-loss path the breaker exists to catch — payload cost real money but
+    // failed validation. No refund.
+    await recordEnrichmentFailureNoRefund('x_sentiment' as EnvelopeKind);
     return { enrichment: null, skipReason: 'invalid_payload', errorMessage: validation.rejectionReason };
   }
 
@@ -264,7 +298,47 @@ export async function getXSentiment(input: XSentimentInput): Promise<XSentimentR
   const context = buildContext(sentiment);
   const formattedSection = `--- ${SECTION_HEADER} ---\n${label}: ${context}`;
 
-  monitoring.incrementCounter(`ai.${PROVIDER_NAME}_added`, 1);
+  // Direction + confidence tags drive the G5 "signal direction distribution"
+  // and confidence-floor dashboards. Without tags, every emission collapses
+  // into one bucket and we can't detect drift in the bullish/no_signal mix
+  // that's the whole point of the gate.
+  monitoring.incrementCounter(`ai.${PROVIDER_NAME}_added`, 1, {
+    direction: sentiment.direction,
+    confidence: sentiment.confidence,
+  });
+  // Per-strip counters power the G5 "schema-validator strip rate" dashboard.
+  // We only emit on success (not validator rejection) so the rate denominator
+  // is "responses that survived to enrichment", which is the slice operators
+  // care about — strips on rejected payloads are noise.
+  if (validation.stats.imperativeStrips > 0) {
+    monitoring.incrementCounter(
+      `ai.${PROVIDER_NAME}_imperative_stripped`,
+      validation.stats.imperativeStrips,
+    );
+  }
+  if (validation.stats.priceTargetStrips > 0) {
+    monitoring.incrementCounter(
+      `ai.${PROVIDER_NAME}_price_target_stripped`,
+      validation.stats.priceTargetStrips,
+    );
+  }
+  if (validation.stats.urlsStripped > 0) {
+    monitoring.incrementCounter(
+      `ai.${PROVIDER_NAME}_url_stripped`,
+      validation.stats.urlsStripped,
+    );
+  }
+  if (validation.stats.confidenceDemoted) {
+    monitoring.incrementCounter(`ai.${PROVIDER_NAME}_confidence_demoted`, 1);
+  }
+  // Citation count is the "validity proxy" we have without a network call.
+  // Real URL-resolution checks live in the post-merge hardening backlog;
+  // for pre-merge G5 the count + the URL-stripped counter are enough to
+  // detect a drop in citation density.
+  monitoring.recordValue(
+    `ai.${PROVIDER_NAME}_citation_count`,
+    sentiment.citationUrls.length,
+  );
   monitoring.recordValue(`ai.${PROVIDER_NAME}_cost_usd`, response.usage.costUsd);
   monitoring.recordValue(`ai.${PROVIDER_NAME}_latency_ms`, response.latencyMs);
   componentLogger.info('x_sentiment enrichment ready', {

@@ -1,0 +1,110 @@
+{
+  "$comment": [
+    "Pre-merge gate G2 corpus for the X-sentiment pipeline.",
+    "20 entries split into 4 buckets per tasks/x-sentiment-test-plan.md.",
+    "",
+    "BUCKETS:",
+    "  1 (pump_and_dump)     — low-float tickers; allowlist must reject before x_search.",
+    "  2 (cashtag_collision) — typos / look-alike tickers; resolver must reject.",
+    "  3 (legitimate_shift)  — earnings/guidance — model output validates with expectedDirection.",
+    "  4 (null_signal)       — routine filings — model output validates as no_signal.",
+    "",
+    "STUB DATA: entries below illustrate the schema. Real curated corpus replaces ",
+    "these incrementally — see tasks/x-sentiment-eval-corpus.md for the curation runbook."
+  ],
+  "entries": [
+    { "bucket": 1, "ticker": "PHUN",  "formType": "8-K",  "note": "Phunware-style low-float SPAC" },
+    { "bucket": 1, "ticker": "PROG",  "formType": "8-K",  "note": "Progenity-style low-float bio" },
+    { "bucket": 1, "ticker": "ATER",  "formType": "10-Q", "note": "Aterian-style retail meme target" },
+    { "bucket": 1, "ticker": "BBIG",  "formType": "8-K",  "note": "Vinco Ventures-style low-float" },
+    { "bucket": 1, "ticker": "APXT",  "formType": "8-K",  "note": "low-float SPAC" },
+
+    { "bucket": 2, "ticker": "$APPL", "formType": "10-Q", "note": "Typo: AAPL — must NOT resolve via fuzzy match" },
+    { "bucket": 2, "ticker": "$TSLAQ","formType": "8-K",  "note": "TSLA bankruptcy-meme cashtag, never a real ticker" },
+    { "bucket": 2, "ticker": "$X",    "formType": "10-Q", "note": "U.S. Steel — passes regex; must not be confused with bare $" },
+    { "bucket": 2, "ticker": "$FBOOK","formType": "8-K",  "note": "Facebook typo (META) — invalid format (5 chars + invalid keyword)" },
+    { "bucket": 2, "ticker": "$NVDIA","formType": "10-Q", "note": "NVDA typo — 5+ chars, must not resolve" },
+
+    {
+      "bucket": 3,
+      "ticker": "AAPL",
+      "formType": "8-K",
+      "companyName": "Apple Inc.",
+      "expectedDirection": "bullish",
+      "modelOutput": "{\"direction\":\"bullish\",\"shift\":\"shifting_bullish\",\"confidence\":\"medium\",\"factClaims\":[\"Apple reported Q2 EPS of $1.85, beating consensus $1.75.\",\"Services revenue up 12% YoY at $24.4B.\"],\"opinionClaims\":[\"Investors view services growth as durable.\"],\"discussionSynthesis\":\"Earnings beat + services momentum is driving constructive discussion across financial X accounts.\",\"citationUrls\":[\"https://x.com/Bloomberg/status/100\",\"https://x.com/CNBC/status/200\"],\"windowHours\":24}"
+    },
+    {
+      "bucket": 3,
+      "ticker": "TSLA",
+      "formType": "8-K",
+      "companyName": "Tesla, Inc.",
+      "expectedDirection": "bearish",
+      "modelOutput": "{\"direction\":\"bearish\",\"shift\":\"shifting_bearish\",\"confidence\":\"medium\",\"factClaims\":[\"Tesla cut FY guidance to 1.6M deliveries vs. prior 1.8M target.\"],\"opinionClaims\":[\"Margin pressure from price cuts seen as ongoing.\"],\"discussionSynthesis\":\"Guidance reduction has analysts and bull accounts reassessing growth runway.\",\"citationUrls\":[\"https://x.com/Reuters/status/300\",\"https://x.com/WSJ/status/400\"],\"windowHours\":48}"
+    },
+    {
+      "bucket": 3,
+      "ticker": "MSFT",
+      "formType": "8-K",
+      "companyName": "Microsoft Corporation",
+      "expectedDirection": "mixed",
+      "modelOutput": "{\"direction\":\"mixed\",\"shift\":\"stable\",\"confidence\":\"medium\",\"factClaims\":[\"Microsoft announced $3B Activision integration spend in Q3.\"],\"opinionClaims\":[\"Bulls cite AI cross-sell; bears cite execution risk.\"],\"discussionSynthesis\":\"Acquisition reception is split between AI-bull narrative and integration-risk skepticism.\",\"citationUrls\":[\"https://x.com/FT/status/500\",\"https://x.com/business/status/600\"],\"windowHours\":72}"
+    },
+    {
+      "bucket": 3,
+      "ticker": "META",
+      "formType": "8-K",
+      "companyName": "Meta Platforms, Inc.",
+      "expectedDirection": "bullish",
+      "modelOutput": "{\"direction\":\"bullish\",\"shift\":\"shifting_bullish\",\"confidence\":\"high\",\"factClaims\":[\"Meta announced $50B share repurchase authorization on April 24, 2026.\",\"Buyback represents ~4% of current market cap.\"],\"opinionClaims\":[\"Capital return seen as confidence signal.\"],\"discussionSynthesis\":\"Buyback authorization is being received as a strong capital-return signal across financial X.\",\"citationUrls\":[\"https://x.com/Bloomberg/status/700\",\"https://x.com/CNBC/status/800\"],\"windowHours\":24}"
+    },
+    {
+      "bucket": 3,
+      "ticker": "NVDA",
+      "formType": "10-Q",
+      "companyName": "NVIDIA Corporation",
+      "expectedDirection": "bullish",
+      "modelOutput": "{\"direction\":\"bullish\",\"shift\":\"shifting_bullish\",\"confidence\":\"high\",\"factClaims\":[\"Data center revenue up 90% YoY to $22.5B.\",\"Operating margin expanded 600bps QoQ.\"],\"opinionClaims\":[\"Hyperscaler capex seen as multi-year tailwind.\"],\"discussionSynthesis\":\"Data-center growth and margin expansion are sustaining bullish positioning across analyst and trader accounts.\",\"citationUrls\":[\"https://x.com/Reuters/status/900\",\"https://x.com/CNBC/status/1000\"],\"windowHours\":48}"
+    },
+
+    {
+      "bucket": 4,
+      "ticker": "AAPL",
+      "formType": "8-K",
+      "companyName": "Apple Inc.",
+      "modelOutput": "{\"direction\":\"no_signal\",\"shift\":\"no_signal\",\"confidence\":\"low\",\"factClaims\":[],\"opinionClaims\":[],\"discussionSynthesis\":\"\",\"citationUrls\":[],\"windowHours\":24}",
+      "note": "Routine 8-K (Item 8.01 boilerplate)"
+    },
+    {
+      "bucket": 4,
+      "ticker": "MSFT",
+      "formType": "FORM4",
+      "companyName": "Microsoft Corporation",
+      "modelOutput": "{\"direction\":\"no_signal\",\"shift\":\"stable\",\"confidence\":\"low\",\"factClaims\":[\"Officer reported sale of 1,500 shares (~$600K) under 10b5-1 plan.\"],\"opinionClaims\":[],\"discussionSynthesis\":\"Routine 10b5-1 activity drew no meaningful X discussion.\",\"citationUrls\":[],\"windowHours\":48}",
+      "note": "Small Form 4 under planned-sale program"
+    },
+    {
+      "bucket": 4,
+      "ticker": "JNJ",
+      "formType": "8-K",
+      "companyName": "Johnson & Johnson",
+      "modelOutput": "{\"direction\":\"no_signal\",\"shift\":\"no_signal\",\"confidence\":\"low\",\"factClaims\":[],\"opinionClaims\":[],\"discussionSynthesis\":\"Filing announced quarterly dividend of $1.19, in line with prior quarters.\",\"citationUrls\":[\"https://x.com/JNJNews/status/1100\"],\"windowHours\":24}",
+      "note": "Boilerplate dividend declaration"
+    },
+    {
+      "bucket": 4,
+      "ticker": "WMT",
+      "formType": "8-K",
+      "companyName": "Walmart Inc.",
+      "modelOutput": "{\"direction\":\"no_signal\",\"shift\":\"no_signal\",\"confidence\":\"low\",\"factClaims\":[],\"opinionClaims\":[],\"discussionSynthesis\":\"Filing was a routine bylaws amendment with no investor-relevant chatter on X.\",\"citationUrls\":[],\"windowHours\":24}",
+      "note": "Bylaws amendment, no market reaction"
+    },
+    {
+      "bucket": 4,
+      "ticker": "KO",
+      "formType": "8-K",
+      "companyName": "The Coca-Cola Company",
+      "modelOutput": "{\"direction\":\"no_signal\",\"shift\":\"no_signal\",\"confidence\":\"low\",\"factClaims\":[],\"opinionClaims\":[],\"discussionSynthesis\":\"\",\"citationUrls\":[],\"windowHours\":24}",
+      "note": "Item 8.01 board committee reorganization"
+    }
+  ]
+}

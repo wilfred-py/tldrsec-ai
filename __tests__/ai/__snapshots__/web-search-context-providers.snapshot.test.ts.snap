@@ -1,0 +1,700 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`web-search-context provider regression snapshot (G4) buildPrompt() output for capital_return 1`] = `
+{
+  "system": "You are a capital allocation research assistant. Place a buyback or dividend authorization in context of market cap, peers, and prior programs. Respond with valid JSON only.",
+  "user": "This 8-K Item 8.01 filing excerpt describes a capital-return action by Acme Corp (ACME).
+
+Using web search where helpful, in 2-3 sentences cover:
+1) Authorization size as a % of current market cap.
+2) Peer / prior-authorization context — is this a fresh auth, extension, or acceleration?
+3) Cash position or leverage context that makes the action meaningful.
+
+Label should be a one-line summary (e.g., "$2B buyback, ~7% of market cap, 4x prior").
+
+Respond with ONLY valid JSON in this exact format:
+{"label": "One-line summary", "context": "2-3 sentence market-grounded analysis"}
+
+<filing_excerpt>
+Acme Corp ("Acquiror") entered into an Agreement and Plan of Merger with Widget Holdings Inc. ("Target"), pursuant to which Acquiror will acquire all outstanding shares of Target for $500 million in cash.
+</filing_excerpt>",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) buildPrompt() output for counterparty 1`] = `
+{
+  "system": "You are a financial research assistant. Extract counterparty information from SEC filings and provide investor-relevant context. Respond with valid JSON only.",
+  "user": "This 8-K filing excerpt describes an acquisition or merger by Acme Corp (ACME).
+
+1) Extract the exact legal name of the company being acquired or merged with.
+2) Search the web for that company.
+3) In 2-3 sentences, describe who they are, what they do, their approximate size or market position, and why this deal matters to ACME investors.
+
+Respond with ONLY valid JSON in this exact format:
+{"label": "Exact Company Name LLC", "context": "2-3 sentence description"}
+
+<filing_excerpt>
+Acme Corp ("Acquiror") entered into an Agreement and Plan of Merger with Widget Holdings Inc. ("Target"), pursuant to which Acquiror will acquire all outstanding shares of Target for $500 million in cash.
+</filing_excerpt>",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) buildPrompt() output for debt_issuance 1`] = `
+{
+  "system": "You are a credit markets research assistant. Analyze a debt-issuance filing and place its terms in current-market context. Respond with valid JSON only.",
+  "user": "This filing excerpt describes a debt issuance by Acme Corp (ACME).
+
+Using web search where helpful, in 2-3 sentences cover:
+1) Current comparable-maturity IG/HY benchmark spreads — are these terms favorable vs peers?
+2) The issuer's stated use of proceeds (refinancing vs net new debt vs M&A vs general corporate).
+3) Whether the notes are secured/senior/subordinated and any collateral structure.
+
+Label should be a one-line summary of the tranche (e.g., "$500M 10-yr senior notes @ 5.25%").
+
+Respond with ONLY valid JSON in this exact format:
+{"label": "One-line tranche summary", "context": "2-3 sentence market-grounded analysis"}
+
+<filing_excerpt>
+Acme Corp ("Acquiror") entered into an Agreement and Plan of Merger with Widget Holdings Inc. ("Target"), pursuant to which Acquiror will acquire all outstanding shares of Target for $500 million in cash.
+</filing_excerpt>",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) buildPrompt() output for earnings 1`] = `
+{
+  "system": "You are an equity research assistant. Compare reported earnings against consensus expectations and guidance. Respond with valid JSON only.",
+  "user": "This 8-K Item 2.02 filing excerpt contains an earnings release from Acme Corp (ACME).
+
+Using web search where helpful, in 2-3 sentences cover:
+1) Consensus expectations for the reported quarter (revenue and EPS).
+2) Whether the result was a beat, miss, or in-line relative to consensus.
+3) Recent prior-day close and any guidance trajectory vs prior quarters.
+
+Label should be a one-line beat/miss classification (e.g., "Q3 revenue beat, EPS in-line").
+
+Respond with ONLY valid JSON in this exact format:
+{"label": "Beat/miss classification", "context": "2-3 sentence market-grounded analysis"}
+
+<filing_excerpt>
+Acme Corp ("Acquiror") entered into an Agreement and Plan of Merger with Widget Holdings Inc. ("Target"), pursuant to which Acquiror will acquire all outstanding shares of Target for $500 million in cash.
+</filing_excerpt>",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) buildPrompt() output for governance 1`] = `
+{
+  "system": "You are a corporate governance research assistant. Extract director and officer information from SEC filings and provide investor-relevant context about the people involved and why the governance change matters. Respond with valid JSON only.",
+  "user": "This 8-K filing excerpt describes a director or officer change at Acme Corp (ACME).
+
+1) Extract the names of the directors or officers mentioned (departing, appointed, or standing for re-election).
+2) Search the web for the most prominent person named.
+3) In 2-3 sentences, describe their background, current roles, and why this governance change matters to ACME shareholders.
+
+Respond with ONLY valid JSON in this exact format:
+{"label": "Full Name", "context": "2-3 sentence description of who they are and why this matters"}
+
+<filing_excerpt>
+Acme Corp ("Acquiror") entered into an Agreement and Plan of Merger with Widget Holdings Inc. ("Target"), pursuant to which Acquiror will acquire all outstanding shares of Target for $500 million in cash.
+</filing_excerpt>",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) detect() matrix for capital_return 1`] = `
+[
+  {
+    "fixture": "counterparty: 8-K Item 1.01 acquisition",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "counterparty: 8-K/A Item 2.01 merger",
+    "formType": "8-K/A",
+    "result": false,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.02 director resignation",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.07 director re-election",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "debt: 424B2 senior notes",
+    "formType": "424B2",
+    "result": false,
+  },
+  {
+    "fixture": "debt: FWP subordinated notes",
+    "formType": "FWP",
+    "result": false,
+  },
+  {
+    "fixture": "earnings: 8-K Item 2.02 results",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 buyback",
+    "formType": "8-K",
+    "result": true,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 dividend",
+    "formType": "8-K",
+    "result": true,
+  },
+  {
+    "fixture": "no match: 10-K with M&A keywords",
+    "formType": "10-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: empty form type",
+    "formType": "",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 9.01 (financial statements only)",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 1.01 without M&A keywords",
+    "formType": "8-K",
+    "result": false,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) detect() matrix for counterparty 1`] = `
+[
+  {
+    "fixture": "counterparty: 8-K Item 1.01 acquisition",
+    "formType": "8-K",
+    "result": true,
+  },
+  {
+    "fixture": "counterparty: 8-K/A Item 2.01 merger",
+    "formType": "8-K/A",
+    "result": true,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.02 director resignation",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.07 director re-election",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "debt: 424B2 senior notes",
+    "formType": "424B2",
+    "result": false,
+  },
+  {
+    "fixture": "debt: FWP subordinated notes",
+    "formType": "FWP",
+    "result": false,
+  },
+  {
+    "fixture": "earnings: 8-K Item 2.02 results",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 buyback",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 dividend",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 10-K with M&A keywords",
+    "formType": "10-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: empty form type",
+    "formType": "",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 9.01 (financial statements only)",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 1.01 without M&A keywords",
+    "formType": "8-K",
+    "result": false,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) detect() matrix for debt_issuance 1`] = `
+[
+  {
+    "fixture": "counterparty: 8-K Item 1.01 acquisition",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "counterparty: 8-K/A Item 2.01 merger",
+    "formType": "8-K/A",
+    "result": false,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.02 director resignation",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.07 director re-election",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "debt: 424B2 senior notes",
+    "formType": "424B2",
+    "result": true,
+  },
+  {
+    "fixture": "debt: FWP subordinated notes",
+    "formType": "FWP",
+    "result": true,
+  },
+  {
+    "fixture": "earnings: 8-K Item 2.02 results",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 buyback",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 dividend",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 10-K with M&A keywords",
+    "formType": "10-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: empty form type",
+    "formType": "",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 9.01 (financial statements only)",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 1.01 without M&A keywords",
+    "formType": "8-K",
+    "result": false,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) detect() matrix for earnings 1`] = `
+[
+  {
+    "fixture": "counterparty: 8-K Item 1.01 acquisition",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "counterparty: 8-K/A Item 2.01 merger",
+    "formType": "8-K/A",
+    "result": false,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.02 director resignation",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.07 director re-election",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "debt: 424B2 senior notes",
+    "formType": "424B2",
+    "result": false,
+  },
+  {
+    "fixture": "debt: FWP subordinated notes",
+    "formType": "FWP",
+    "result": false,
+  },
+  {
+    "fixture": "earnings: 8-K Item 2.02 results",
+    "formType": "8-K",
+    "result": true,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 buyback",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 dividend",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 10-K with M&A keywords",
+    "formType": "10-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: empty form type",
+    "formType": "",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 9.01 (financial statements only)",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 1.01 without M&A keywords",
+    "formType": "8-K",
+    "result": false,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) detect() matrix for governance 1`] = `
+[
+  {
+    "fixture": "counterparty: 8-K Item 1.01 acquisition",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "counterparty: 8-K/A Item 2.01 merger",
+    "formType": "8-K/A",
+    "result": false,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.02 director resignation",
+    "formType": "8-K",
+    "result": true,
+  },
+  {
+    "fixture": "governance: 8-K Item 5.07 director re-election",
+    "formType": "8-K",
+    "result": true,
+  },
+  {
+    "fixture": "debt: 424B2 senior notes",
+    "formType": "424B2",
+    "result": false,
+  },
+  {
+    "fixture": "debt: FWP subordinated notes",
+    "formType": "FWP",
+    "result": false,
+  },
+  {
+    "fixture": "earnings: 8-K Item 2.02 results",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 buyback",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "capital_return: 8-K Item 8.01 dividend",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 10-K with M&A keywords",
+    "formType": "10-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: empty form type",
+    "formType": "",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 9.01 (financial statements only)",
+    "formType": "8-K",
+    "result": false,
+  },
+  {
+    "fixture": "no match: 8-K Item 1.01 without M&A keywords",
+    "formType": "8-K",
+    "result": false,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) metadata for capital_return 1`] = `
+{
+  "maxExcerptLength": 2000,
+  "name": "capital_return",
+  "sectionHeader": "CAPITAL RETURN CONTEXT (web search)",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) metadata for counterparty 1`] = `
+{
+  "maxExcerptLength": 2000,
+  "name": "counterparty",
+  "sectionHeader": "COUNTERPARTY CONTEXT (web search)",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) metadata for debt_issuance 1`] = `
+{
+  "maxExcerptLength": 2500,
+  "name": "debt_issuance",
+  "sectionHeader": "DEBT ISSUANCE CONTEXT (web search)",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) metadata for earnings 1`] = `
+{
+  "maxExcerptLength": 2500,
+  "name": "earnings",
+  "sectionHeader": "EARNINGS CONTEXT (web search)",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) metadata for governance 1`] = `
+{
+  "maxExcerptLength": 2000,
+  "name": "governance",
+  "sectionHeader": "GOVERNANCE CONTEXT (web search)",
+}
+`;
+
+exports[`web-search-context provider regression snapshot (G4) parseResponse() across edge inputs for capital_return 1`] = `
+[
+  {
+    "fixture": "valid response",
+    "result": {
+      "context": "A 50-year-old widget maker.",
+      "label": "Target Corp",
+    },
+  },
+  {
+    "fixture": "label exceeding 200 chars (truncated)",
+    "result": {
+      "context": "ok",
+      "label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    },
+  },
+  {
+    "fixture": "context exceeding 500 chars (truncated)",
+    "result": {
+      "context": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+      "label": "ok",
+    },
+  },
+  {
+    "fixture": "missing label field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "missing context field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "top-level array returns null",
+    "result": null,
+  },
+  {
+    "fixture": "null payload returns null",
+    "result": null,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) parseResponse() across edge inputs for counterparty 1`] = `
+[
+  {
+    "fixture": "valid response",
+    "result": {
+      "context": "A 50-year-old widget maker.",
+      "label": "Target Corp",
+    },
+  },
+  {
+    "fixture": "label exceeding 200 chars (truncated)",
+    "result": {
+      "context": "ok",
+      "label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    },
+  },
+  {
+    "fixture": "context exceeding 500 chars (truncated)",
+    "result": {
+      "context": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+      "label": "ok",
+    },
+  },
+  {
+    "fixture": "missing label field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "missing context field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "top-level array returns null",
+    "result": null,
+  },
+  {
+    "fixture": "null payload returns null",
+    "result": null,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) parseResponse() across edge inputs for debt_issuance 1`] = `
+[
+  {
+    "fixture": "valid response",
+    "result": {
+      "context": "A 50-year-old widget maker.",
+      "label": "Target Corp",
+    },
+  },
+  {
+    "fixture": "label exceeding 200 chars (truncated)",
+    "result": {
+      "context": "ok",
+      "label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    },
+  },
+  {
+    "fixture": "context exceeding 500 chars (truncated)",
+    "result": {
+      "context": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+      "label": "ok",
+    },
+  },
+  {
+    "fixture": "missing label field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "missing context field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "top-level array returns null",
+    "result": null,
+  },
+  {
+    "fixture": "null payload returns null",
+    "result": null,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) parseResponse() across edge inputs for earnings 1`] = `
+[
+  {
+    "fixture": "valid response",
+    "result": {
+      "context": "A 50-year-old widget maker.",
+      "label": "Target Corp",
+    },
+  },
+  {
+    "fixture": "label exceeding 200 chars (truncated)",
+    "result": {
+      "context": "ok",
+      "label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    },
+  },
+  {
+    "fixture": "context exceeding 500 chars (truncated)",
+    "result": {
+      "context": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+      "label": "ok",
+    },
+  },
+  {
+    "fixture": "missing label field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "missing context field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "top-level array returns null",
+    "result": null,
+  },
+  {
+    "fixture": "null payload returns null",
+    "result": null,
+  },
+]
+`;
+
+exports[`web-search-context provider regression snapshot (G4) parseResponse() across edge inputs for governance 1`] = `
+[
+  {
+    "fixture": "valid response",
+    "result": {
+      "context": "A 50-year-old widget maker.",
+      "label": "Target Corp",
+    },
+  },
+  {
+    "fixture": "label exceeding 200 chars (truncated)",
+    "result": {
+      "context": "ok",
+      "label": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    },
+  },
+  {
+    "fixture": "context exceeding 500 chars (truncated)",
+    "result": {
+      "context": "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+      "label": "ok",
+    },
+  },
+  {
+    "fixture": "missing label field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "missing context field returns null",
+    "result": null,
+  },
+  {
+    "fixture": "top-level array returns null",
+    "result": null,
+  },
+  {
+    "fixture": "null payload returns null",
+    "result": null,
+  },
+]
+`;
