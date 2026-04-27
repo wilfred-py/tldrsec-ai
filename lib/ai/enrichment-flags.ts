@@ -27,9 +27,16 @@ const PROVIDER_FLAGS: Record<string, string> = {
   debt_issuance: 'why_it_matters_debt',
   earnings: 'why_it_matters_earnings',
   capital_return: 'why_it_matters_capital_return',
+  x_sentiment: 'x_sentiment_enrichment',
 };
 
 async function evaluateFlag(flagKey: string, distinctId: string): Promise<boolean> {
+  // Dev/QA bypass: ENRICHMENT_FORCE_ENABLE=1 short-circuits every flag to true so
+  // test scripts can exercise enrichment without provisioning PostHog flags.
+  // NEVER set this in production — it disables the kill-switch.
+  if (process.env.ENRICHMENT_FORCE_ENABLE === '1') {
+    return true;
+  }
   try {
     // Dynamic import prevents posthog-node (Node-only deps like `readline`)
     // from being pulled into any client bundle that transitively imports

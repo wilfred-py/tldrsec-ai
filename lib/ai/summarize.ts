@@ -19,8 +19,10 @@ import { getHistoricalSummaries, buildContextEnrichedPrompt } from './historical
 import { getEnrichmentContext } from './web-search-context';
 import {
   isWhyItMattersEnabled,
+  isProviderEnabled,
   isWithinDailyEnrichmentBudget,
 } from './enrichment-flags';
+import { getXSentiment, type XSentimentEnrichment } from './x-sentiment-provider';
 // Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
@@ -729,6 +731,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
 
     // Phase 3: Enrich content with historical context if ticker is available
     let enrichedContent = processedContent;
+    let capturedXSentiment: XSentimentEnrichment | null = null;
     const tickerSymbol = filingRecordFromDB.ticker?.symbol;
     const filingDateStr = filingRecordFromDB.filingDate
       ? filingRecordFromDB.filingDate.toISOString().split('T')[0]
@@ -782,6 +785,42 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       } catch (enrichError) {
         componentLogger.warn(`Failed to fetch enrichment context: ${enrichError instanceof Error ? enrichError.message : String(enrichError)}`);
         monitoring.incrementCounter('ai.enrichment_context_error', 1);
+      }
+    }
+
+    // X Sentiment enrichment runs on a wider form set (any high-importance form
+    // for an allowlisted ticker) and uses xAI direct rather than OpenRouter, so
+    // it lives outside the legacy ENRICHMENT_FORM_TYPES branch above. Eligibility,
+    // budget, and F3 sanitization are enforced inside getXSentiment.
+    if (tickerSymbol && tickerSymbol !== 'UNKNOWN' && !process.env.ENRICHMENT_FORCE_DISABLE) {
+      const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol;
+      try {
+        const topFlag = await isWhyItMattersEnabled(accession);
+        const providerFlag = topFlag && (await isProviderEnabled('x_sentiment', accession));
+        if (!providerFlag) {
+          componentLogger.info('x_sentiment flag off, skipping', { accession });
+        } else {
+          const result = await getXSentiment({
+            ticker: tickerSymbol,
+            formType: filingRecordFromDB.formType,
+            companyName: filingRecordFromDB.companyName,
+            accessionNumber: accession,
+          });
+          if (result.enrichment) {
+            enrichedContent += `\n\n${result.enrichment.formattedSection}`;
+            capturedXSentiment = result.enrichment;
+            componentLogger.info('Added x_sentiment enrichment', {
+              ticker: tickerSymbol,
+              direction: result.enrichment.sentiment.direction,
+              confidence: result.enrichment.sentiment.confidence,
+            });
+          } else {
+            componentLogger.info('x_sentiment skipped', { ticker: tickerSymbol, reason: result.skipReason });
+          }
+        }
+      } catch (xErr) {
+        componentLogger.warn(`x_sentiment enrichment failed: ${xErr instanceof Error ? xErr.message : String(xErr)}`);
+        monitoring.incrementCounter('ai.x_sentiment_unhandled_error', 1);
       }
     }
 
@@ -883,7 +922,11 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         componentLogger.info(`Successfully parsed response for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}, filingType=${filingRecordFromDB.formType}`);
         monitoring.recordTiming('ai.parsing_duration', Date.now() - parsingStartTime);
         monitoring.incrementCounter('ai.summarization_parsing_success', 1);
-        
+
+        const summaryJSONWithSentiment = capturedXSentiment
+          ? { ...parsedResult.data, xSentiment: capturedXSentiment.sentiment }
+          : parsedResult.data;
+
         // Update the summary record if summaryId exists
         if (summaryId) {
           await prisma.summary.update({
@@ -894,7 +937,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
                * Store structured JSON data for email templates to use
                * This eliminates the need for regex extraction fallbacks
                */
-              summaryJSON: parsedResult.data,
+              summaryJSON: summaryJSONWithSentiment,
               processingStatus: 'COMPLETED',
               processingCompletedAt: new Date(),
               isPartialResult: false,
@@ -915,7 +958,7 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
           summaryId: summaryId || undefined,
           summary: parsedResult.data.summary,
           summaryText: parsedResult.data.summary,
-          summaryJSON: parsedResult.data,
+          summaryJSON: summaryJSONWithSentiment,
           keyPoints: parsedResult.data.keyPoints || [],
           duration: Date.now() - startTime,
           modelUsed: response.model || getDefaultModel(),
@@ -1000,11 +1043,15 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
           });
         }
         
+        const fixedDataWithSentiment = capturedXSentiment
+          ? { ...fixedData, xSentiment: capturedXSentiment.sentiment }
+          : fixedData;
+
         return {
           summaryId: summaryId || undefined,
           summary: fixedData.summary,
           summaryText: fixedData.summary,
-          summaryJSON: fixedData,
+          summaryJSON: fixedDataWithSentiment,
           keyPoints: fixedData.keyPoints || [],
           isPartial: true,
           parsingErrors: parsedResult.errors,

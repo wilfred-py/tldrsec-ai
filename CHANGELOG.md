@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.0] - 2026-04-27
+
+### Added
+- **X (Twitter) Sentiment Enrichment Provider** — augments mega-cap SEC filing summaries with public-discussion sentiment via xAI Grok's `x_search` tool. Adds a structured `{direction, shift, confidence, factClaims, opinionClaims, discussionSynthesis, citationUrls}` payload onto `summaryJSON.xSentiment` and squeezes a short `{label, context}` block into the summarize prompt so the AI summary reflects social-discussion context alongside filing fundamentals. Gated by PostHog `x_sentiment_enrichment` flag, mega-cap ticker allowlist (~S&P 100), and form-importance check (8-K / 10-Q / 10-K).
+- `lib/ai/xai-direct-client.ts` (276 lines) — direct `api.x.ai/v1/responses` client. Required because `x_search` is xAI-proprietary and not exposed via OpenRouter (verified during G1 spike). Native cost reporting via `usage.cost_in_usd_ticks`, retryable-error classification, abort/timeout handling that propagates pre-aborted upstream signals correctly.
+- `lib/ai/x-sentiment-provider.ts` (305 lines) — orchestrates eligibility check → budget debit → xAI call → JSON parse → F3 validator → squeezed prompt block. Returns structured skip reasons (`budget_exhausted`, `xai_error`, `invalid_payload`, eligibility reasons) so caller can degrade gracefully without throws.
+- `lib/ai/x-sentiment-eligibility.ts` (146 lines) — form-importance + ticker allowlist gating. Pump-and-dump defense: only runs against the mega-cap allowlist where x_search results have meaningful signal-to-noise.
+- `lib/ai/parsers/x-sentiment-validator.ts` (280 lines) — F3 output sanitization. Strips imperative trading verbs ("buy", "sell", "load up", "short this"), price targets, untrusted citation URLs (compares emitted citations against the model's actual `citationUrls` set), enforces enum values, clamps `windowHours` to [1,168].
+- 60 unit tests across `x-sentiment-eligibility.test.ts`, `x-sentiment-provider.test.ts`, `x-sentiment-validator.test.ts` — covering eligibility gates, provider skip reasons, abort/timeout paths, F3 sanitization edge cases, and `accessionNumber` log-correlation threading.
+
+### Changed
+- `lib/ai/summarize.ts` — passes `accessionNumber` into the X-sentiment provider for log/counter correlation, appends the `--- X SENTIMENT ---` block to the summarize prompt when the provider returns enrichment, persists the full structured `XSentiment` object on `summaryJSON.xSentiment` for downstream dashboard / email-template surfaces.
+- `lib/ai/enrichment-flags.ts` — registers `x_sentiment` in the per-provider PostHog flag map (`x_sentiment_enrichment`). The shared daily-budget accumulator (`tryDebitEnrichmentBudget`) is reused for x_sentiment debits at ~$0.05/call (vs ~$0.003/call for "why it matters" providers); cap-envelope split, multi-instance counter, and refund-on-retryable are deferred to a follow-up architecture pass — see `tasks/x-sentiment-budget-architecture.md`.
+
 ## [0.0.24.10] - 2026-04-26
 
 ### Changed
