@@ -16,6 +16,13 @@ All notable changes to this project will be documented in this file.
 ### Refactored
 - `lib/email/campaign-templates.ts` — extracted `fetchScoredSummariesLast30Days(take)` and `dedupeByTicker(rows, maxPerTicker)` from the monolithic `fetchCampaignFilings`. Same score formula and final email-output shape; the new helpers are now reusable by `scripts/refresh-landing-fixtures.ts` without duplicating heuristics. The 14-test regression suite locks the contract.
 
+## [0.0.24.6] - 2026-04-26
+
+### Fixed
+- **Newly added tickers now start receiving filings immediately** even if SEC EDGAR has never been queried for that company before. Previously, when a user added a ticker to their watchlist, the symbol could become a "silent monitoring orphan" — the ticker row was created but no SEC filings ever arrived because the upstream CIK (Central Index Key) lookup was never triggered. Three production tickers (PLTR, GS, FDS) were stuck in this state until they were backfilled by hand.
+- `app/api/user/tickers/route.ts`: both ticker-create paths (new-user POST branch and existing-user POST branch) now fire `resolveTicker(symbol)` after `prisma.ticker.create()` completes. Pattern is fire-and-forget (`void resolveTicker(symbol).catch(...)`) so the API response stays fast even when SEC EDGAR is slow or unreachable. Failures log at `warn` level — the next cron tick will retry CIK resolution downstream. Idempotent because `cikMapping.upsert(where: { cik })` deduplicates concurrent resolutions of the same symbol.
+- Backfilled `cikMapping` rows for the three known orphan tickers (PLTR / GS / FDS) so existing subscribers stop missing filings while the fix propagates.
+
 ## [0.0.24.5] - 2026-04-26
 
 ### Changed
