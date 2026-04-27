@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.24.7] - 2026-04-26
+## [0.0.24.9] - 2026-04-27
 
 ### Added
 - **10-Q financial scorecard — pill deltas** (`components/ui/email/templates/10q-minimalist-template.tsx`): redesigned earnings table to a 4-column grid (METRIC | LATEST | YoY | QoQ) with mono-font pill chips for YoY/QoQ deltas. Positive deltas render green, negative red (with Unicode minus `U+2212`, not ASCII hyphen — visually heavier so `-3.5%` reads instantly), zero/unparseable values fall back to a neutral gray pill. Numbered list rendering for "What to Watch". Spacer rows added before "EARNINGS SCORECARD" and "What to Watch" black bars (email-safe — `marginTop` on `<td>` doesn't render in Outlook).
@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **`parseDelta` was rendering unparseable strings as positive (green)** — `parseFloat("N/A")` returns `NaN` but the old code path treated `>= 0` as positive, so any non-numeric change string ("N/A", "+5 points", basis-point measures) painted green. Replaced loose parse with strict regex (`/^-?\d+(\.\d+)?$/`) over a stripped form (no `%`, `+`, `,`, `$`); unparseable values now correctly route to the neutral gray pill via a discriminated `DeltaTone = 'positive' | 'negative' | 'zero' | 'unparseable'` union.
+
+## [0.0.24.7] - 2026-04-27
+
+### Fixed
+- `app/robots.ts`: extended `disallow` to include `/feedback/` and `/unsubscribe`. These dead-end transactional pages already carried `<meta name="robots" content="noindex,nofollow">` (via `app/feedback/{thanks,error}/page.tsx` and `app/unsubscribe/layout.tsx`), but Bing crawled them anyway and indexed them — `noindex` only takes effect once the crawler reads the page, and the meta tag was being treated inconsistently. Adding the paths to robots.txt stops crawl entirely so Bing/Google decay the index entries, and PostHog stops recording bot hits as engaged sessions on those routes. `/unsubscribe` is listed without a trailing slash because email links are constructed as `/unsubscribe?token=...` (bare path with query string) — per RFC 9309, `Disallow: /unsubscribe/` would only match paths starting with `/unsubscribe/` and would miss the bare path that Bing actually indexed.
+- `__tests__/seo/metadata-validation.test.ts`: added test asserting `/feedback/` and `/unsubscribe` are present in the robots.txt disallow list.
 
 ## [0.0.24.6] - 2026-04-26
 
