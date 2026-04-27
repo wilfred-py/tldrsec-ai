@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.24.6] - 2026-04-26
+## [0.0.24.7] - 2026-04-27
 
 ### Fixed
 - `app/robots.ts`: extended `disallow` to include `/feedback/` and `/unsubscribe`. These dead-end transactional pages already carried `<meta name="robots" content="noindex,nofollow">` (via `app/feedback/{thanks,error}/page.tsx` and `app/unsubscribe/layout.tsx`), but Bing crawled them anyway and indexed them — `noindex` only takes effect once the crawler reads the page, and the meta tag was being treated inconsistently. Adding the paths to robots.txt stops crawl entirely so Bing/Google decay the index entries, and PostHog stops recording bot hits as engaged sessions on those routes. `/unsubscribe` is listed without a trailing slash because email links are constructed as `/unsubscribe?token=...` (bare path with query string) — per RFC 9309, `Disallow: /unsubscribe/` would only match paths starting with `/unsubscribe/` and would miss the bare path that Bing actually indexed.
 - `__tests__/seo/metadata-validation.test.ts`: added test asserting `/feedback/` and `/unsubscribe` are present in the robots.txt disallow list.
+
+## [0.0.24.6] - 2026-04-26
+
+### Fixed
+- **Newly added tickers now start receiving filings immediately** even if SEC EDGAR has never been queried for that company before. Previously, when a user added a ticker to their watchlist, the symbol could become a "silent monitoring orphan" — the ticker row was created but no SEC filings ever arrived because the upstream CIK (Central Index Key) lookup was never triggered. Three production tickers (PLTR, GS, FDS) were stuck in this state until they were backfilled by hand.
+- `app/api/user/tickers/route.ts`: both ticker-create paths (new-user POST branch and existing-user POST branch) now fire `resolveTicker(symbol)` after `prisma.ticker.create()` completes. Pattern is fire-and-forget (`void resolveTicker(symbol).catch(...)`) so the API response stays fast even when SEC EDGAR is slow or unreachable. Failures log at `warn` level — the next cron tick will retry CIK resolution downstream. Idempotent because `cikMapping.upsert(where: { cik })` deduplicates concurrent resolutions of the same symbol.
+- Backfilled `cikMapping` rows for the three known orphan tickers (PLTR / GS / FDS) so existing subscribers stop missing filings while the fix propagates.
 
 ## [0.0.24.5] - 2026-04-26
 
