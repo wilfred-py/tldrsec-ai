@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.24.8] - 2026-04-26
+## [0.0.24.10] - 2026-04-26
 
 ### Changed
 - **Landing-page Gmail hero — re-curated fixtures (`lib/landing/gmail-mock-summaries.ts`)**: refreshed the 15 hand-curated Gmail mock summaries from the prod DB's last-30-day scoring run. Distribution: 7×8-K, 6×Form 4, 2×10-Q across 9 distinct tickers (AAPL×2, AMZN×2, TSLA×2, META×2, GOOGL×2, JNJ×2, BRK-B, VRT, COIN). Removed unused `TrendingDown` icon import — no bearish-sentiment entries this cycle.
@@ -15,6 +15,22 @@ All notable changes to this project will be documented in this file.
 
 ### Refactored
 - `lib/email/campaign-templates.ts` — extracted `fetchScoredSummariesLast30Days(take)` and `dedupeByTicker(rows, maxPerTicker)` from the monolithic `fetchCampaignFilings`. Same score formula and final email-output shape; the new helpers are now reusable by `scripts/refresh-landing-fixtures.ts` without duplicating heuristics. The 14-test regression suite locks the contract.
+
+## [0.0.24.9] - 2026-04-27
+
+### Added
+- **10-Q financial scorecard — pill deltas** (`components/ui/email/templates/10q-minimalist-template.tsx`): redesigned earnings table to a 4-column grid (METRIC | LATEST | YoY | QoQ) with mono-font pill chips for YoY/QoQ deltas. Positive deltas render green, negative red (with Unicode minus `U+2212`, not ASCII hyphen — visually heavier so `-3.5%` reads instantly), zero/unparseable values fall back to a neutral gray pill. Numbered list rendering for "What to Watch". Spacer rows added before "EARNINGS SCORECARD" and "What to Watch" black bars (email-safe — `marginTop` on `<td>` doesn't render in Outlook).
+- `EmailColors.semantic.pill{Positive,Negative,Neutral}{Bg,Fg}` (`components/ui/email/design-system.ts`): six new design tokens for pill chip colors so the scorecard, and any future template that needs delta indicators, all reach for the same source of truth instead of inlining hexes.
+- `__tests__/email/10q-pill-delta.test.tsx` — 8 regression tests rendering the full template with realistic financial data and asserting pill background/foreground colors per tone (positive green, negative red with U+2212, zero gray, unparseable "N/A" gray, basis-point "+5 points" gray, missing → em-dash, dual YoY+QoQ pills, no pill bleed onto the dollar-value cell).
+
+### Fixed
+- **`parseDelta` was rendering unparseable strings as positive (green)** — `parseFloat("N/A")` returns `NaN` but the old code path treated `>= 0` as positive, so any non-numeric change string ("N/A", "+5 points", basis-point measures) painted green. Replaced loose parse with strict regex (`/^-?\d+(\.\d+)?$/`) over a stripped form (no `%`, `+`, `,`, `$`); unparseable values now correctly route to the neutral gray pill via a discriminated `DeltaTone = 'positive' | 'negative' | 'zero' | 'unparseable'` union.
+
+## [0.0.24.7] - 2026-04-27
+
+### Fixed
+- `app/robots.ts`: extended `disallow` to include `/feedback/` and `/unsubscribe`. These dead-end transactional pages already carried `<meta name="robots" content="noindex,nofollow">` (via `app/feedback/{thanks,error}/page.tsx` and `app/unsubscribe/layout.tsx`), but Bing crawled them anyway and indexed them — `noindex` only takes effect once the crawler reads the page, and the meta tag was being treated inconsistently. Adding the paths to robots.txt stops crawl entirely so Bing/Google decay the index entries, and PostHog stops recording bot hits as engaged sessions on those routes. `/unsubscribe` is listed without a trailing slash because email links are constructed as `/unsubscribe?token=...` (bare path with query string) — per RFC 9309, `Disallow: /unsubscribe/` would only match paths starting with `/unsubscribe/` and would miss the bare path that Bing actually indexed.
+- `__tests__/seo/metadata-validation.test.ts`: added test asserting `/feedback/` and `/unsubscribe` are present in the robots.txt disallow list.
 
 ## [0.0.24.6] - 2026-04-26
 

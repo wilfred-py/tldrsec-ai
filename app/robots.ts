@@ -14,6 +14,8 @@ export default function robots(): MetadataRoute.Robots {
         '/admin/',
         '/_next/',
         '/tmp/',
+        '/feedback/',
+        '/unsubscribe',
       ],
     },
     sitemap: 'https://tldrsec.app/sitemap.xml',
