@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.24.12] - 2026-04-27
+
+### Fixed
+- **`storeSummary` was failing for all tickers with `tokensUsed is not defined`** — DB persistence was silently broken even though emails delivered fine via the in-memory path. Restored the missing `tokensUsed` declaration in `services/filings/database/filingDatabase.ts:213`, falling back to `inputTokens + outputTokens` when `metadata.tokensUsed` isn't provided. Filing summaries now persist to the DB again.
+- **Migrated `filingDatabase.ts` from direct `import { prisma }` to `getPrismaClient()`** in 6 functions (`findExistingSummary`, `storeSummary`, `storeSummaryForTicker`, `getFilingLogs`, `trackCacheAccess`, `trackEmailDelivery`). Direct prisma imports are captured at module-load time and cannot be intercepted by Jest mocks; the `getPrismaClient()` indirection (already the project convention per CLAUDE.md item 2) lets the test suite mock the client cleanly. Side-benefit: clears 8 pre-existing `'prisma' is possibly 'undefined'` typecheck errors in this file.
+
+### Changed
+- **`__tests__/services/filings/database/filingDatabase.test.ts`** — repaired the 3 mock-dependent test cases. Mock factory now uses a getter pattern (`get prisma() { return mockPrisma; }`) to defer reference until after the const initialization, sidestepping the TDZ trap that Jest's hoisting creates. Added `$transaction` to the mock so `storeSummaryForTicker`'s upsert (wrapped in a transaction) lands on the inspected mock. Switched assertions from `summary.create` to `summary.upsert.create` to match the actual code path.
+- **`__tests__/security/cache-access-security.test.ts`** — bridged the test's local `prisma` mock (used by `PrivacyConsentService`) with the global `getPrismaClient()` mock from `__tests__/setup.js` (used by the migrated `trackCacheAccess`). Added `mockGetPrismaClient.mockReturnValue(mockPrisma)` in `beforeEach` plus runtime augmentation of `summary.update` and `summaryCacheAccess.create` since the `@prisma/client` auto-mock doesn't supply them. All 25 tests pass.
+
 ## [0.0.24.11] - 2026-04-27
 
 ### Fixed
