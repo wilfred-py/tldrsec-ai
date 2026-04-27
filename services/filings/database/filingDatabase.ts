@@ -1,4 +1,4 @@
-import { prisma } from '../../../lib/db';
+import { getPrismaClient } from '../../../lib/db/prisma';
 import { FilingSummaryResult } from '../../filing/types';
 import { FilingType } from '../../../types/sec/filing';
 
@@ -11,6 +11,7 @@ import { FilingType } from '../../../types/sec/filing';
  * @returns The existing summary or null if not found
  */
 export async function findExistingSummary(ticker: string, formType: string, bypassCache: boolean = false): Promise<FilingSummaryResult | null> {
+  const prisma = getPrismaClient();
   try {
     // Check if we should bypass cache for fresh summaries
     if (bypassCache || process.env.FORCE_FRESH_SUMMARIES === 'true') {
@@ -148,6 +149,7 @@ export async function storeSummary(
   metadata: Record<string, any>,
   options?: StoreSummaryOptions
 ): Promise<StoreSummaryResult> {
+  const prisma = getPrismaClient();
   const result: StoreSummaryResult = { stored: 0, total: 0, errors: [], summaryIds: [] };
 
   try {
@@ -204,9 +206,11 @@ async function storeSummaryForTicker(
   metadata: Record<string, any>,
   options?: StoreSummaryOptions
 ): Promise<string> {
+  const prisma = getPrismaClient();
   // Calculate cost per token from metadata if available
   const inputTokens = metadata.inputTokens || 0;
   const outputTokens = metadata.outputTokens || 0;
+  const tokensUsed = metadata.tokensUsed ?? (inputTokens + outputTokens);
   const totalCost = metadata.cost || 0;
 
   const inputCostPerToken = inputTokens > 0 && totalCost > 0
@@ -309,6 +313,7 @@ async function storeSummaryForTicker(
  * @returns Array of filing logs
  */
 export async function getFilingLogs(limit: number = 100): Promise<any[]> {
+  const prisma = getPrismaClient();
   try {
     const logs = await prisma.summary.findMany({
       take: limit,
@@ -348,6 +353,7 @@ export async function getFilingLogs(limit: number = 100): Promise<any[]> {
  * @returns Boolean indicating success
  */
 export async function trackCacheAccess(summaryId: string, accessType: string, userId?: string): Promise<boolean> {
+  const prisma = getPrismaClient();
   try {
     // Import security and privacy modules dynamically to avoid circular dependencies
     const { validateCacheAccessParams, sanitizeForLogging } = await import('@/lib/security/validation');
@@ -492,6 +498,7 @@ export async function trackCacheAccess(summaryId: string, accessType: string, us
  * @returns Boolean indicating success
  */
 export async function trackEmailDelivery(summaryId: string, userEmail: string, deliveryType: string = 'individual'): Promise<boolean> {
+  const prisma = getPrismaClient();
   try {
     // Wrap both operations in a transaction for atomicity
     await prisma.$transaction(async (tx) => {
