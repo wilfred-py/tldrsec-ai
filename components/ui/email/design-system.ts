@@ -633,12 +633,12 @@ export function markdownToHtml(markdown: string | undefined): string {
   html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em style="font-style:italic;">$1</em>');
   html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em style="font-style:italic;">$1</em>');
 
-  // Convert bullet lists (- item or * item)
-  html = html.replace(/^[\-\*] (.+)$/gm, `<div style="padding:4px 0 4px 16px;font-size:14px;color:${EmailColors.text.body};"><span style="color:${EmailColors.text.meta};margin-right:8px;">•</span>$1</div>`);
+  // Convert bullet lists (- item or * item) — 2-cell hanging-indent table.
+  html = html.replace(/^[\-\*] (.+)$/gm, `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0;border-collapse:collapse;"><tr><td valign="top" width="16" style="width:16px;padding:4px 0;color:${EmailColors.text.meta};font-size:14px;line-height:1.5;">•</td><td valign="top" style="padding:4px 0 4px 8px;font-size:14px;line-height:1.5;color:${EmailColors.text.body};word-break:break-word;">$1</td></tr></table>`);
 
-  // Convert numbered lists (1. item)
+  // Convert numbered lists (1. item) — same 2-cell hanging-indent pattern.
   html = html.replace(/^(\d+)\. (.+)$/gm, (match, num, content) => {
-    return `<div style="padding:4px 0 4px 16px;font-size:14px;color:${EmailColors.text.body};"><span style="color:${EmailColors.text.meta};margin-right:8px;">${num}.</span>${content}</div>`;
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0;border-collapse:collapse;"><tr><td valign="top" width="20" style="width:20px;padding:4px 0;color:${EmailColors.text.meta};font-size:14px;line-height:1.5;">${num}.</td><td valign="top" style="padding:4px 0 4px 8px;font-size:14px;line-height:1.5;color:${EmailColors.text.body};word-break:break-word;">${content}</td></tr></table>`;
   });
 
   // Convert line breaks (double newline = paragraph break)

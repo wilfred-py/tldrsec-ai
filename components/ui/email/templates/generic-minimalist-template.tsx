@@ -3,6 +3,7 @@ import { EmailColors, EmailStyles, markdownToHtml, getWhyItMattersLabel } from '
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
+import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface GenericMinimalistTemplateProps {
@@ -124,15 +125,7 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
                   </table>
                   <div style={EmailStyles.watchForHeader}>Key points:</div>
                   {keyPoints.slice(0, 6).map((point, idx) => (
-                    <div key={idx} style={{
-                      padding: '3px 0 3px 16px',
-                      fontSize: '14px',
-                      color: EmailColors.text.body,
-                      lineHeight: '1.5',
-                    }}>
-                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
-                      {point}
-                    </div>
+                    <HangingBulletItem key={idx} text={point} />
                   ))}
                 </>
               )}
