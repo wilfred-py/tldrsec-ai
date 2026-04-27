@@ -32,7 +32,18 @@ EmailColors.semantic.positive = #10B981   Green 500 for buys/gains
 EmailColors.semantic.negative = #EF4444   Red 500 for sells/losses
 EmailColors.semantic.neutral  = #6B7280   Gray 500 for no change
 EmailColors.semantic.accent   = #7C3AED   Purple for CTAs only (minimal use)
+
+EmailColors.semantic.pillPositiveBg = #ECFDF5   Pill chip bg, gain
+EmailColors.semantic.pillPositiveFg = #047857   Pill chip text, gain (Green 700, deeper than line tokens)
+EmailColors.semantic.pillNegativeBg = #FEF2F2   Pill chip bg, loss
+EmailColors.semantic.pillNegativeFg = #B91C1C   Pill chip text, loss (Red 700)
+EmailColors.semantic.pillNeutralBg  = #F3F4F6   Pill chip bg, no change / unparseable
+EmailColors.semantic.pillNeutralFg  = #6B7280   Pill chip text, neutral
 ```
+
+Pill tokens are for filled ±% delta chips inside financial scorecards (e.g.
+10-Q YoY/QoQ columns). They use deeper foreground colors than the line-level
+`positive`/`negative` tokens so a small pill stays legible against its tinted bg.
 
 ## Typography Scale
 
@@ -127,6 +138,7 @@ degraded        | Company name  | Hidden         | Hidden
 |---|---|
 | Design tokens | `components/ui/email/design-system.ts` |
 | Form 4 template | `components/ui/email/templates/form4-minimalist-template.tsx` |
+| 10-Q template | `components/ui/email/templates/10q-minimalist-template.tsx` |
 | Header | `components/ui/email/templates/sections/EmailHeader.tsx` |
 | Footer | `components/ui/email/templates/sections/EmailFooter.tsx` |
 | Field normalizer | `lib/email/form4-field-normalizer.ts` |
