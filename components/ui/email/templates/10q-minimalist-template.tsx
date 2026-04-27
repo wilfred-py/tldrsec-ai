@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, getChangeArrow, markdownToHtml } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
@@ -8,6 +8,135 @@ import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface Form10QMinimalistTemplateProps {
   filing: FilingTemplateData;
+}
+
+const MONO_FONT = '"JetBrains Mono", "SF Mono", Monaco, Consolas, "Courier New", monospace';
+
+/**
+ * Litquidity-style financial scorecard cell styles.
+ * 4-column grid: METRIC | LATEST | YoY | QoQ.
+ * Color is applied ONLY to the % delta pills, never to the dollar value.
+ */
+const fin = {
+  headMetric: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: EmailColors.text.muted,
+    letterSpacing: '0.9px',
+    textTransform: 'uppercase' as const,
+    textAlign: 'left' as const,
+    padding: '12px 15px 8px',
+    borderBottom: `1px solid ${EmailColors.structure.border}`,
+  },
+  headNum: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: EmailColors.text.muted,
+    letterSpacing: '0.9px',
+    textTransform: 'uppercase' as const,
+    textAlign: 'right' as const,
+    padding: '12px 15px 8px',
+    borderBottom: `1px solid ${EmailColors.structure.border}`,
+  },
+  cellMetric: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: EmailColors.text.headline,
+    padding: '11px 15px',
+    verticalAlign: 'middle' as const,
+  },
+  cellValue: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: EmailColors.text.headline,
+    fontFamily: MONO_FONT,
+    fontVariantNumeric: 'tabular-nums' as const,
+    textAlign: 'right' as const,
+    padding: '11px 15px',
+    verticalAlign: 'middle' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  cellDelta: {
+    textAlign: 'right' as const,
+    padding: '11px 8px 11px 15px',
+    verticalAlign: 'middle' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  cellDeltaLast: {
+    textAlign: 'right' as const,
+    padding: '11px 15px 11px 8px',
+    verticalAlign: 'middle' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  dash: {
+    color: EmailColors.text.muted,
+    fontSize: '12px',
+    fontFamily: MONO_FONT,
+  },
+} as const;
+
+type DeltaTone = 'positive' | 'negative' | 'zero' | 'unparseable';
+
+/**
+ * Parse a YoY/QoQ change value into a tone + display text.
+ *
+ * Numeric strings ("+6.1%", "-2.7", 6.1) → positive/negative/zero with
+ * "+N%" / "−N%" formatting. Non-numeric strings ("N/A", "n/m") and basis-
+ * point measures ("5 points") fall through as "unparseable" — they render
+ * in a neutral gray pill with the raw text preserved, never colored as
+ * positive by accident.
+ */
+function parseDelta(value: string | number | undefined): { tone: DeltaTone; text: string } | null {
+  if (value === undefined || value === null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const stripped = raw.replace(/[%+,$\s]/g, '');
+  // Reject anything with non-numeric characters left after stripping the
+  // sign / unit decorations — "5points" → not a clean percentage.
+  if (!/^-?\d+(\.\d+)?$/.test(stripped)) return { tone: 'unparseable', text: raw };
+  const num = parseFloat(stripped);
+  if (isNaN(num)) return { tone: 'unparseable', text: raw };
+  if (num === 0) return { tone: 'zero', text: '0%' };
+  const isNegative = num < 0;
+  const abs = Math.abs(num);
+  const sign = isNegative ? '\u2212' : '+';
+  return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${abs}%` };
+}
+
+/**
+ * Pill chip showing a percentage delta. Green for positive, red for
+ * negative, gray for zero AND for unparseable values like "N/A" / "n/m".
+ * The pill is the ONLY colored element in the financial scorecard rows —
+ * labels and dollar values stay neutral.
+ */
+function PillDelta({ value }: { value: string | number }) {
+  const parsed = parseDelta(value);
+  if (!parsed) return <span style={fin.dash}>—</span>;
+
+  const colors = parsed.tone === 'positive'
+    ? { bg: EmailColors.semantic.pillPositiveBg, text: EmailColors.semantic.pillPositiveFg }
+    : parsed.tone === 'negative'
+      ? { bg: EmailColors.semantic.pillNegativeBg, text: EmailColors.semantic.pillNegativeFg }
+      : { bg: EmailColors.semantic.pillNeutralBg, text: EmailColors.semantic.pillNeutralFg };
+
+  return (
+    <span style={{
+      display: 'inline-block' as const,
+      padding: '3px 8px',
+      borderRadius: '4px',
+      backgroundColor: colors.bg,
+      color: colors.text,
+      fontSize: '11px',
+      fontWeight: 700,
+      fontFamily: MONO_FONT,
+      fontVariantNumeric: 'tabular-nums' as const,
+      letterSpacing: '0.2px',
+      lineHeight: '1.2',
+      whiteSpace: 'nowrap' as const,
+    }}>
+      {parsed.text}
+    </span>
+  );
 }
 
 /**
@@ -197,131 +326,194 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
       {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
-          <tr>
-            <td style={{ padding: '0 15px 20px' }}>
 
-              {/* Why it matters */}
-              {whyItMatters && (
+          {/* Why it matters — padded */}
+          {whyItMatters && (
+            <tr>
+              <td style={{ padding: '0 15px 4px' }}>
                 <p style={EmailStyles.whyItMatters}>
                   <strong style={{ color: '#000000' }}>Why it matters: </strong>
                   {whyItMatters}
                 </p>
-              )}
+              </td>
+            </tr>
+          )}
 
-              {/* Data snapshot */}
-              {dataRows.length > 0 && (
-                <>
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+          {/* Data snapshot: black bar header + 4-column financials grid */}
+          {dataRows.length > 0 && (
+            <>
+              {/* Spacer above the black bar (margin doesn't work on td) */}
+              <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
+              {/* Full-width black "EARNINGS SCORECARD" bar */}
+              <tr>
+                <td style={{
+                  backgroundColor: '#000000',
+                  padding: '11px 15px',
+                }}>
+                  <table width="100%" cellPadding="0" cellSpacing="0">
+                    <tbody>
+                      <tr>
+                        <td style={{
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#FFFFFF',
+                          letterSpacing: '1.2px',
+                          textTransform: 'uppercase' as const,
+                        }}>
+                          Earnings Scorecard
+                        </td>
+                        <td style={{
+                          textAlign: 'right' as const,
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          color: '#9CA3AF',
+                          letterSpacing: '0.6px',
+                          textTransform: 'uppercase' as const,
+                          fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace',
+                        }}>
+                          {dataRows.length} metrics
+                        </td>
+                      </tr>
+                    </tbody>
                   </table>
+                </td>
+              </tr>
 
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+              {/* Column headers */}
+              <tr>
+                <td style={{ padding: '0' }}>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: 'collapse' as const }}>
+                    <thead>
+                      <tr>
+                        <th style={fin.headMetric}>Metric</th>
+                        <th style={fin.headNum}>Latest</th>
+                        <th style={fin.headNum}>YoY</th>
+                        <th style={fin.headNum}>QoQ</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {dataRows.map((row, idx) => {
-                        const changeStyle = getChangeStyle(row.change);
-                        const arrow = getChangeArrow(row.change);
-                        const qoqStyle = getChangeStyle(row.qoqChange);
-                        const qoqArrow = getChangeArrow(row.qoqChange);
-
-                        // Build the value cell content: value + YoY + QoQ inline
-                        const changeParts: string[] = [];
-                        if (row.change) changeParts.push(`${arrow}${row.change} YoY`);
-                        if (row.qoqChange) changeParts.push(`${qoqArrow}${row.qoqChange} QoQ`);
-
+                        const isOdd = idx % 2 === 1;
+                        const rowBg = isOdd ? EmailColors.structure.backgroundAlt : EmailColors.structure.background;
                         return (
-                          <tr key={idx}>
-                            <td style={{
-                              ...EmailStyles.dataLabel,
-                              borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
-                            }}>{row.label}</td>
-                            <td style={{
-                              ...EmailStyles.dataValue,
-                              borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
-                            }}>
-                              <span>{row.value}</span>
-                              {row.change && (
-                                <span style={{ ...changeStyle, marginLeft: '8px', fontSize: '12px' }}>
-                                  {arrow}{row.change} YoY
-                                </span>
-                              )}
-                              {row.qoqChange && (
-                                <span style={{ ...qoqStyle, marginLeft: '6px', fontSize: '12px' }}>
-                                  {qoqArrow}{row.qoqChange} QoQ
-                                </span>
-                              )}
+                          <tr key={idx} style={{ backgroundColor: rowBg }}>
+                            <td style={fin.cellMetric}>{row.label}</td>
+                            <td style={fin.cellValue}>{row.value}</td>
+                            <td style={fin.cellDelta}>
+                              {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
+                            </td>
+                            <td style={fin.cellDeltaLast}>
+                              {row.qoqChange ? <PillDelta value={row.qoqChange} /> : <span style={fin.dash}>—</span>}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
-                </>
-              )}
+                </td>
+              </tr>
+            </>
+          )}
 
-              {/* Story — guidance + trends narrative */}
-              {storyParts.length > 0 && (
-                <>
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+          {/* Story — guidance + trends narrative */}
+          {storyParts.length > 0 && (
+            <tr>
+              <td style={{ padding: '20px 15px 0' }}>
+                <div
+                  style={EmailStyles.prose}
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(storyParts.join('\n\n')) }}
+                />
+              </td>
+            </tr>
+          )}
+
+          {/* Watch for — black bar header + numbered list */}
+          {watchFor.length > 0 && (
+            <>
+              {/* Spacer above the black bar (margin doesn't work on td) */}
+              <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
+              <tr>
+                <td style={{
+                  backgroundColor: '#000000',
+                  padding: '11px 15px',
+                }}>
+                  <span style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#FFFFFF',
+                    letterSpacing: '1.2px',
+                    textTransform: 'uppercase' as const,
+                  }}>
+                    What to Watch
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: '6px 15px 8px' }}>
+                  <table width="100%" cellPadding="0" cellSpacing="0">
+                    <tbody>
+                      {watchFor.map((item, idx) => (
+                        <tr key={idx}>
+                          <td style={{
+                            padding: '8px 0',
+                            borderBottom: idx < watchFor.length - 1 ? '1px solid #F0F0F0' : 'none',
+                            fontSize: '14px',
+                            color: EmailColors.text.body,
+                            lineHeight: '1.5',
+                            verticalAlign: 'top' as const,
+                          }}>
+                            <span style={{
+                              fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace',
+                              color: EmailColors.text.muted,
+                              fontWeight: 700,
+                              marginRight: '10px',
+                              fontSize: '12px',
+                            }}>
+                              {String(idx + 1).padStart(2, '0')}
+                            </span>
+                            {item}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
+                </td>
+              </tr>
+            </>
+          )}
 
-                  <div
-                    style={EmailStyles.prose}
-                    dangerouslySetInnerHTML={{ __html: markdownToHtml(storyParts.join('\n\n')) }}
-                  />
-                </>
-              )}
+          {/* Fallback: full summary text when no structured data */}
+          {!hasStructuredData && summaryText && (
+            <tr>
+              <td style={{ padding: '20px 15px 0' }}>
+                <div
+                  style={EmailStyles.prose}
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
+                />
+              </td>
+            </tr>
+          )}
 
-              {/* Watch for */}
-              {watchFor.length > 0 && (
-                <>
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
-                  </table>
-
-                  <div style={EmailStyles.watchForHeader}>Watch for:</div>
-                  {watchFor.map((item, idx) => (
-                    <div key={idx} style={{
-                      padding: '3px 0 3px 16px',
-                      fontSize: '14px',
-                      color: EmailColors.text.body,
-                      lineHeight: '1.5',
-                    }}>
-                      <span style={{ color: EmailColors.text.meta, marginRight: '8px' }}>•</span>
-                      {item}
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {/* Fallback: full summary text when no structured data */}
-              {!hasStructuredData && summaryText && (
-                <>
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
-                  </table>
-
-                  <div
-                    style={EmailStyles.prose}
-                    dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
-                  />
-                </>
-              )}
-
-              {/* No data at all */}
-              {!hasStructuredData && !summaryText && (
+          {/* No data at all */}
+          {!hasStructuredData && !summaryText && (
+            <tr>
+              <td style={{ padding: '0 15px' }}>
                 <p style={{
                   fontSize: '14px',
                   lineHeight: '1.6',
                   color: EmailColors.text.meta,
                   textAlign: 'center',
                   padding: '20px 0',
+                  margin: 0,
                 }}>
                   View the full 10-Q filing for quarterly details.
                 </p>
-              )}
-            </td>
-          </tr>
+              </td>
+            </tr>
+          )}
+
+          {/* Bottom spacer */}
+          <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
         </tbody>
       </table>
 
