@@ -231,6 +231,9 @@ export default {
     // Trial nurture emails
     await callEndpoint('nurture-trials', `${base}/api/cron?action=nurture-trials`, { timeoutMs: 30000 });
 
+    // Enrichment ledger retention prune (90-day cutoff)
+    await callEndpoint('enrichment-ledger-cleanup', `${base}/api/cron/enrichment-ledger-cleanup`, { timeoutMs: 60000 });
+
     // Weekly digest + prompt improvement (Sunday only)
     if (new Date().getUTCDay() === 0) {
       await callEndpoint('weekly-digest', `${base}/api/cron/weekly-digest`, { timeoutMs: 60000 });

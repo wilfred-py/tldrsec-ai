@@ -1,5 +1,24 @@
 import { prisma } from '../db/prisma';
 import { logger } from '../logging';
+import { EVENTS } from '../analytics/events';
+import { getServerPostHog } from '../analytics/posthog-server';
+
+/**
+ * Counter → PostHog bridge.
+ *
+ * Only metrics whose name STARTS WITH one of these prefixes are forwarded to
+ * PostHog as `monitoring_metric` events. Adding a new metric to the
+ * dashboards requires updating this allowlist (intentional friction so we
+ * don't silently export every counter).
+ *
+ * See tasks/x-sentiment-posthog-dashboards.md for the dashboards these power.
+ */
+const POSTHOG_METRIC_PREFIX_ALLOWLIST: readonly string[] = [
+  'ai.x_sentiment_',
+];
+
+/** Stable distinctId for operational metrics — they are not user-attributable. */
+const MONITORING_DISTINCT_ID = 'server';
 
 // Define metrics types
 export interface MetricValue {
@@ -71,9 +90,58 @@ class Monitoring {
       metric.values = metric.values.slice(metric.values.length - this.maxMetricValues);
     }
 
+    // Forward to PostHog when allowlisted (counter→event bridge for dashboards).
+    this.forwardToPostHog(name, value, unit, tags);
+
     // Log for debugging in development
     if (process.env.NODE_ENV !== 'production') {
       this.componentLogger.debug(`Recorded metric: ${name}`, { value, tags });
+    }
+  }
+
+  /**
+   * Forward an allowlisted metric to PostHog as a `monitoring_metric` event.
+   *
+   * Silent no-op when:
+   *   - the metric name doesn't match the allowlist prefix set, OR
+   *   - PostHog is not configured (NEXT_PUBLIC_POSTHOG_KEY missing — local dev).
+   *
+   * Tags are flattened into top-level event properties so PostHog dashboards
+   * can slice on them directly (e.g., `properties.direction`).
+   */
+  private forwardToPostHog(
+    name: string,
+    value: number,
+    unit: string | undefined,
+    tags: Record<string, string> | undefined,
+  ): void {
+    if (!POSTHOG_METRIC_PREFIX_ALLOWLIST.some((prefix) => name.startsWith(prefix))) {
+      return;
+    }
+    const posthog = getServerPostHog();
+    if (!posthog) return;
+    const kind: 'counter' | 'gauge' | 'value' | 'timing' =
+      unit === 'count' ? 'counter'
+        : unit === 'gauge' ? 'gauge'
+        : name.endsWith('.duration_ms') ? 'timing'
+        : 'value';
+    try {
+      posthog.capture({
+        distinctId: MONITORING_DISTINCT_ID,
+        event: EVENTS.MONITORING_METRIC,
+        properties: {
+          metric: name,
+          value,
+          kind,
+          ...(tags ?? {}),
+        },
+      });
+    } catch (err) {
+      // Bridge failures must never break the metric path. Log + continue.
+      this.componentLogger.warn(
+        `PostHog bridge failed for metric ${name}`,
+        err instanceof Error ? { message: err.message } : { err },
+      );
     }
   }
 

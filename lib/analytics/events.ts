@@ -34,6 +34,11 @@ export const EVENTS = {
   // Email lifecycle (Resend webhook → PostHog)
   EMAIL_OPENED: 'email_opened',
   EMAIL_CLICKED: 'email_clicked',
+
+  // Operational telemetry — single carrier event for monitoring metrics that
+  // need PostHog dashboards (see lib/monitoring/index.ts allowlist + bridge).
+  // Filter in PostHog by `event = monitoring_metric` and `properties.metric`.
+  MONITORING_METRIC: 'monitoring_metric',
 } as const;
 
 export type EventName = typeof EVENTS[keyof typeof EVENTS];
@@ -126,6 +131,16 @@ export type EventProps = {
     ticker?: string;
     filing_id?: string;
     link?: string;
+  };
+  [EVENTS.MONITORING_METRIC]: {
+    /** The metric name as emitted by lib/monitoring (e.g., "ai.x_sentiment_added"). */
+    metric: string;
+    /** Numeric value. For counters this is the increment; for gauges/values it's the recorded number. */
+    value: number;
+    /** "counter" | "gauge" | "value" | "timing" — for downstream HogQL filtering. */
+    kind: 'counter' | 'gauge' | 'value' | 'timing';
+    /** Flattened tag key/value pairs (PostHog stores them as top-level props for dashboard slicing). */
+    [tag: string]: string | number | boolean | undefined;
   };
 };
 

@@ -20,13 +20,30 @@ jest.mock('../../lib/monitoring', () => ({
   },
 }));
 
-// Enrichment budget is covered by its own test file; don't couple these tests
-// to the process-wide spend accumulator.
+// Enrichment budget is covered by `lib/ai/__tests__/enrichment-spend.test.ts`;
+// stub the Postgres-backed debit so these tests stay focused on provider
+// orchestration and don't hit the DB.
+jest.mock('../../lib/ai/enrichment-spend', () => ({
+  tryDebitEnrichment: jest.fn(async () => ({
+    ok: true,
+    spendId: 'spend_1',
+    entryId: 'entry_1',
+    newTotalUsd: 0.003,
+  })),
+  recordRetryableFailure: jest.fn(async () => ({
+    refundedUsd: 0.003,
+    circuitState: 'closed',
+    failureCount: 1,
+  })),
+  recordEnrichmentFailureNoRefund: jest.fn(async () => ({
+    circuitState: 'closed',
+    failureCount: 1,
+  })),
+}));
+
 jest.mock('../../lib/ai/enrichment-flags', () => ({
-  tryDebitEnrichmentBudget: jest.fn(() => true),
   isWhyItMattersEnabled: jest.fn(async () => true),
   isProviderEnabled: jest.fn(async () => true),
-  isWithinDailyEnrichmentBudget: jest.fn(() => true),
 }));
 
 import {
@@ -42,11 +59,23 @@ import {
   DEFAULT_PROVIDERS,
   _clearEnrichmentCache,
 } from '../../lib/ai/web-search-context';
+import {
+  tryDebitEnrichment,
+  recordRetryableFailure,
+  recordEnrichmentFailureNoRefund,
+} from '../../lib/ai/enrichment-spend';
+
+const mockTryDebit = tryDebitEnrichment as jest.MockedFunction<typeof tryDebitEnrichment>;
+const mockRetryableFailure = recordRetryableFailure as jest.MockedFunction<typeof recordRetryableFailure>;
+const mockNoRefundFailure = recordEnrichmentFailureNoRefund as jest.MockedFunction<typeof recordEnrichmentFailureNoRefund>;
 
 const originalEnv = { ...process.env };
 
 beforeEach(() => {
   process.env.TLDRSEC_AI_SUMMARIZER = 'test-api-key';
+  mockTryDebit.mockClear();
+  mockRetryableFailure.mockClear();
+  mockNoRefundFailure.mockClear();
 });
 
 afterEach(() => {
@@ -277,6 +306,192 @@ describe('runEnrichment', () => {
     );
 
     expect(results).toEqual([]);
+  });
+});
+
+// ─── Phase 4: Refund + Breaker Wiring ─────────────────────────────────────────
+
+describe('runEnrichment — refund + breaker wiring (Phase 4)', () => {
+  beforeEach(() => {
+    _clearEnrichmentCache();
+  });
+
+  it('refunds debit on 5xx (retryable upstream failure)', async () => {
+    const errorFetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    } as Response);
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of XYZ Corp',
+      '8-K',
+      'Test Corp',
+      'TEST',
+      { _fetchImpl: errorFetch, accessionNumber: 'acc-500' },
+    );
+
+    expect(mockRetryableFailure).toHaveBeenCalledWith('why_it_matters', 'acc-500-counterparty');
+    expect(mockNoRefundFailure).not.toHaveBeenCalled();
+  });
+
+  it('refunds debit on 429 (rate-limit)', async () => {
+    const rateLimitFetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+    } as Response);
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of XYZ Corp',
+      '8-K',
+      'Test Corp',
+      'TEST',
+      { _fetchImpl: rateLimitFetch, accessionNumber: 'acc-429' },
+    );
+
+    expect(mockRetryableFailure).toHaveBeenCalledWith('why_it_matters', 'acc-429-counterparty');
+    expect(mockNoRefundFailure).not.toHaveBeenCalled();
+  });
+
+  it('does NOT refund on 4xx (programmer error → drain budget)', async () => {
+    const authFetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+    } as Response);
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of XYZ Corp',
+      '8-K',
+      'Test Corp',
+      'TEST',
+      { _fetchImpl: authFetch, accessionNumber: 'acc-401' },
+    );
+
+    expect(mockNoRefundFailure).toHaveBeenCalledWith('why_it_matters');
+    expect(mockRetryableFailure).not.toHaveBeenCalled();
+  });
+
+  it('refunds debit on network error (fetch throws)', async () => {
+    const networkFetch = jest.fn().mockRejectedValue(new Error('ECONNRESET'));
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of XYZ Corp',
+      '8-K',
+      'Test Corp',
+      'TEST',
+      { _fetchImpl: networkFetch, accessionNumber: 'acc-net' },
+    );
+
+    expect(mockRetryableFailure).toHaveBeenCalledWith('why_it_matters', 'acc-net-counterparty');
+    expect(mockNoRefundFailure).not.toHaveBeenCalled();
+  });
+
+  it('refunds debit on abort/timeout (DOMException AbortError)', async () => {
+    const abortFetch = jest.fn().mockRejectedValue(
+      new DOMException('aborted', 'AbortError'),
+    );
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of XYZ Corp',
+      '8-K',
+      'Test Corp',
+      'TEST',
+      { _fetchImpl: abortFetch, accessionNumber: 'acc-abort' },
+    );
+
+    expect(mockRetryableFailure).toHaveBeenCalledWith('why_it_matters', 'acc-abort-counterparty');
+    expect(mockNoRefundFailure).not.toHaveBeenCalled();
+  });
+
+  it('does NOT refund on malformed JSON (slow-loss, model-side failure)', async () => {
+    const malformedFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        choices: [{ message: { content: 'not valid json at all' } }],
+      }),
+    } as Response);
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of XYZ Corp',
+      '8-K',
+      'Test Corp',
+      'TEST',
+      { _fetchImpl: malformedFetch, accessionNumber: 'acc-malformed' },
+    );
+
+    expect(mockNoRefundFailure).toHaveBeenCalledWith('why_it_matters');
+    expect(mockRetryableFailure).not.toHaveBeenCalled();
+  });
+
+  it('does NOT refund on empty response content (slow-loss)', async () => {
+    const emptyFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        choices: [{ message: { content: '' } }],
+      }),
+    } as Response);
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of XYZ Corp',
+      '8-K',
+      'Test Corp',
+      'TEST',
+      { _fetchImpl: emptyFetch, accessionNumber: 'acc-empty' },
+    );
+
+    expect(mockNoRefundFailure).toHaveBeenCalledWith('why_it_matters');
+    expect(mockRetryableFailure).not.toHaveBeenCalled();
+  });
+
+  it('does NOT refund when parser returns null (missing required fields)', async () => {
+    const missingFieldFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        choices: [{ message: { content: '{"label": "Only label, no context"}' } }],
+      }),
+    } as Response);
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of XYZ Corp',
+      '8-K',
+      'Test Corp',
+      'TEST',
+      { _fetchImpl: missingFieldFetch, accessionNumber: 'acc-partial' },
+    );
+
+    expect(mockNoRefundFailure).toHaveBeenCalledWith('why_it_matters');
+    expect(mockRetryableFailure).not.toHaveBeenCalled();
+  });
+
+  it('does not call refund or no-refund on success path', async () => {
+    const okFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        choices: [{ message: { content: '{"label": "Target Corp", "context": "A retail company."}' } }],
+      }),
+    } as Response);
+
+    await runEnrichment(
+      [counterpartyProvider],
+      'Item 1.01 acquisition of Target Corp',
+      '8-K',
+      'Acme',
+      'ACME',
+      { _fetchImpl: okFetch, accessionNumber: 'acc-ok' },
+    );
+
+    expect(mockRetryableFailure).not.toHaveBeenCalled();
+    expect(mockNoRefundFailure).not.toHaveBeenCalled();
   });
 });
 

@@ -1,21 +1,14 @@
 /**
- * Enrichment rollout gates: PostHog feature flags + daily spend cap.
+ * Enrichment rollout gates: PostHog feature flags only.
  *
- * Shared defensively-failing helpers that gate whether web-search enrichment
- * should run. All failure modes return `false` (enrichment skipped) so template
- * fallback copy always renders.
+ * The daily-spend cap moved to `lib/ai/enrichment-spend.ts` (Postgres-backed
+ * ledger, multi-isolate-safe, per-envelope independent caps). This module is
+ * now flag-evaluation only.
  */
 
 import { logger } from '../logging';
-import { monitoring } from '../monitoring';
 
 const componentLogger = logger.child('enrichment-flags');
-
-/** Daily spend cap for enrichment, env-overridable (W3.9). */
-const DAILY_ENRICHMENT_CAP_USD = Number(process.env.ENRICHMENT_DAILY_CAP_USD ?? 5);
-
-/** Approximate per-call enrichment spend estimate in USD (Grok 4.1 Fast + web search). */
-const APPROX_COST_PER_ENRICHMENT_CALL_USD = 0.003;
 
 /** Top-level feature flag — gates the entire enrichment path. */
 const TOP_LEVEL_FLAG = 'why_it_matters_enrichment';
@@ -27,9 +20,16 @@ const PROVIDER_FLAGS: Record<string, string> = {
   debt_issuance: 'why_it_matters_debt',
   earnings: 'why_it_matters_earnings',
   capital_return: 'why_it_matters_capital_return',
+  x_sentiment: 'x_sentiment_enrichment',
 };
 
 async function evaluateFlag(flagKey: string, distinctId: string): Promise<boolean> {
+  // Dev/QA bypass: ENRICHMENT_FORCE_ENABLE=1 short-circuits every flag to true so
+  // test scripts can exercise enrichment without provisioning PostHog flags.
+  // NEVER set this in production — it disables the kill-switch.
+  if (process.env.ENRICHMENT_FORCE_ENABLE === '1') {
+    return true;
+  }
   try {
     // Dynamic import prevents posthog-node (Node-only deps like `readline`)
     // from being pulled into any client bundle that transitively imports
@@ -70,82 +70,8 @@ export async function isProviderEnabled(providerName: string, accessionNumber: s
   return evaluateFlag(flagKey, accessionNumber);
 }
 
-// ─── Daily Spend Cap (W3.9) ──────────────────────────────────────────────────
-//
-// Process-local daily spend counter. Resets on process restart and at midnight
-// local time. Pre-revenue guardrail against traffic spikes or classification
-// bugs that would fan out enrichment calls.
-
-interface DailySpendState {
-  date: string; // ISO YYYY-MM-DD
-  usd: number;
-}
-
-let dailySpend: DailySpendState = { date: todayIsoDate(), usd: 0 };
-
-function todayIsoDate(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-function rotateIfNewDay(): void {
-  const today = todayIsoDate();
-  if (dailySpend.date !== today) {
-    dailySpend = { date: today, usd: 0 };
-  }
-}
-
-/**
- * Cheap top-level gate: returns true if the accumulator hasn't already crossed
- * the cap. Does NOT reserve budget — callers must still use
- * `tryDebitEnrichmentBudget` to atomically check-and-debit per call.
- */
-export function isWithinDailyEnrichmentBudget(): boolean {
-  rotateIfNewDay();
-  const within = dailySpend.usd < DAILY_ENRICHMENT_CAP_USD;
-  if (!within) {
-    componentLogger.warn('Daily enrichment spend cap reached', {
-      spent: dailySpend.usd,
-      cap: DAILY_ENRICHMENT_CAP_USD,
-    });
-    monitoring.incrementCounter('ai.enrichment_capped_by_spend', 1);
-  }
-  return within;
-}
-
-/**
- * Atomic check-and-debit. Returns `true` iff the projected spend after this
- * call stays within the cap; in that case the accumulator is incremented
- * before returning. Node's event loop is single-threaded, so the
- * read-then-write inside this function is effectively atomic with respect to
- * concurrent callers — fixing the race the pair of
- * `isWithinDailyEnrichmentBudget()` + `recordEnrichmentCallSpend()` had.
- *
- * Returning `false` also counts a cap-hit for observability.
- */
-export function tryDebitEnrichmentBudget(
-  costUsd: number = APPROX_COST_PER_ENRICHMENT_CALL_USD,
-): boolean {
-  rotateIfNewDay();
-  if (dailySpend.usd + costUsd > DAILY_ENRICHMENT_CAP_USD) {
-    monitoring.incrementCounter('ai.enrichment_capped_by_spend', 1);
-    return false;
-  }
-  dailySpend.usd += costUsd;
-  return true;
-}
-
-/** Exposed for tests — reset in-process spend accumulator. */
-export function _resetDailyEnrichmentSpend(): void {
-  dailySpend = { date: todayIsoDate(), usd: 0 };
-}
-
 /** Exposed for tests. */
 export const _internal = {
-  DAILY_ENRICHMENT_CAP_USD,
-  APPROX_COST_PER_ENRICHMENT_CALL_USD,
   TOP_LEVEL_FLAG,
   PROVIDER_FLAGS,
-  get dailySpend() {
-    return dailySpend;
-  },
 };

@@ -819,6 +819,56 @@ model WeeklyDigestLog {
 }
 
 // =============================================================================
+// ENRICHMENT SPEND LEDGER (pipeline) — see tasks/x-sentiment-budget-architecture.md
+// =============================================================================
+
+model EnrichmentSpend {
+  id        String       @id @default(cuid())
+  envelope  EnvelopeKind
+  dateIso   String // "YYYY-MM-DD" (UTC)
+  totalUsd  Decimal      @default(0) @db.Decimal(10, 4)
+  capUsd    Decimal      @db.Decimal(10, 4)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  entries EnrichmentSpendEntry[]
+
+  @@unique([envelope, dateIso], name: "envelope_date")
+  @@index([dateIso])
+  @@schema("pipeline")
+}
+
+model EnrichmentSpendEntry {
+  id        String          @id @default(cuid())
+  spendId   String
+  spend     EnrichmentSpend @relation(fields: [spendId], references: [id], onDelete: Cascade)
+  requestId String
+  envelope  EnvelopeKind
+  dateIso   String
+  amountUsd Decimal         @db.Decimal(10, 4)
+  status    String // "debited" | "refunded"
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([envelope, dateIso, requestId], name: "envelope_date_request")
+  @@index([spendId, status])
+  @@index([dateIso])
+  @@schema("pipeline")
+}
+
+model EnrichmentCircuitState {
+  envelope          EnvelopeKind @id
+  state             String       @default("closed") // "closed" | "open" | "half_open"
+  openedAt          DateTime?
+  failureCount      Int          @default(0)
+  windowStart       DateTime?
+  halfOpenSuccesses Int          @default(0)
+  updatedAt         DateTime     @updatedAt
+
+  @@schema("pipeline")
+}
+
+// =============================================================================
 // ENUMS
 // =============================================================================
 
@@ -877,6 +927,13 @@ enum ExecutionStatus {
   COMPLETED
   FAILED
   SKIPPED
+
+  @@schema("pipeline")
+}
+
+enum EnvelopeKind {
+  why_it_matters
+  x_sentiment
 
   @@schema("pipeline")
 }

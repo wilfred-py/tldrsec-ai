@@ -16,7 +16,12 @@
 
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
-import { tryDebitEnrichmentBudget } from './enrichment-flags';
+import {
+  tryDebitEnrichment,
+  recordRetryableFailure,
+  recordEnrichmentFailureNoRefund,
+} from './enrichment-spend';
+import type { EnvelopeKind } from '@prisma/client';
 
 const componentLogger = logger.child('web-search-context');
 
@@ -38,6 +43,9 @@ const MAX_TOTAL_ENRICHMENT_CHARS = 2000;
 
 /** In-memory enrichment cache TTL (W3.6) — prevents retry-driven double-spend */
 const ENRICHMENT_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/** Per-provider OpenRouter web-search call cost — drives the why_it_matters debit. */
+const APPROX_COST_PER_ENRICHMENT_CALL_USD = 0.003;
 
 // ─── Provider Interface ───────────────────────────────────────────────────────
 
@@ -327,6 +335,12 @@ export async function runEnrichment(
     perProviderTimeoutMs?: number;
     _fetchImpl?: typeof fetch;
     cacheKey?: string;
+    /**
+     * Filing accession — required to mint a stable per-(provider, filing) requestId
+     * so retries hit the idempotent ledger entry instead of double-debiting. Falls
+     * back to `cacheKey` then `'noacc'` for legacy callers.
+     */
+    accessionNumber?: string;
   } = {},
 ): Promise<string[]> {
   const totalTimeout = options.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS;
@@ -358,6 +372,7 @@ export async function runEnrichment(
   const startTime = Date.now();
   const globalAbort = new AbortController();
   const globalTimeoutId = setTimeout(() => globalAbort.abort(), totalTimeout);
+  const requestIdSeed = options.accessionNumber ?? options.cacheKey ?? 'noacc';
 
   try {
     const settled = await Promise.allSettled(
@@ -372,6 +387,7 @@ export async function runEnrichment(
         totalTimeout,
         fetchImpl,
         globalSignal: globalAbort.signal,
+        requestIdSeed,
       })),
     );
 
@@ -418,6 +434,7 @@ interface ProviderRunArgs {
   totalTimeout: number;
   fetchImpl: typeof fetch;
   globalSignal: AbortSignal;
+  requestIdSeed: string;
 }
 
 async function runSingleProvider(
@@ -435,12 +452,20 @@ async function runSingleProvider(
 
   const effectiveTimeout = Math.min(args.perProviderTimeout, remainingGlobal);
 
-  // Atomic check-and-debit of the daily enrichment budget. Moves spend
-  // accounting from "per filing, flat rate, post-hoc" to "per provider call,
-  // pre-flight" — so a filing that fans out to 5 providers actually counts
-  // 5x against the cap, and concurrent summarizations can't race past it.
-  if (!tryDebitEnrichmentBudget()) {
-    componentLogger.info(`Daily enrichment spend cap reached, skipping ${provider.name}`);
+  // Atomic check-and-debit against the Postgres-backed why_it_matters envelope.
+  // RequestId is stable per-(filing, provider) so retries hit the idempotent
+  // ledger entry. A filing that fans out to N providers counts N times against
+  // the cap, and concurrent isolates can't race past it.
+  const requestId = `${args.requestIdSeed}-${provider.name}`;
+  const debit = await tryDebitEnrichment(
+    'why_it_matters' as EnvelopeKind,
+    APPROX_COST_PER_ENRICHMENT_CALL_USD,
+    requestId,
+  );
+  if (!debit.ok) {
+    componentLogger.info(`Enrichment debit rejected, skipping ${provider.name}`, {
+      reason: debit.reason,
+    });
     return null;
   }
 
@@ -484,6 +509,17 @@ async function runSingleProvider(
         statusText: response.statusText,
       });
       monitoring.incrementCounter(`ai.${provider.name}_context_error`, 1);
+      // 5xx and 429 → upstream transient; refund + breaker increment so retries
+      // don't double-charge. 4xx (auth, validation) → programmer error; drain
+      // budget as a forcing function.
+      if (response.status >= 500 || response.status === 429) {
+        const refund = await recordRetryableFailure('why_it_matters' as EnvelopeKind, requestId);
+        if (refund.refundedUsd > 0) {
+          monitoring.incrementCounter(`ai.${provider.name}_refunded`, 1);
+        }
+      } else {
+        await recordEnrichmentFailureNoRefund('why_it_matters' as EnvelopeKind);
+      }
       return null;
     }
 
@@ -492,6 +528,8 @@ async function runSingleProvider(
 
     if (!responseContent || typeof responseContent !== 'string') {
       componentLogger.warn(`${provider.name} search returned empty content`);
+      // Slow-loss: cost was spent on an empty response. No refund.
+      await recordEnrichmentFailureNoRefund('why_it_matters' as EnvelopeKind);
       return null;
     }
 
@@ -506,11 +544,16 @@ async function runSingleProvider(
         error: parseErr instanceof Error ? parseErr.message : String(parseErr),
       });
       monitoring.incrementCounter(`ai.${provider.name}_context_error`, 1);
+      // Slow-loss: model-side malformation. No refund.
+      await recordEnrichmentFailureNoRefund('why_it_matters' as EnvelopeKind);
       return null;
     }
 
     if (!result) {
       componentLogger.info(`No ${provider.name} context available`, { ticker: args.ticker });
+      // Parser returned null (missing required fields). Cost spent, output
+      // unusable → slow-loss, no refund.
+      await recordEnrichmentFailureNoRefund('why_it_matters' as EnvelopeKind);
       return null;
     }
 
@@ -527,6 +570,12 @@ async function runSingleProvider(
         error: error instanceof Error ? error.message : String(error),
       });
       monitoring.incrementCounter(`ai.${provider.name}_context_error`, 1);
+    }
+    // Network/abort errors are retryable — upstream may succeed on next attempt.
+    // Refund the debit and increment the breaker.
+    const refund = await recordRetryableFailure('why_it_matters' as EnvelopeKind, requestId);
+    if (refund.refundedUsd > 0) {
+      monitoring.incrementCounter(`ai.${provider.name}_refunded`, 1);
     }
     return null;
   } finally {
@@ -560,6 +609,7 @@ export async function getEnrichmentContext(
     perProviderTimeoutMs?: number;
     _fetchImpl?: typeof fetch;
     cacheKey?: string;
+    accessionNumber?: string;
   },
 ): Promise<string[]> {
   return runEnrichment(DEFAULT_PROVIDERS, content, formType, companyName, ticker, options);
