@@ -14,7 +14,7 @@ import { FORM_SCHEMAS } from '@/lib/ai/prompts/unified-prompts';
 describe('Simple JSON Parser', () => {
   describe('parseJSONResponse', () => {
     it('should parse clean JSON on first attempt', () => {
-      const response = '{"company":"Tesla","summary":"Q4 revenue grew 20%.","fiscalQuarter":"Q4 2024","keyHighlights":["Revenue up 20%"]}';
+      const response = '{"company":"Tesla","summary":"Q4 revenue grew 20%.","fiscalQuarter":"Q4 2024","financialHighlights":[{"label":"Revenue","value":"$25.2B"}]}';
 
       const result = parseJSONResponse(response, '10-Q');
 
@@ -23,14 +23,14 @@ describe('Simple JSON Parser', () => {
         company: 'Tesla',
         summary: 'Q4 revenue grew 20%.',
         fiscalQuarter: 'Q4 2024',
-        keyHighlights: ['Revenue up 20%']
+        financialHighlights: [{ label: 'Revenue', value: '$25.2B' }]
       });
       expect(result.method).toBe('direct');
       expect(result.attempts).toBe(1);
     });
 
     it('should extract JSON from markdown code block if present', () => {
-      const response = '```json\n{"company":"Apple","summary":"Strong quarter.","fiscalYear":"2024","keyHighlights":["Growth"]}\n```';
+      const response = '```json\n{"company":"Apple","summary":"Strong quarter.","fiscalYear":"2024","financialHighlights":[{"label":"Revenue","value":"$120B"}]}\n```';
 
       const result = parseJSONResponse(response, '10-K');
 
@@ -40,7 +40,7 @@ describe('Simple JSON Parser', () => {
     });
 
     it('should handle code block without json language specifier', () => {
-      const response = '```\n{"company":"Microsoft","summary":"Cloud growth accelerated.","fiscalYear":"2024","keyHighlights":["Azure revenue up 30%"]}\n```';
+      const response = '```\n{"company":"Microsoft","summary":"Cloud growth accelerated.","fiscalYear":"2024","financialHighlights":[{"label":"Azure Revenue","value":"+30%"}]}\n```';
 
       const result = parseJSONResponse(response, '10-K');
 
@@ -72,7 +72,7 @@ describe('Simple JSON Parser', () => {
 
     it('should validate against schema and report missing fields', () => {
       // Missing required 'summary' field
-      const response = '{"company":"Tesla","fiscalYear":"2024","keyHighlights":["Revenue up"]}';
+      const response = '{"company":"Tesla","fiscalYear":"2024","financialHighlights":[{"label":"Revenue","value":"$1B"}]}';
 
       const result = parseJSONResponse(response, '10-K');
 
@@ -81,14 +81,14 @@ describe('Simple JSON Parser', () => {
     });
 
     it('should validate required fields for 10-Q form', () => {
-      // Missing required 'fiscalQuarter' and 'keyHighlights' for 10-Q
+      // Missing required 'fiscalQuarter' and 'financialHighlights' for 10-Q
       const response = '{"company":"Tesla","summary":"Strong quarter."}';
 
       const result = parseJSONResponse(response, '10-Q');
 
       expect(result.success).toBe(false);
       expect(result.validationErrors).toEqual(
-        expect.arrayContaining(['fiscalQuarter', 'keyHighlights'])
+        expect.arrayContaining(['fiscalQuarter', 'financialHighlights'])
       );
     });
 
@@ -120,7 +120,8 @@ describe('Simple JSON Parser', () => {
         summary: 'Strong Q4 with record deliveries.',
         eventType: 'Earnings Results',
         keyHighlights: ['Record 1.8M vehicle deliveries', 'Revenue of $25.2B'],
-        sentiment: 'positive'
+        sentiment: 'positive',
+        itemNumbers: ['2.02']
       });
 
       const result = parseJSONResponse(response, '8-K');
@@ -148,7 +149,7 @@ describe('Simple JSON Parser', () => {
     });
 
     it('should handle null/undefined in required fields', () => {
-      const response = '{"company":"Tesla","summary":null,"fiscalYear":"2024","keyHighlights":[]}';
+      const response = '{"company":"Tesla","summary":null,"fiscalYear":"2024","financialHighlights":[]}';
 
       const result = parseJSONResponse(response, '10-K');
 
@@ -157,7 +158,7 @@ describe('Simple JSON Parser', () => {
     });
 
     it('should handle empty string in required fields', () => {
-      const response = '{"company":"","summary":"Good quarter.","fiscalYear":"2024","keyHighlights":["Revenue"]}';
+      const response = '{"company":"","summary":"Good quarter.","fiscalYear":"2024","financialHighlights":[{"label":"Revenue","value":"$1B"}]}';
 
       const result = parseJSONResponse(response, '10-K');
 
@@ -166,12 +167,12 @@ describe('Simple JSON Parser', () => {
     });
 
     it('should handle empty arrays in required array fields', () => {
-      const response = '{"company":"Tesla","summary":"Good quarter.","fiscalYear":"2024","keyHighlights":[]}';
+      const response = '{"company":"Tesla","summary":"Good quarter.","fiscalYear":"2024","financialHighlights":[]}';
 
       const result = parseJSONResponse(response, '10-K');
 
       expect(result.success).toBe(false);
-      expect(result.validationErrors).toContain('keyHighlights');
+      expect(result.validationErrors).toContain('financialHighlights');
     });
 
     it('should fall back to Generic schema for unknown form types', () => {
@@ -204,7 +205,7 @@ describe('Simple JSON Parser', () => {
 
   describe('Edge cases', () => {
     it('should handle JSON with extra whitespace', () => {
-      const response = '  \n  {"company":"Tesla","summary":"Test.","fiscalYear":"2024","keyHighlights":["Point 1"]}  \n  ';
+      const response = '  \n  {"company":"Tesla","summary":"Test.","fiscalYear":"2024","financialHighlights":[{"label":"Revenue","value":"$1B"}]}  \n  ';
 
       const result = parseJSONResponse(response, '10-K');
 
@@ -213,7 +214,7 @@ describe('Simple JSON Parser', () => {
     });
 
     it('should handle JSON with Unicode characters', () => {
-      const response = '{"company":"日本企業","summary":"こんにちは。","fiscalYear":"2024","keyHighlights":["ポイント"]}';
+      const response = '{"company":"日本企業","summary":"こんにちは。","fiscalYear":"2024","financialHighlights":[{"label":"売上","value":"¥100B"}]}';
 
       const result = parseJSONResponse(response, '10-K');
 
@@ -238,7 +239,7 @@ describe('Simple JSON Parser', () => {
     });
 
     it('should handle JSON with special characters in strings', () => {
-      const response = '{"company":"Tesla \\"Motors\\"","summary":"Revenue: $1B. Growth: 20%.","fiscalYear":"2024","keyHighlights":["Revenue"]}';
+      const response = '{"company":"Tesla \\"Motors\\"","summary":"Revenue: $1B. Growth: 20%.","fiscalYear":"2024","financialHighlights":[{"label":"Revenue","value":"$1B"}]}';
 
       const result = parseJSONResponse(response, '10-K');
 
@@ -247,18 +248,18 @@ describe('Simple JSON Parser', () => {
     });
 
     it('should handle very large JSON responses', () => {
-      const largeHighlights = Array(100).fill('This is a key highlight point with some details.');
+      const largeHighlights = Array(100).fill({ label: 'Revenue', value: '$1B' });
       const response = JSON.stringify({
         company: 'Tesla',
         summary: 'Annual report summary.',
         fiscalYear: '2024',
-        keyHighlights: largeHighlights
+        financialHighlights: largeHighlights
       });
 
       const result = parseJSONResponse(response, '10-K');
 
       expect(result.success).toBe(true);
-      expect(result.data?.keyHighlights).toHaveLength(100);
+      expect(result.data?.financialHighlights).toHaveLength(100);
     });
 
     it('should handle AI response with explanation before JSON', () => {
@@ -282,7 +283,7 @@ describe('Simple JSON Parser', () => {
 
   describe('Performance', () => {
     it('should parse in under 5ms on average', () => {
-      const response = '{"company":"Tesla","summary":"Strong performance.","fiscalYear":"2024","keyHighlights":["Revenue up"]}';
+      const response = '{"company":"Tesla","summary":"Strong performance.","fiscalYear":"2024","financialHighlights":[{"label":"Revenue","value":"$1B"}]}';
 
       const start = performance.now();
       for (let i = 0; i < 100; i++) {
@@ -295,7 +296,7 @@ describe('Simple JSON Parser', () => {
 
     it('should handle large responses efficiently', () => {
       const largeContent = 'x'.repeat(100000);
-      const response = `{"company":"Tesla","summary":"${largeContent}","fiscalYear":"2024","keyHighlights":["Revenue"]}`;
+      const response = `{"company":"Tesla","summary":"${largeContent}","fiscalYear":"2024","financialHighlights":[{"label":"Revenue","value":"$1B"}]}`;
 
       const start = performance.now();
       const result = parseJSONResponse(response, '10-K');
