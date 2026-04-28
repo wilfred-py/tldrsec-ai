@@ -53,7 +53,7 @@ const schema10K = z.object({
   sections: z.array(sectionSchema).optional(),
   summary: z.string().optional(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional(),
+  emailSubject: z.string().max(80).optional(),
   whyItMatters: whyItMattersSchema
 });
 
@@ -72,7 +72,7 @@ const schema10Q = z.object({
   sections: z.array(sectionSchema).optional(),
   summary: z.string().optional(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional(),
+  emailSubject: z.string().max(80).optional(),
   whyItMatters: whyItMattersSchema
 });
 
@@ -90,7 +90,7 @@ const schema8K = z.object({
   structuralChanges: z.string().or(z.array(z.string())).optional(),
   additionalNotes: z.string().optional(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional(),
+  emailSubject: z.string().max(80).optional(),
   whyItMatters: whyItMattersSchema
 });
 
@@ -120,7 +120,7 @@ const schemaForm4 = z.object({
   newStake: z.string().optional(),
   summary: z.string(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(80).optional()
 });
 
 /**
@@ -154,7 +154,7 @@ const schemaForm3 = z.object({
   totalShares: z.string().optional(),
   summary: z.string().optional(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(80).optional()
 });
 
 /**
@@ -178,7 +178,7 @@ const schemaS1 = z.object({
   ).optional(),
   summary: z.string(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional(),
+  emailSubject: z.string().max(80).optional(),
   whyItMatters: whyItMattersSchema
 });
 
@@ -211,7 +211,7 @@ const schemaDEF14A = z.object({
   ).optional(),
   summary: z.string(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional(),
+  emailSubject: z.string().max(80).optional(),
   whyItMatters: whyItMattersSchema
 });
 
@@ -226,7 +226,7 @@ const schemaGeneric = z.object({
   keyPoints: z.array(z.string()),
   summary: z.string(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional(),
+  emailSubject: z.string().max(80).optional(),
   whyItMatters: whyItMattersSchema
 });
 
@@ -255,7 +255,7 @@ const schemaForm144 = z.object({
   percentOfHoldings: z.string().or(z.number()).optional(),
   broker: z.string().optional(),
   headline: z.string().max(120).optional(),
-  emailSubject: z.string().max(100).optional()
+  emailSubject: z.string().max(80).optional()
 });
 
 const schemaMap: Record<SECFilingType | string, z.ZodTypeAny> = {

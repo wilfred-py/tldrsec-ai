@@ -129,7 +129,8 @@ describe('Headline and emailSubject normalization', () => {
     expect(result.data?.headline).toBe('Apple posts record iPhone revenue beating analyst estimates');
   });
 
-  it('truncates emailSubject to 100 chars', () => {
+  it('truncates oversized emailSubject to <=78 chars without word boundary', () => {
+    // Single long token (no spaces) — falls back to slice + ellipsis
     const longSubject = 'B'.repeat(130);
     const json = JSON.stringify({
       company: 'Apple Inc.',
@@ -137,7 +138,29 @@ describe('Headline and emailSubject normalization', () => {
       emailSubject: longSubject,
     });
     const result = parseResponse<Record<string, unknown>>(json, 'Generic', { allowPartial: true });
-    expect((result.data?.emailSubject as string).length).toBe(100);
+    const subject = result.data?.emailSubject as string;
+    expect(subject.length).toBeLessThanOrEqual(78);
+    expect(subject.endsWith('…')).toBe(true);
+  });
+
+  it('folds an overlong emailSubject at the last word boundary with a single-char ellipsis', () => {
+    // Real-world regression: CMG 8-K subject overran Gmail's reading-pane width
+    // and got truncated mid-phrase, displaying "...June 1, 2026, and..." in Gmail.
+    // The fold should produce a clean word-boundary cut with our own "…", not
+    // a mid-word slice that Gmail then ellipsizes again.
+    const longSubject = 'CMG: Chipotle hired Fernando Machado as Chief Brand Officer effective June 1, 2026, and appointed Arlie Sisson as CSO';
+    const json = JSON.stringify({
+      company: 'Chipotle Mexican Grill, Inc.',
+      summary: 'Chipotle announced two senior appointments.',
+      emailSubject: longSubject,
+    });
+    const result = parseResponse<Record<string, unknown>>(json, 'Generic', { allowPartial: true });
+    const subject = result.data?.emailSubject as string;
+    expect(subject.length).toBeLessThanOrEqual(78);
+    expect(subject.endsWith('…')).toBe(true);
+    // Must end on a word, not in the middle of one, and no dangling punctuation before "…"
+    expect(subject).not.toMatch(/[,;:.\-–—]…$/);
+    expect(subject).toMatch(/\w…$/);
   });
 
   it('quality gate deletes emailSubject shorter than 15 chars', () => {

@@ -130,9 +130,21 @@ function normalizeFields(data: unknown, filingType: SECFilingType): unknown {
     }
   }
 
-  // Normalize emailSubject field (all form types)
+  // Normalize emailSubject field (all form types).
+  // Why 78: Gmail's reading-pane header visually truncates subjects past ~80 chars
+  // and renders its own ellipsis, producing ugly mid-word cuts like
+  // "CMG: ... June 1, 2026, and...". Cap to 78 with a word-boundary fold so the
+  // ellipsis (if any) is ours, lands on a real word, and the full subject fits.
   if (normalized.emailSubject && typeof normalized.emailSubject === 'string') {
-    normalized.emailSubject = normalized.emailSubject.trim().substring(0, 100);
+    let subject = normalized.emailSubject.trim();
+    const MAX_SUBJECT_CHARS = 78;
+    if (subject.length > MAX_SUBJECT_CHARS) {
+      const sliced = subject.slice(0, MAX_SUBJECT_CHARS - 1); // reserve 1 char for "…"
+      const lastSpace = sliced.lastIndexOf(' ');
+      const cut = lastSpace > 30 ? sliced.slice(0, lastSpace) : sliced;
+      subject = `${cut.replace(/[,;:.\-–—]+$/, '')}…`;
+    }
+    normalized.emailSubject = subject;
     if (normalized.emailSubject.length < 15) {
       delete normalized.emailSubject;
     }

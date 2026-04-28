@@ -98,8 +98,8 @@ const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
   },
   emailSubject: {
     type: 'string',
-    description: 'Email subject line (40-70 chars). Format: "[TICKER] [FormType]: [key insight]". Must include the ticker symbol. Example: "NVDA 10-K: Revenue surged 23% to $94.8B"',
-    maxLength: 100
+    description: 'Email subject line. HARD MAX 78 chars (Gmail truncates past ~80 in the reading-pane header). Target 40-70 chars. Format: "[TICKER] [FormType]: [key insight]". Must include the ticker symbol. Example: "NVDA 10-K: Revenue surged 23% to $94.8B". Do not stuff multiple facts — pick the single most material one.',
+    maxLength: 78
   }
 };
 

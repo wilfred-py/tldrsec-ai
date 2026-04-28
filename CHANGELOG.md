@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.1] - 2026-04-29
+
+### Fixed
+- **Email subject lines truncating mid-word in Gmail's reading pane** (`lib/ai/parsers/response-parser.ts:133-149`): Gmail visually truncates subjects past ~80 chars and renders its own ellipsis, producing ugly mid-word cuts like "CMG: Chipotle hired Fernando Machado as Chief Brand Officer effective June 1, 2026, and..." (real CMG 8-K regression). Replaced the previous hard `substring(0, 100)` slice in `normalizeFields()` with a 78-char word-boundary fold: slice to 77, find the last space (rejecting cuts before column 30), strip dangling punctuation (`,;:.\-–—`), append a single `…`. The ellipsis is now ours, lands on a real word, and the full subject fits Gmail's reading-pane width.
+
+### Changed
+- **Defense-in-depth on the 78-char ceiling** across the AI pipeline so a regression in one layer doesn't silently re-introduce the bug:
+  - `lib/ai/prompts/unified-prompts.ts` `BASE_SCHEMA_PROPERTIES.emailSubject` — `maxLength` 100 → 78, description rewritten to spell out the Gmail constraint and forbid multi-fact stuffing.
+  - `lib/ai/parsers/schema-validators.ts` — all 9 Zod schemas (`10K`, `10Q`, `8K`, `Form4`, `Form3`, `S1`, `DEF14A`, `Form144`, `Generic`) tightened from `z.string().max(100)` → `max(80)` on `emailSubject`. Note: this Zod path is currently aspirational — the runtime parser uses `simple-parser.ts`'s local validator which only checks required field presence — but the cap is now correct if/when Zod validation is wired into the hot path.
+
+### Added
+- `__tests__/ai/parsers/response-parser-normalization.test.ts` — 2 new regression tests: (1) hard truncation of a 130-char single-token subject to ≤78 chars ending in `…`, (2) the exact CMG 8-K subject is folded at the last word boundary, ends in `\w…` (no dangling punctuation), and stays ≤78 chars.
+
+### Repaired (pre-existing, surfaced by /ship test gate)
+- **`__tests__/ai/parsers/simple-parser.test.ts`** — repaired 11 test cases that were referencing the pre-refactor field name `keyHighlights` for 10-K/10-Q schemas (renamed to `financialHighlights` and converted from string array to `{label, value}` object array in an earlier release). Also added the now-required `itemNumbers` field to the 8-K validation success case. Failures were pre-existing on `origin/main` and unrelated to the email-subject fix; chose to repair in-branch rather than ship a separate cleanup PR.
+
 ## [0.0.25.0] - 2026-04-27
 
 ### Added
