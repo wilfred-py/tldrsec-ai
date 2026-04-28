@@ -200,11 +200,17 @@ describe('getXSentiment', () => {
       expect(promptArg).toContain('Apple Inc');
     });
 
-    it('uses x_search tool only', async () => {
+    it('uses x_search tool with image + video understanding enabled', async () => {
       mockCallXai.mockResolvedValue(buildXaiResponse());
       await getXSentiment({ ticker: 'AAPL', formType: '8-K', companyName: 'Apple Inc' });
       const tools = mockCallXai.mock.calls[0][0].tools;
-      expect(tools).toEqual([{ type: 'x_search' }]);
+      expect(tools).toEqual([
+        {
+          type: 'x_search',
+          enable_image_understanding: true,
+          enable_video_understanding: true,
+        },
+      ]);
     });
 
     it('clamps windowHours to [1, 168]', async () => {

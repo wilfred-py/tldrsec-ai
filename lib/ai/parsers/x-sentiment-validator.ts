@@ -106,11 +106,25 @@ function containsPriceTarget(text: string): boolean {
   return PRICE_TARGET_PATTERNS.some((p) => p.test(text));
 }
 
+// Citations must point at the X post itself, not at media CDN assets. With
+// `enable_image_understanding` on, xai-direct-client.extractCitationUrls picks
+// up `pbs.twimg.com/media/*` image URLs from the response payload — letting
+// those through pollutes summaryJSON.citationUrls and breaks any future
+// tweet-embed UI that assumes x.com/{handle}/status/{id} shape.
+const TRUSTED_CITATION_HOSTS: ReadonlySet<string> = new Set([
+  'x.com',
+  'www.x.com',
+  'twitter.com',
+  'www.twitter.com',
+  'mobile.twitter.com',
+]);
+
 function isValidUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
     const u = new URL(value);
-    return u.protocol === 'http:' || u.protocol === 'https:';
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    return TRUSTED_CITATION_HOSTS.has(u.hostname.toLowerCase());
   } catch {
     return false;
   }

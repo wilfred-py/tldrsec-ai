@@ -117,6 +117,8 @@ Use the x_search tool to gather posts from the last ${windowHours} hours that me
   - Have meaningful engagement (likes, reposts, replies)
   - Come from accounts with non-trivial follower counts or verified status
 
+When posts contain images or videos (chart screenshots, product demos, earnings-call clips), incorporate what they depict into the synthesis — but cite the post URL, not the media itself.
+
 Then synthesize a sentiment assessment. Distinguish between:
   - Verifiable facts (numeric, dated, sourced) → factClaims
   - Opinion / interpretation / speculation       → opinionClaims
@@ -229,7 +231,17 @@ export async function getXSentiment(input: XSentimentInput): Promise<XSentimentR
   try {
     response = await callXaiResponses({
       input: prompt,
-      tools: [{ type: 'x_search' }],
+      // Image + video understanding lets x_search incorporate visual posts
+      // (chart screenshots, product demos, earnings-call clips) into the
+      // sentiment synthesis. Increases token usage — actual cost is reconciled
+      // against the budget envelope via response.usage.costUsd.
+      tools: [
+        {
+          type: 'x_search',
+          enable_image_understanding: true,
+          enable_video_understanding: true,
+        },
+      ],
       timeoutMs,
     });
   } catch (err) {

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.2] - 2026-04-29
+
+### Changed
+- **X sentiment pipeline now ingests images and videos** — the `x_search` tool is invoked with `enable_image_understanding: true` and `enable_video_understanding: true` so chart screenshots, product demos, and earnings-call clips factor into the sentiment synthesis. Prompt updated to instruct the model to incorporate visual context but cite the post URL, not the media asset. End-to-end smoke test on TSLA over a 7-day window: $0.0614 / call, 38s latency, 12 citations, bullish/shifting_bullish/high — visual posts surfaced cleanly without polluting citations.
+- `lib/ai/xai-direct-client.ts` — `XaiTool` union expanded to expose `enable_image_understanding` (x_search + web_search) and `enable_video_understanding` (x_search) flags so callers can opt in type-safely.
+
+### Fixed
+- **Citation URL pollution from image-CDN hosts** — with image understanding enabled, `extractCitationUrls` was picking up `pbs.twimg.com/media/*` and `video.twimg.com/*` asset URLs from the response payload and persisting them onto `summaryJSON.citationUrls`, which would have broken any downstream tweet-embed UI assuming `x.com/{handle}/status/{id}` shape. Validator's `isValidUrl` now allowlists trusted citation hosts (`x.com`, `www.x.com`, `twitter.com`, `www.twitter.com`, `mobile.twitter.com`) and drops everything else into the `urlsStripped` counter for observability.
+
 ## [0.0.25.1] - 2026-04-29
 
 ### Fixed
