@@ -92,9 +92,9 @@ function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || (status >= 500 && status < 600);
 }
 
-function extractCitationUrls(parsed: any): string[] {
+function extractCitationUrls(parsed: unknown): string[] {
   const urls = new Set<string>();
-  function walk(node: any): void {
+  function walk(node: unknown): void {
     if (!node) return;
     if (typeof node === 'string') {
       const matches = node.match(/https?:\/\/[^\s"'<>)\]]+/g);
@@ -106,37 +106,54 @@ function extractCitationUrls(parsed: any): string[] {
       return;
     }
     if (typeof node === 'object') {
-      if (typeof node.url === 'string') urls.add(node.url);
-      Object.values(node).forEach(walk);
+      const obj = node as Record<string, unknown>;
+      if (typeof obj.url === 'string') urls.add(obj.url);
+      Object.values(obj).forEach(walk);
     }
   }
   walk(parsed);
   return Array.from(urls);
 }
 
-function extractMessageText(parsed: any): string {
-  if (!Array.isArray(parsed?.output)) return '';
-  const message = parsed.output.find((o: any) => o?.type === 'message');
-  if (!message?.content) return '';
-  return message.content
-    .filter((c: any) => c?.type === 'output_text' && typeof c.text === 'string')
-    .map((c: any) => c.text)
+function extractMessageText(parsed: unknown): string {
+  const output = (parsed as { output?: unknown })?.output;
+  if (!Array.isArray(output)) return '';
+  const message = output.find(
+    (o: unknown) => (o as { type?: unknown })?.type === 'message',
+  ) as { content?: unknown } | undefined;
+  if (!Array.isArray(message?.content)) return '';
+  return (message!.content as unknown[])
+    .filter((c: unknown) => {
+      const item = c as { type?: unknown; text?: unknown };
+      return item?.type === 'output_text' && typeof item.text === 'string';
+    })
+    .map((c: unknown) => (c as { text: string }).text)
     .join('\n');
 }
 
-function extractToolCalls(parsed: any): XaiToolCall[] {
-  if (!Array.isArray(parsed?.output)) return [];
-  return parsed.output
-    .filter((o: any) => o?.type === 'custom_tool_call')
-    .map((o: any) => ({
-      name: String(o.name ?? 'unknown'),
-      status: String(o.status ?? 'unknown'),
-      arguments: typeof o.arguments === 'string' ? o.arguments : JSON.stringify(o.arguments ?? {}),
-    }));
+function extractToolCalls(parsed: unknown): XaiToolCall[] {
+  const output = (parsed as { output?: unknown })?.output;
+  if (!Array.isArray(output)) return [];
+  return output
+    .filter((o: unknown) => (o as { type?: unknown })?.type === 'custom_tool_call')
+    .map((o: unknown) => {
+      const call = o as { name?: unknown; status?: unknown; arguments?: unknown };
+      return {
+        name: String(call.name ?? 'unknown'),
+        status: String(call.status ?? 'unknown'),
+        arguments:
+          typeof call.arguments === 'string'
+            ? call.arguments
+            : JSON.stringify(call.arguments ?? {}),
+      };
+    });
 }
 
-function extractUsage(parsed: any): XaiUsage {
-  const u = parsed?.usage ?? {};
+function extractUsage(parsed: unknown): XaiUsage {
+  const u = ((parsed as { usage?: Record<string, unknown> })?.usage ?? {}) as Record<string, unknown> & {
+    output_tokens_details?: { reasoning_tokens?: unknown };
+    input_tokens_details?: { cached_tokens?: unknown };
+  };
   const inputTokens = Number(u.input_tokens ?? 0);
   const outputTokens = Number(u.output_tokens ?? 0);
   const reasoningTokens = Number(u.output_tokens_details?.reasoning_tokens ?? 0);
@@ -228,18 +245,19 @@ export async function callXaiResponses(req: XaiResponseRequest): Promise<XaiResp
     throw new XaiDirectError(`xAI HTTP ${res.status}: ${text.slice(0, 200)}`, res.status, code, retryable);
   }
 
-  let parsed: any;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch (err) {
+  } catch {
     throw new XaiDirectError(`xAI returned non-JSON body: ${text.slice(0, 200)}`, res.status, 'invalid_json', false);
   }
 
-  if (parsed?.error) {
+  const errorPayload = (parsed as { error?: { message?: unknown; code?: unknown } } | null)?.error;
+  if (errorPayload) {
     throw new XaiDirectError(
-      `xAI returned error: ${parsed.error.message ?? JSON.stringify(parsed.error)}`,
+      `xAI returned error: ${errorPayload.message ?? JSON.stringify(errorPayload)}`,
       res.status,
-      String(parsed.error.code ?? 'api_error'),
+      String(errorPayload.code ?? 'api_error'),
       false,
     );
   }

@@ -4,11 +4,32 @@
  * Provides optimistic locking, race condition handling, and concurrent operation utilities
  */
 
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import type { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { getPrismaClient } from './prisma';
 import { logger } from '../logging';
-import { RetryOptions } from './retry-wrapper';
+import type { RetryOptions } from './retry-wrapper';
 import type { PrismaClient } from '@prisma/client';
+
+/**
+ * Duck-type check for `PrismaClientKnownRequestError`.
+ *
+ * We deliberately avoid `instanceof PrismaClientKnownRequestError` because that
+ * would require a *value* import from `@prisma/client/runtime/library`, and
+ * webpack pulls Node's `module` builtin from that subpath when bundling for
+ * the client. (The browser bundle has no `module`, so the build fails with
+ * `Module not found: Can't resolve 'module'` whenever a client component
+ * transitively imports this file.) The type-only import above lets us keep
+ * the precise type for narrowing while the runtime check stays pure JS.
+ *
+ * Prisma's known errors expose `.code` (string), `.meta`, and a `.name` of
+ * `'PrismaClientKnownRequestError'`. Checking `name` keeps us robust if a
+ * subclass appears, since name is set on the prototype chain.
+ */
+function isPrismaKnownRequestError(error: unknown): error is PrismaClientKnownRequestError {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { name?: unknown; code?: unknown };
+  return e.name === 'PrismaClientKnownRequestError' && typeof e.code === 'string';
+}
 
 // Lazy accessor to avoid build-time initialization
 const getPrisma = () => getPrismaClient();
@@ -70,8 +91,8 @@ export function isConcurrencyError(error: unknown): boolean {
     }
   }
   
-  if (error instanceof PrismaClientKnownRequestError || 
-      (error && typeof error === 'object' && 'code' in error && 
+  if (isPrismaKnownRequestError(error) ||
+      (error && typeof error === 'object' && 'code' in error &&
        typeof (error as { code: unknown }).code === 'string')) {
     // P2002: Unique constraint failed
     // P2034: Transaction failed due to write conflict
@@ -107,7 +128,7 @@ export function calculateIntelligentBackoff(
   // Identify error type for specialized backoff
   const isDeadlock = error instanceof Error && 
     error.message.toLowerCase().includes('deadlock');
-  const isTimeout = error instanceof PrismaClientKnownRequestError && 
+  const isTimeout = isPrismaKnownRequestError(error) &&
     ['P2024', 'P5008'].includes(error.code);
   
   // Use different strategies based on error type
@@ -207,7 +228,7 @@ export async function updateTickerMonitoringWithLock(
         
         return updatedRecord;
       } catch (error) {
-        if (error instanceof PrismaClientKnownRequestError && error.code === 'P2025') {
+        if (isPrismaKnownRequestError(error) && error.code === 'P2025') {
           // Record not found means version mismatch (concurrent update)
           throw createOptimisticLockError('TickerMonitoring', id, currentRecord.version);
         }
@@ -266,7 +287,7 @@ export async function upsertTickerMonitoringWithLock(
           
           return { ...updatedRecord, wasCreated: false };
         } catch (error) {
-          if (error instanceof PrismaClientKnownRequestError && error.code === 'P2025') {
+          if (isPrismaKnownRequestError(error) && error.code === 'P2025') {
             throw createOptimisticLockError('TickerMonitoring', existingRecord.id, existingRecord.version);
           }
           throw error;
@@ -285,7 +306,7 @@ export async function upsertTickerMonitoringWithLock(
           
           return { ...newRecord, wasCreated: true };
         } catch (error) {
-          if (error instanceof PrismaClientKnownRequestError && error.code === 'P2002') {
+          if (isPrismaKnownRequestError(error) && error.code === 'P2002') {
             // Unique constraint violation - another process created it, retry the transaction
             throw createOptimisticLockError('TickerMonitoring', cik);
           }
