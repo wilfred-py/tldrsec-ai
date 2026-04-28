@@ -183,6 +183,24 @@ describe('validateXSentiment', () => {
       });
       expect(sentiment!.citationUrls).toEqual(['https://x.com/ok/1']);
     });
+
+    it('drops media-CDN and off-host URLs from citations', () => {
+      const { sentiment, stats } = validateXSentiment({
+        ...baseValid,
+        citationUrls: [
+          'https://pbs.twimg.com/media/HGbqxSuWgAAl9ma.jpg',
+          'https://video.twimg.com/ext_tw_video/abc.mp4',
+          'https://attacker.example/pump',
+          'https://x.com/Bloomberg/status/123',
+          'https://twitter.com/CNBC/status/456',
+        ],
+      });
+      expect(sentiment!.citationUrls).toEqual([
+        'https://x.com/Bloomberg/status/123',
+        'https://twitter.com/CNBC/status/456',
+      ]);
+      expect(stats.urlsStripped).toBe(3);
+    });
   });
 
   describe('windowHours bounds', () => {

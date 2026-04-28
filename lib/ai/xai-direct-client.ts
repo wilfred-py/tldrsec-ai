@@ -23,7 +23,24 @@ const DEFAULT_MODEL = 'grok-4.20-reasoning';
 
 const TICK_TO_USD = 1e-10;
 
-export type XaiTool = { type: 'x_search' } | { type: 'web_search' };
+export type XaiXSearchTool = {
+  type: 'x_search';
+  allowed_x_handles?: string[];
+  excluded_x_handles?: string[];
+  from_date?: string;
+  to_date?: string;
+  enable_image_understanding?: boolean;
+  enable_video_understanding?: boolean;
+};
+
+export type XaiWebSearchTool = {
+  type: 'web_search';
+  allowed_domains?: string[];
+  excluded_domains?: string[];
+  enable_image_understanding?: boolean;
+};
+
+export type XaiTool = XaiXSearchTool | XaiWebSearchTool;
 
 export interface XaiResponseRequest {
   model?: string;
