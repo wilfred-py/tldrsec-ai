@@ -162,7 +162,7 @@ describe('Schema Alignment', () => {
       });
 
       expect(userPrompt).toContain('Gross Margin');
-      expect(userPrompt).toContain('MANDATORY');
+      expect(userPrompt).toContain('REQUIRED FINANCIAL METRICS');
     });
 
     it('10-K prompt should list Revenue, Net Income, Gross Margin, EPS as required', () => {
