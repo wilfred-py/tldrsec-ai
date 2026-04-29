@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.28.1] - 2026-05-10
+
+### Added
+- **`Summary.enrichmentApplied` column + 3-col cache index.** Schema groundwork for the X-search-MAX-only gating plan (`tasks/x-search-max-only.md`). Adds `enrichmentApplied: Boolean @default(false)` to `Summary` (`prisma/schema.prisma`) so the tier-aware shared cache can distinguish enriched (Max) from non-enriched (Pro/Free) summaries on the same filing. Prisma migration uses `ADD COLUMN IF NOT EXISTS ... NOT NULL DEFAULT false` (fast in PG 11+ — constant default, no row rewrite). Post-deploy SQL `prisma/migrations/add_enrichment_applied_index.sql` swaps the legacy 2-col cache index `[filingUrl, filingType]` for the 3-col `[filingUrl, filingType, enrichmentApplied]` via `CREATE INDEX CONCURRENTLY` (online, no read-path stall) followed by `DROP INDEX CONCURRENTLY` of the old one. Lives outside the Prisma migration runner because Prisma wraps each migration in a transaction and `CONCURRENTLY` can't run inside one — same pattern as `add_monitoring_optimization_indices.sql`.
+- **Schema regression test** at `__tests__/migrations/summary-enrichment-applied-schema.test.ts` confirms the column shape and default. Ships alongside the migration so `bun test` would catch a future revert.
+
+### Notes
+- No readers or writers of the new column ship in this release. Producer gating lands in PR #491; backfill of historical rows lands in PR #490.
+
 ## [0.0.27.2] - 2026-05-09
 
 ### Fixed
