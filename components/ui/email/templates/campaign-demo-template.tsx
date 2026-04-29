@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, markdownToHtml } from '../design-system';
+import { EmailColors, SignalColors, markdownToHtml } from '../design-system';
 import { EmailHeader } from './sections/EmailHeader';
 import { EmailFooter } from './sections/EmailFooter';
 
@@ -26,25 +26,15 @@ interface CampaignDemoTemplateProps {
   signupUrl?: string;
 }
 
-const signalConfig = {
-  HIGH: {
-    bgColor: '#FEF3C7',
-    borderColor: '#F59E0B',
-    textColor: '#92400E',
-    icon: '\u26A0\uFE0F',
-  },
-  MODERATE: {
-    bgColor: '#EEF2FF',
-    borderColor: '#6366F1',
-    textColor: '#4338CA',
-    icon: '\uD83D\uDC40',
-  },
-  LOW: {
-    bgColor: '#F1F5F9',
-    borderColor: '#94A3B8',
-    textColor: '#475569',
-    icon: '\u2713',
-  },
+/**
+ * Per-level icons live here (not in design-system.ts) because they're only
+ * rendered by this React template — the inline-HTML campaign emails don't
+ * surface them. Color tokens come from `SignalColors`.
+ */
+const signalIcons: Record<keyof typeof SignalColors, string> = {
+  HIGH: '\u26A0\uFE0F',
+  MODERATE: '\uD83D\uDC40',
+  LOW: '\u2713',
 };
 
 /**
@@ -71,7 +61,8 @@ export function CampaignDemoTemplate({
   founderNote,
   signupUrl = 'https://tldrsec.app/sign-up',
 }: CampaignDemoTemplateProps) {
-  const signal = signalConfig[signalLevel];
+  const signal = SignalColors[signalLevel];
+  const signalIcon = signalIcons[signalLevel];
 
   return (
     <div style={{
@@ -119,7 +110,7 @@ export function CampaignDemoTemplate({
                         letterSpacing: '1px',
                         textTransform: 'uppercase' as const,
                       }}>
-                        {signal.icon} {signalLevel} SIGNAL
+                        {signalIcon} {signalLevel} SIGNAL
                       </span>
 
                       {/* Verdict */}

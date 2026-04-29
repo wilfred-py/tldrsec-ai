@@ -15,10 +15,33 @@
  * Gmail strips from <style> blocks.
  */
 
+import * as React from 'react';
+import { renderAsync } from '@react-email/render';
 import { getPrismaClient } from '../db/prisma';
 import { logger } from '../logging';
+import { escapeHtml } from './security-helpers';
+import {
+  capHeadline,
+  EmailColors,
+  SignalColors,
+  importanceToSignalLevel,
+  type SignalLevel,
+} from '@/components/ui/email/design-system';
+import { EmailHeader } from '@/components/ui/email/templates/sections/EmailHeader';
+import {
+  CAMPAIGN_FALLBACK_HERO,
+  CAMPAIGN_FALLBACK_DIGEST,
+} from './__fixtures__/campaign-fallback-filings';
 
 const campaignLogger = logger.child('campaign-templates');
+
+/**
+ * Strip CR/LF from RFC 5322 header values (e.g. email subject) to prevent
+ * header injection. Subjects are not HTML, so escapeHtml is not appropriate.
+ */
+function stripCrlf(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim();
+}
 
 /**
  * A filing summary formatted for display in campaign emails.
@@ -52,14 +75,26 @@ const FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helv
  * Wrap email body content in a Gmail/Outlook-safe inline-styled shell.
  * Uses table layout (Outlook), all inline styles (Gmail), MSO conditionals,
  * hidden preheader div, and role="presentation" for screen readers.
+ *
+ * `headerHtml` is an optional pre-rendered header (e.g. from the shared
+ * `<EmailHeader>` section component). When omitted, falls back to the
+ * legacy inline logo strip used by email2/email3 (no single-filing context).
  */
-function campaignShell(content: string, options: { unsubscribeUrl: string; preheader?: string }): string {
+function campaignShell(content: string, options: { unsubscribeUrl: string; preheader?: string; headerHtml?: string }): string {
   const year = new Date().getFullYear();
   // Preheader padding prevents email clients from appending body text to the inbox preview
   const preheaderPad = '&zwnj;&nbsp;'.repeat(40);
   const preheaderHtml = options.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${options.preheader}${preheaderPad}</div>`
     : '';
+
+  const headerCellHtml = options.headerHtml
+    ? `<tr><td>${options.headerHtml}</td></tr>`
+    : `<tr>
+            <td style="padding:32px 28px 0;">
+              <img src="https://tldrsec.app/images/logo-email.png" alt="tldrSEC" width="120" height="24" style="display:block;width:120px;height:24px;border:0;font-size:18px;font-weight:700;color:#1e293b;margin:0 0 24px;" />
+            </td>
+          </tr>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -76,11 +111,7 @@ function campaignShell(content: string, options: { unsubscribeUrl: string; prehe
     <tr>
       <td align="center" style="padding:24px 16px;">
         <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;">
-          <tr>
-            <td style="padding:32px 28px 0;">
-              <img src="https://tldrsec.app/images/logo-email.png" alt="tldrSEC" width="120" height="24" style="display:block;width:120px;height:24px;border:0;font-size:18px;font-weight:700;color:#1e293b;margin:0 0 24px;" />
-            </td>
-          </tr>
+          ${headerCellHtml}
           <tr>
             <td style="padding:0 28px;">
               ${content}
@@ -236,9 +267,7 @@ function toCampaignFiling(s: ScoredSummaryRow): CampaignFiling {
   }
   if (!title) title = s.filingType;
 
-  const summaryText = s.summaryText.length > 200
-    ? s.summaryText.substring(0, 197) + '...'
-    : s.summaryText;
+  const summaryText = capHeadline(s.summaryText, 200);
 
   return {
     ticker: s.ticker.symbol,
@@ -273,26 +302,14 @@ export async function fetchCampaignFilings(count: number = 3): Promise<CampaignF
   return results;
 }
 
-// --- Importance to color mapping ---
-
-function importanceColor(importance: string): string {
-  switch (importance) {
-    case 'critical': return '#dc2626';
-    case 'high': return '#ef4444';
-    case 'medium': return '#f59e0b';
-    default: return '#6b7280';
-  }
-}
-
-function filingBadgeColors(filingType: string): { bg: string; text: string } {
-  switch (filingType) {
-    case 'Form 4': return { bg: '#f3e8ff', text: '#7c3aed' };
-    case '8-K': return { bg: '#f0fdf4', text: '#16a34a' };
-    case '10-Q': return { bg: '#eff6ff', text: '#2563eb' };
-    case '10-K': return { bg: '#fef3c7', text: '#d97706' };
-    default: return { bg: '#f1f5f9', text: '#475569' };
-  }
-}
+/**
+ * Filing-type pill uses the same muted neutral across all types — the dry/Hybrid
+ * voice (locked in `.claude/tasks/design-shotgun/email-1-hero-2026-04-29/`) drops
+ * the type-specific vivid palettes (purple Form 4, green 8-K, etc.) in favor of
+ * a single quiet token. Saves a switch and unifies with `EmailStyles.categoryBadge`.
+ */
+const FILING_BADGE_BG = '#F3F4F6'; // BadgeColors.neutral.bg / EmailStyles.categoryBadge bg
+const FILING_BADGE_FG = EmailColors.text.meta; // #6B7280
 
 /**
  * Email 1: "The Filing That Moved [Ticker]"
@@ -301,50 +318,72 @@ function filingBadgeColors(filingType: string): { bg: string; text: string } {
  * to prove the product works. This is the most important email
  * in the sequence, it must be impressive.
  */
-function email1(options: CampaignEmailOptions): CampaignEmailContent {
+async function email1(options: CampaignEmailOptions): Promise<CampaignEmailContent> {
   // Use the top dynamic filing if available, otherwise fall back to hardcoded sample
   const filing = options.filings?.[0];
 
-  const impColor = filing ? importanceColor(filing.importance) : '#ef4444';
-  const badge = filing ? filingBadgeColors(filing.filingType) : { bg: '#f3e8ff', text: '#7c3aed' };
-  const impLabel = filing ? filing.importance.toUpperCase() : 'HIGH';
-  const filingType = filing?.filingType || 'Form 4';
-  const heading = filing
+  const signalLevel: SignalLevel = importanceToSignalLevel(filing?.importance ?? CAMPAIGN_FALLBACK_HERO.importance);
+  const signal = SignalColors[signalLevel];
+  const badge = { bg: FILING_BADGE_BG, text: FILING_BADGE_FG };
+
+  // Render the shared <EmailHeader> for this filing — gives the campaign hero
+  // the same logo + category + ticker · company strip as production filing emails.
+  const headerHtml = await renderAsync(
+    React.createElement(EmailHeader, {
+      ticker: filing?.ticker ?? CAMPAIGN_FALLBACK_HERO.ticker,
+      companyName: filing?.companyName ?? CAMPAIGN_FALLBACK_HERO.companyName,
+      filingType: filing?.filingType ?? CAMPAIGN_FALLBACK_HERO.filingType,
+      filingDate: filing?.filingDate ?? CAMPAIGN_FALLBACK_HERO.filingDate,
+    }),
+  );
+
+  // Raw values (used for plaintext body + subject; subject path uses stripCrlf).
+  // Fallback copy lives in __fixtures__/campaign-fallback-filings.ts.
+  const rawImpLabel = filing ? filing.importance.toUpperCase() : CAMPAIGN_FALLBACK_HERO.importanceLabel;
+  const rawFilingType = filing?.filingType || CAMPAIGN_FALLBACK_HERO.filingType;
+  const rawHeading = filing
     ? `${filing.companyName} (${filing.ticker}) - ${filing.title}`
-    : 'NVIDIA Corp (NVDA) - Insider Purchase';
-  const summaryBody = filing?.summary
-    || 'A senior executive acquired 15,000 shares at $142.50/share ($2.14M total). This is notable because insider buying at this scale, during a period of elevated valuation, signals strong internal confidence in near-term performance. The executive now holds 185,000 shares directly.';
+    : CAMPAIGN_FALLBACK_HERO.heading;
+  const rawSummaryBody = filing?.summary || CAMPAIGN_FALLBACK_HERO.summaryBody;
   const filedDate = filing
     ? filing.filingDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    : 'March 2026';
+    : CAMPAIGN_FALLBACK_HERO.filedDateLabel;
 
+  // HTML-safe values (used inside template-literal HTML output)
+  const impLabel = escapeHtml(rawImpLabel);
+  const filingType = escapeHtml(rawFilingType);
+  const heading = escapeHtml(rawHeading);
+  const summaryBody = escapeHtml(rawSummaryBody);
+
+  // Subject is an RFC 5322 header — strip CRLF (header injection), not HTML
   const subject = filing
-    ? `${filing.ticker}: ${filing.title}`.toLowerCase()
-    : (options.variant === 'B' ? 'NVDA insider bought $2.1M last week' : 'the form 4 filing most investors missed');
+    ? stripCrlf(`${filing.ticker}: ${filing.title}`).toLowerCase()
+    : (options.variant === 'B' ? CAMPAIGN_FALLBACK_HERO.variantBSubject : CAMPAIGN_FALLBACK_HERO.variantASubject);
 
+  // Preheader renders inside <div> in campaignShell — escape user content
   const preheader = filing
-    ? summaryBody.substring(0, 100)
+    ? escapeHtml(rawSummaryBody.substring(0, 100))
     : (options.variant === 'B'
-      ? 'A senior executive acquired 15,000 NVDA shares at $142.50/share ($2.14M total).'
-      : 'This is what our AI does with SEC filings, minutes after they hit EDGAR.');
+      ? CAMPAIGN_FALLBACK_HERO.variantBPreheader
+      : CAMPAIGN_FALLBACK_HERO.variantAPreheader);
 
   const content = `
     <p style="margin:0 0 16px;font-size:15px;color:#334155;line-height:1.6;">You signed up for tldrSEC a few weeks ago. Here's what our AI does with SEC filings.</p>
 
     <p style="margin:0 0 16px;font-size:15px;color:#334155;line-height:1.6;">Below is a real summary, generated automatically within minutes of the filing hitting EDGAR.</p>
 
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;border-left:4px solid ${impColor};border-radius:4px;margin:20px 0;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${signal.bgColor};border-left:4px solid ${signal.borderColor};border-radius:4px;margin:20px 0;">
       <tr>
         <td style="padding:20px;">
           <table role="presentation" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="padding-right:8px;"><span style="background:${impColor};color:white;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;text-transform:uppercase;display:inline-block;">${impLabel}</span></td>
+              <td style="padding-right:8px;"><span style="background:${signal.borderColor};color:#ffffff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;text-transform:uppercase;display:inline-block;">${impLabel}</span></td>
               <td><span style="background:${badge.bg};color:${badge.text};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;display:inline-block;">${filingType}</span></td>
             </tr>
           </table>
-          <h3 style="margin:12px 0 8px;color:#1e293b;font-size:16px;font-weight:600;">${heading}</h3>
-          <p style="margin:0 0 12px;color:#475569;font-size:14px;line-height:1.6;">${summaryBody}</p>
-          <p style="margin:0;color:#94a3b8;font-size:12px;">
+          <h3 style="margin:12px 0 8px;color:${EmailColors.text.headline};font-size:16px;font-weight:600;">${heading}</h3>
+          <p style="margin:0 0 12px;color:${EmailColors.text.body};font-size:14px;line-height:1.6;">${summaryBody}</p>
+          <p style="margin:0;color:${EmailColors.text.muted};font-size:12px;">
             Filed: ${filedDate} &middot; Source: SEC EDGAR
           </p>
         </td>
@@ -367,15 +406,15 @@ You signed up for tldrSEC a few weeks ago. Here's what our AI does with SEC fili
 Below is a real summary, generated automatically within minutes of the filing hitting EDGAR.
 
 ---
-${impLabel} | ${filingType}
-${heading}
+${rawImpLabel} | ${rawFilingType}
+${rawHeading}
 
-${summaryBody}
+${rawSummaryBody}
 
 Filed: ${filedDate} | Source: SEC EDGAR
 ---
 
-On EDGAR, reading this ${filingType} takes 15-20 minutes. Our AI extracted the key details in under 10 minutes from the moment it was filed.
+On EDGAR, reading this ${rawFilingType} takes 15-20 minutes. Our AI extracted the key details in under 10 minutes from the moment it was filed.
 
 This is a sample of what tldrSEC delivers to your inbox within minutes of every SEC filing. More to come.
 
@@ -384,7 +423,7 @@ Unsubscribe: ${options.unsubscribeUrl}`;
 
   return {
     subject,
-    html: campaignShell(content, { unsubscribeUrl: options.unsubscribeUrl, preheader }),
+    html: campaignShell(content, { unsubscribeUrl: options.unsubscribeUrl, preheader, headerHtml }),
     text,
   };
 }
@@ -395,70 +434,58 @@ Unsubscribe: ${options.unsubscribeUrl}`;
  * Shows breadth: multiple filings, multiple types, importance-ranked.
  * Soft CTA to landing page.
  */
-function email2(options: CampaignEmailOptions): CampaignEmailContent {
-  // Use dynamic filings if available (top 3), otherwise hardcoded samples
+async function email2(options: CampaignEmailOptions): Promise<CampaignEmailContent> {
+  // Use dynamic filings if available (top 3), otherwise hardcoded samples.
+  // Raw values are stored here; HTML interpolation sites below escape per-field.
+  // The plaintext text body uses these raw values directly.
   const dynamicFilings = options.filings?.slice(0, 3);
   const filings = dynamicFilings?.length
-    ? dynamicFilings.map(f => ({
-        importance: f.importance.toUpperCase(),
-        importanceColor: importanceColor(f.importance),
-        badge: f.filingType,
-        badgeColor: filingBadgeColors(f.filingType).bg,
-        badgeTextColor: filingBadgeColors(f.filingType).text,
-        company: `${f.companyName} (${f.ticker})`,
-        title: f.title,
-        summary: f.summary,
-      }))
-    : [
-        {
-          importance: 'HIGH',
-          importanceColor: '#ef4444',
-          badge: 'Form 4',
-          badgeColor: '#f3e8ff',
-          badgeTextColor: '#7c3aed',
-          company: 'Tesla Inc (TSLA)',
-          title: 'Director Stock Sale',
-          summary: 'Board member sold 50,000 shares at $248.30 ($12.4M). Scheduled sale under 10b5-1 plan filed in January. Director retains 420,000 shares.',
-        },
-        {
-          importance: 'MEDIUM',
-          importanceColor: '#f59e0b',
-          badge: '8-K',
-          badgeColor: '#f0fdf4',
-          badgeTextColor: '#16a34a',
-          company: 'Apple Inc (AAPL)',
-          title: 'Material Definitive Agreement',
-          summary: 'Entered into a $5B revolving credit facility with a consortium of banks. Replaces existing $3B facility expiring Q2 2026. Signals preparation for potential large acquisition or capital deployment.',
-        },
-        {
-          importance: 'MEDIUM',
-          importanceColor: '#f59e0b',
-          badge: '10-Q',
-          badgeColor: '#eff6ff',
-          badgeTextColor: '#2563eb',
-          company: 'Microsoft Corp (MSFT)',
-          title: 'Quarterly Report',
-          summary: 'Revenue $65.2B (+14% YoY). Cloud segment grew 22%. Operating margin expanded 180bps to 44.2%. Raised full-year guidance by $2B on AI demand strength.',
-        },
-      ];
+    ? dynamicFilings.map(f => {
+        const signal = SignalColors[importanceToSignalLevel(f.importance)];
+        return {
+          importance: f.importance.toUpperCase(),
+          signalBg: signal.bgColor,
+          signalBorder: signal.borderColor,
+          badge: f.filingType,
+          badgeColor: FILING_BADGE_BG,
+          badgeTextColor: FILING_BADGE_FG,
+          company: `${f.companyName} (${f.ticker})`,
+          title: f.title,
+          summary: f.summary,
+        };
+      })
+    : CAMPAIGN_FALLBACK_DIGEST.map(row => {
+        const signal = SignalColors[importanceToSignalLevel(row.importanceColorKey)];
+        return {
+          importance: row.importance,
+          signalBg: signal.bgColor,
+          signalBorder: signal.borderColor,
+          badge: row.badge,
+          badgeColor: FILING_BADGE_BG,
+          badgeTextColor: FILING_BADGE_FG,
+          company: row.company,
+          title: row.title,
+          summary: row.summary,
+        };
+      });
 
-  const subject = `${filings.length} SEC filings you should know about`;
+  const subject = stripCrlf(`${filings.length} SEC filings you should know about`);
 
   let filingsHtml = '';
   let filingsText = '';
   for (const f of filings) {
     filingsHtml += `
-      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;border-left:4px solid ${f.importanceColor};border-radius:4px;margin:12px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${f.signalBg};border-left:4px solid ${f.signalBorder};border-radius:4px;margin:12px 0;">
         <tr>
           <td style="padding:16px;">
             <table role="presentation" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="padding-right:8px;"><span style="background:${f.importanceColor};color:white;font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;text-transform:uppercase;display:inline-block;">${f.importance}</span></td>
-                <td><span style="background:${f.badgeColor};color:${f.badgeTextColor};font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;display:inline-block;">${f.badge}</span></td>
+                <td style="padding-right:8px;"><span style="background:${f.signalBorder};color:#ffffff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;text-transform:uppercase;display:inline-block;">${escapeHtml(f.importance)}</span></td>
+                <td><span style="background:${f.badgeColor};color:${f.badgeTextColor};font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;display:inline-block;">${escapeHtml(f.badge)}</span></td>
               </tr>
             </table>
-            <h4 style="margin:8px 0 6px;color:#1e293b;font-size:14px;font-weight:600;">${f.company} - ${f.title}</h4>
-            <p style="margin:0;color:#475569;font-size:13px;line-height:1.5;">${f.summary}</p>
+            <h4 style="margin:8px 0 6px;color:${EmailColors.text.headline};font-size:14px;font-weight:600;">${escapeHtml(f.company)} - ${escapeHtml(f.title)}</h4>
+            <p style="margin:0;color:${EmailColors.text.body};font-size:13px;line-height:1.5;">${escapeHtml(f.summary)}</p>
           </td>
         </tr>
       </table>
@@ -508,7 +535,7 @@ Unsubscribe: ${options.unsubscribeUrl}`;
     subject,
     html: campaignShell(content, {
       unsubscribeUrl: options.unsubscribeUrl,
-      preheader: filings.map(f => `${f.company.split(' (')[0]}: ${f.title}`).join('. ') + '.',
+      preheader: escapeHtml(filings.map(f => `${f.company.split(' (')[0]}: ${f.title}`).join('. ') + '.'),
     }),
     text,
   };
@@ -530,8 +557,9 @@ Unsubscribe: ${options.unsubscribeUrl}`;
  *   - Time Delay: first summary within 10 minutes
  *   - Effort & Sacrifice: CC acknowledged honestly with risk reversal
  */
-function email3(options: CampaignEmailOptions): CampaignEmailContent {
-  const subject = 'your 7-day trial is ready';
+async function email3(options: CampaignEmailOptions): Promise<CampaignEmailContent> {
+  // Static subject — no user content, but use stripCrlf for symmetry with email1/2
+  const subject = stripCrlf('your 7-day trial is ready');
 
   const subCtaCopy = options.variant === 'B'
     ? 'Full access for 7 days — every filing type, every company on EDGAR.<br>Your card won\'t be charged until the trial ends. Cancel in one click.'
@@ -656,10 +684,10 @@ Unsubscribe: ${options.unsubscribeUrl}`;
  * Get campaign email content by email number.
  * Used by the campaign send API route.
  */
-export function getCampaignEmailContent(
+export async function getCampaignEmailContent(
   emailNumber: 1 | 2 | 3,
   options: CampaignEmailOptions
-): CampaignEmailContent {
+): Promise<CampaignEmailContent> {
   switch (emailNumber) {
     case 1: return email1(options);
     case 2: return email2(options);

@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.4] - 2026-04-30
+
+### Added
+- **3-email campaign foundation — PR 1 of the email-campaign-revamp track.** Lands the security, design-token, and test-coverage prerequisites for the upcoming creative refactor without changing creative or routing surface area. Eight bisectable sub-tasks executed under one PR per the locked plan in `.claude/tasks/email-campaign-revamp.md`.
+- **`SignalColors` + `importanceToSignalLevel` design tokens** (`components/ui/email/design-system.ts`). Canonical 3-tier importance palette (HIGH amber / MODERATE indigo / LOW slate) shared by `campaign-demo-template.tsx` and the inline-HTML campaign emails so the same `Summary.importance` value renders the same color in every surface. `critical` collapses into `HIGH` — design system intentionally avoids a fourth band.
+- **`lib/email/__fixtures__/campaign-fallback-filings.ts`** — extracted fallback hero + 3-row digest fixtures from `lib/email/campaign-templates.ts` so the strings ship through `import` rather than inlined heredocs. Test suites now assert against the fixture export instead of duplicating string literals.
+- **8 campaign test suites — 86 passing + 9 todo across all 12 acceptance criteria** from `.claude/tasks/email-campaign-revamp-test-plan.md`:
+  - `campaign-xss.test.tsx` (AC1) — 14 tests covering ticker/companyName/title/summary/filingType interpolation, header injection via `stripCrlf`, and the `escapeHtml` smoke test mirroring `__tests__/email/8k-xss.test.tsx`.
+  - `campaign-subject-consistency.test.ts` (AC2) — pins variant A/B subject + preheader pairs, fallback subjects, and the count-led subject template for E2.
+  - `campaign-resend-tags.test.ts` (AC6) — locks the `[{ name: 'campaign', value: 'cohort{N}-email{N}' }, { name: 'variant', value: variant || 'none' }]` tag schema at `app/api/admin/campaign/send/route.ts`.
+  - `campaign-utm-variant.test.tsx` (AC9) — verifies `?utm_campaign=onboarding&utm_email={n}&variant={A|B}` propagation through CTA hrefs.
+  - `campaign-rendering.test.tsx` (AC3 + AC7) — 19 tests covering hero ticker render, fallback fixture render, digest 1/3/empty cases, invite static copy, and the `campaignShell` envelope (doctype + manage-preferences + unsubscribe).
+  - `campaign-token-consumption.test.ts` (AC4) — static source scan + render-time band token assertion. `KNOWN_LAYOUT_HEX` whitelist makes any new inline hex an explicit decision; band-hex check (HIGH amber + MODERATE indigo) forbids inlining the loud signal palettes.
+  - `campaign-prompt-eval.test.ts` (AC10) — pins the locked Variant C Hybrid voice (Hormozi-calibrated structure + Levine-dry tone). Forbids press-release filler verbs (`Announced/Issued/Prices/Completes/Signs/Enters`) and marketing scream (`ACT NOW/LIMITED TIME`), enforces ≤2 exclamation marks, and surfaces E3 Hormozi Grand Slam Offer markers (Dream Outcome, Time Delay, Effort/Sacrifice reversal).
+  - `campaign-performance.test.ts` (AC8 + AC11 prereqs) — 7 passing on the observable `capHeadline` truncation contract + render stability across calls. AC8 (1-hour cache) and AC11 (pre-render+splice parity) tracked under `it.todo` until the perf optimizations land in PR 2.
+
+### Hardened
+- **`escapeHtml` applied at every dynamic interpolation site in `lib/email/campaign-templates.ts`** (PR 1.1 — AC1). Closes the residual XSS risk that user-controllable `Summary.title` / `Summary.summary` / `Filing.companyName` strings could inject `<script>` or break out of HTML attributes when rendered into the inline campaign HTML. Mirrors the defensive posture already in place for `8k-minimalist-template.tsx`.
+- **`stripCrlf` applied to subject + preheader composition** so that header-injection attempts via filing-derived strings cannot insert `\r\n` into Resend `To:` / `Subject:` headers.
+
+### Refactored (no behavior change)
+- **Section composition in `campaign-demo-template.tsx`** (PR 1.3) — replaced inline header markup with `<EmailHeader>` from `components/ui/email/templates/sections/`, matching the architecture of the 11 minimalist filing templates.
+- **`capHeadline` from `design-system.ts` reused for digest summary truncation** (PR 1.6) — replaces a one-off slice + ellipsis at 200 chars with the design-system helper that does word-boundary cutting, trailing-punctuation strip, and ellipsis append. Single source of truth for "200 char dot-dot-dot."
+- **Inline color helpers deleted in favor of `SignalColors[importanceToSignalLevel(x)]`** (PR 1.4) at the importance-band interpolation sites. Layout chrome (page bg, footer text) still uses raw hex pending a follow-up token sweep tracked under the `it.todo('AC4 strict: refactor #475569 + #94A3B8 in chrome to non-band tokens')` in `campaign-token-consumption.test.ts`.
+- **`getCampaignEmailContent` is now async** (`lib/email/campaign-templates.ts` + `app/api/admin/campaign/send/route.ts`). The route now `await Promise.all(...)`s the per-recipient render so the function can be cached or pre-rendered without a second migration. AC11's pre-render + splice optimization (PR 2) builds on this.
+
+### Verified
+- **`Summary.filingDate` index already present in `prisma/schema.prisma`** (PR 1.7). The `fetchScoredSummariesLast30Days` query plan was at risk of a sequential scan on the 30-day window; verified the existing `@@index([filingDate])` is sufficient. No schema migration required.
+
+### Pre-existing issues confirmed (not introduced by this PR)
+- `campaign-demo-template.tsx`, `campaign-digest-template.tsx`, `campaign-invite-template.tsx` have 4 pre-existing TS errors against `EmailFooterProps` (extra `filingUrl` arg) and a `<td>` `bgcolor` typing mismatch. Confirmed identical errors on bare `origin/main` via stash + re-run. Tracked for a separate `chore: fix campaign-template TS errors` PR.
+
 ## [0.0.25.3] - 2026-04-29
 
 ### Added
