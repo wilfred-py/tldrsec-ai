@@ -64,7 +64,7 @@ export async function handleSummarizeCached(
   payload: SummarizeJobPayload
 ): Promise<SummarizeResult> {
   const startTime = Date.now();
-  const { userId, userEmail, userTier: _userTier, ticker, filing, cacheId, executionContext } = payload;
+  const { userId, userEmail, userTier, ticker, filing, cacheId, executionContext } = payload;
   const executionId = executionContext?.executionId ?? `legacy-${Date.now()}`;
 
   // Defense-in-depth: fail fast if payload is missing required nested objects
@@ -87,10 +87,18 @@ export async function handleSummarizeCached(
     const { getPrismaClient } = await import('../../db/prisma');
     const prisma = getPrismaClient();
 
-    // Check if user account is soft-deleted — skip processing entirely
+    // Check if user account is soft-deleted — skip processing entirely.
+    // Also pull trial fields here so we can pass MAX-eligibility context into
+    // summarizeFilingWithValidation (Phase 4 of tasks/x-search-max-only.md):
+    // enrichment is gated at the writer, and the writer needs to know whether
+    // the requesting user qualifies as MAX (paid OR active trial).
     const dbUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { deletedAt: true },
+      select: {
+        deletedAt: true,
+        isTrialing: true,
+        trialEndsAt: true,
+      },
     });
     if (dbUser?.deletedAt) {
       summarizeLogger.info(`[${executionId}] Skipping deleted user`, { userId });
@@ -586,7 +594,11 @@ export async function handleSummarizeCached(
       formType: filing.formType
     });
 
-    // Call summarizeFilingWithValidation for AI summary + extractor enrichment
+    // Call summarizeFilingWithValidation for AI summary + extractor enrichment.
+    // Pass tier context so the writer can gate web-search enrichment to MAX
+    // (Phase 4 of tasks/x-search-max-only.md). userTier comes from the job
+    // payload (snapshot at enqueue time); isTrialing/trialEndsAt are read
+    // fresh from the DB above to honor any trial-state changes since enqueue.
     const summaryResult = await summarizeFilingWithValidation(
       cachedContent.content,
       {
@@ -598,7 +610,10 @@ export async function handleSummarizeCached(
           filingDate: typeof filing.filingDate === 'string' ? filing.filingDate : filing.filingDate.toISOString(),
           accessionNumber: filing.accessionNumber,
           cik: ticker.cik || undefined
-        }
+        },
+        userTier,
+        isTrialing: dbUser?.isTrialing ?? false,
+        trialEndsAt: dbUser?.trialEndsAt ?? null,
       }
     );
 
