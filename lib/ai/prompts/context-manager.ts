@@ -17,8 +17,14 @@ const DEFAULT_CONTEXT_CONFIGS: Record<SECFilingType, ContextWindowConfig> = {
     chunkStrategy: 'section-based', // Chunk by document sections
   },
   '10-Q': {
-    maxChunkSize: 8000,        // Moderate size for quarterly reports
-    overlapSize: 800,
+    // Bumped 8000→24000 so chunks span full income-statement tables.
+    // Why: 10-Q income statements are wide (current Q + prior-year Q + YTD
+    // columns) and routinely exceed 8k chars after the section heading. With
+    // an 8k chunk, the table got truncated mid-row, leaving Grok with only
+    // the prior-year comparison column visible — producing wrong "Latest"
+    // figures (e.g., Apr 2026 FDS 10-Q reported $560M revenue instead of $611M).
+    maxChunkSize: 24000,
+    overlapSize: 2000,
     useSemanticChunking: true,
     chunkStrategy: 'section-based',
   },

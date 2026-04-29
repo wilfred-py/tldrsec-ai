@@ -191,28 +191,43 @@ function processDocumentContent(content: string, filingType: SECFilingType, maxT
     
     // For specific filing types, extract and include key sections from other chunks
     if (['10-K', '10-Q', '8-K', '20-F', '40-F', '10-K/A', '10-Q/A'].includes(filingType)) {
-      // For financial reports, look for risk factors, MD&A, and financial statements in other chunks
+      // For financial reports, look for risk factors, MD&A, and financial statements in other chunks.
+      // 'Cash Flow' / 'Statements of Cash' are added explicitly so we don't rely on the broader
+      // 'Consolidated Statements' match (whose first occurrence usually lands on the income
+      // statement) to also reach the cash-flow table — important for FCF Margin extraction.
       const keyPhrases = [
-        'Risk Factors', 'Item 1A', 'Item 7', 'Management Discussion', 
-        'Financial Statements', 'Consolidated Statements', 'Notes to', 
-        'Executive Summary', 'Business Overview'
+        'Risk Factors', 'Item 1A', 'Item 7', 'Management Discussion',
+        'Financial Statements', 'Consolidated Statements', 'Statements of Cash',
+        'Cash Flow', 'Notes to', 'Executive Summary', 'Business Overview'
       ];
-      
+
       // Extract key sections from other chunks
       let keyContentFromOtherChunks = '';
-      
+
+      // Window sizing for key-section extraction.
+      // Wider window for financial reports so multi-column income-statement
+      // tables (current quarter + prior-year + YTD) aren't truncated
+      // mid-row. 18k chars after the heading covers the full table plus
+      // surrounding MD&A context.
+      const isQuarterlyOrAnnual = ['10-K', '10-Q', '20-F', '40-F', '10-K/A', '10-Q/A'].includes(filingType);
+      const beforeChars = isQuarterlyOrAnnual ? 1000 : 500;
+      const afterChars = isQuarterlyOrAnnual ? 18000 : 4500;
+
       for (let i = 1; i < chunks.length; i++) {
         const chunk = chunks[i];
-        
+        // Case-insensitive matching: many older filings use ALL-CAPS section
+        // headings (e.g., "CONSOLIDATED STATEMENTS OF CASH FLOWS"); we don't
+        // want a case mismatch to silently drop the cash-flow table.
+        const chunkLower = chunk.toLowerCase();
+
         // Look for key sections in this chunk
         for (const phrase of keyPhrases) {
-          const phraseIndex = chunk.indexOf(phrase);
+          const phraseIndex = chunkLower.indexOf(phrase.toLowerCase());
           if (phraseIndex >= 0) {
-            // Extract a reasonable portion around the key phrase (5000 chars)
-            const startPos = Math.max(0, phraseIndex - 500);
-            const endPos = Math.min(chunk.length, phraseIndex + 4500);
+            const startPos = Math.max(0, phraseIndex - beforeChars);
+            const endPos = Math.min(chunk.length, phraseIndex + afterChars);
             const section = chunk.substring(startPos, endPos);
-            
+
             keyContentFromOtherChunks += `\n\n--- ${phrase} (from document section ${i+1}) ---\n${section}`;
           }
         }

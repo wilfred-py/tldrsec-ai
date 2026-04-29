@@ -63,31 +63,46 @@ const PILL = {
 };
 
 describe('Form10QMinimalistTemplate — PillDelta', () => {
-  it('renders a green pill for a positive YoY delta', () => {
+  it('renders a green pill for a positive YoY delta (2 decimal places)', () => {
     const html = renderHtml(makeFiling([
       { label: 'Revenue', value: '$94B', change: '+6.1%' },
     ]));
     expect(html).toContain(PILL.positiveBg);
     expect(html).toContain(PILL.positiveFg);
-    expect(html).toContain('+6.1%');
+    expect(html).toContain('+6.10%');
   });
 
-  it('renders a red pill for a negative YoY delta with a unicode minus', () => {
+  it('renders a red pill for a negative YoY delta with a unicode minus (2 decimal places)', () => {
     const html = renderHtml(makeFiling([
       { label: 'EPS', value: '$1.65', change: '-3.5%' },
     ]));
     expect(html).toContain(PILL.negativeBg);
     expect(html).toContain(PILL.negativeFg);
-    expect(html).toContain('\u22123.5%');
+    expect(html).toContain('\u22123.50%');
   });
 
-  it('renders a gray pill for a zero delta', () => {
+  it('renders a gray pill for a zero delta (2 decimal places)', () => {
     const html = renderHtml(makeFiling([
       { label: 'Buybacks', value: '$0', change: '0%' },
     ]));
     expect(html).toContain(PILL.neutralBg);
     expect(html).toContain(PILL.neutralFg);
-    expect(html).toContain('0%');
+    expect(html).toContain('0.00%');
+  });
+
+  it('pads single-digit integer percentages to 2 decimal places', () => {
+    const html = renderHtml(makeFiling([
+      { label: 'Revenue', value: '$611M', change: '+7%' },
+    ]));
+    expect(html).toContain('+7.00%');
+    expect(html).not.toContain('+7%</span>');
+  });
+
+  it('rounds long-decimal percentages to 2 decimal places', () => {
+    const html = renderHtml(makeFiling([
+      { label: 'Net Income', value: '$133M', change: '+33.426%' },
+    ]));
+    expect(html).toContain('+33.43%');
   });
 
   it('renders a gray pill (NOT green) for unparseable strings like "N/A"', () => {
@@ -102,15 +117,58 @@ describe('Form10QMinimalistTemplate — PillDelta', () => {
     expect(surroundingPill).not.toContain(PILL.positiveBg);
   });
 
-  it('renders a gray pill (NOT green) for basis-point measures like "5 points"', () => {
+  it('renders a green pill (with % suffix) for positive margin-point input "+1.33pp"', () => {
     const html = renderHtml(makeFiling([
-      { label: 'Net margin', value: '38%', change: '+5 points' },
+      { label: 'Gross Margin', value: '51.43%', change: '+1.33pp' },
     ]));
-    expect(html).toContain(PILL.neutralBg);
-    expect(html).toContain('+5 points');
-    const idx = html.indexOf('+5 points');
-    const surroundingPill = html.slice(Math.max(0, idx - 300), idx + 50);
-    expect(surroundingPill).not.toContain(PILL.positiveBg);
+    expect(html).toContain(PILL.positiveBg);
+    expect(html).toContain('+1.33%');
+    expect(html).not.toContain('+1.33pp');
+  });
+
+  it('renders a red pill (with % suffix) for negative margin-point input "-1.33pp"', () => {
+    const html = renderHtml(makeFiling([
+      { label: 'Gross Margin', value: '51.43%', change: '-1.33pp' },
+    ]));
+    expect(html).toContain(PILL.negativeBg);
+    expect(html).toContain('\u22121.33%');
+    expect(html).not.toContain('1.33pp');
+  });
+
+  it('treats "pts" and "points" as percentage-point synonyms (rendered with % suffix)', () => {
+    const ptsHtml = renderHtml(makeFiling([
+      { label: 'Op Margin', value: '30%', change: '+0.5 pts' },
+    ]));
+    expect(ptsHtml).toContain(PILL.positiveBg);
+    expect(ptsHtml).toContain('+0.50%');
+
+    const pointsHtml = renderHtml(makeFiling([
+      { label: 'Op Margin', value: '30%', change: '-2 points' },
+    ]));
+    expect(pointsHtml).toContain(PILL.negativeBg);
+    expect(pointsHtml).toContain('\u22122.00%');
+  });
+
+  it('formats short dollar magnitudes to 2 decimal places ("$94B" → "$94.00B")', () => {
+    const html = renderHtml(makeFiling([
+      { label: 'Revenue', value: '$94B', change: '+6.1%' },
+    ]));
+    expect(html).toContain('$94.00B');
+    expect(html).not.toContain('>$94B<');
+  });
+
+  it('formats integer-percentage values to 2 decimal places ("30%" → "30.00%")', () => {
+    const html = renderHtml(makeFiling([
+      { label: 'Op Margin', value: '30%', change: '+0.5 pts' },
+    ]));
+    expect(html).toContain('>30.00%<');
+  });
+
+  it('passes through "N/A" values unchanged', () => {
+    const html = renderHtml(makeFiling([
+      { label: 'FCF Margin', value: 'N/A', change: 'N/A' },
+    ]));
+    expect(html).toContain('>N/A<');
   });
 
   it('renders an em-dash placeholder when delta is missing', () => {
@@ -124,8 +182,8 @@ describe('Form10QMinimalistTemplate — PillDelta', () => {
     const html = renderHtml(makeFiling([
       { label: 'EPS', value: '$1.65', change: '+13.7%', qoqChange: '-3.5%' },
     ]));
-    expect(html).toContain('+13.7%');
-    expect(html).toContain('\u22123.5%');
+    expect(html).toContain('+13.70%');
+    expect(html).toContain('\u22123.50%');
     expect(html).toContain(PILL.positiveBg);
     expect(html).toContain(PILL.negativeBg);
   });
@@ -134,10 +192,11 @@ describe('Form10QMinimalistTemplate — PillDelta', () => {
     const html = renderHtml(makeFiling([
       { label: 'Revenue', value: '$94B', change: '+6.1%' },
     ]));
-    const valueIndex = html.indexOf('$94B');
+    // formatValue normalizes "$94B" → "$94.00B" — assert on the normalized form.
+    const valueIndex = html.indexOf('$94.00B');
     expect(valueIndex).toBeGreaterThan(-1);
-    // The dollar-value <td> immediately precedes "$94B" — its style attribute
-    // ends just before the text. Take a tight window that excludes the
+    // The dollar-value <td> immediately precedes the value text — its style
+    // attribute ends just before it. Take a tight window that excludes the
     // following pill <td>.
     const cellStart = html.lastIndexOf('<td', valueIndex);
     const cellSlice = html.slice(cellStart, valueIndex);
