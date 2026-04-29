@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.3] - 2026-04-29
+
+### Added
+- **X sentiment block now renders inside the three minimalist email templates** (10-K, 10-Q, 8-K). New shared section `components/ui/email/templates/sections/XSentimentSection.tsx` (~240 lines): black-bar header with `Last {windowHours}h` window chip, direction/confidence/shift chips driven by `BadgeColors` design tokens, narrative paragraph (`discussionSynthesis`), up to 3 fact-claim bullets, and up to 5 monospace x.com source links. Each template extracts `summaryData.xSentiment` and gates render through `shouldRenderXSentiment()`.
+- **`shouldRenderXSentiment` doubles as a runtime payload validator** on top of being an "is this worth showing" check. Hardens four ways the upstream cast could land bad data without crashing the email render:
+  - rejects unknown `direction` enum values (would otherwise crash on `DIRECTION_BADGE[direction].label`),
+  - rejects unknown `confidence` enum values,
+  - drops `direction === 'no_signal'` and empty `discussionSynthesis`,
+  - drops `confidence === 'low' && factClaims.length === 0` so a directional chip backed by zero verified claims never reaches a customer inbox (F3 demotes confidence→low when citations<2 OR factClaims empty, but does not demote the direction).
+- **Citation URL host re-allowlist in the renderer** (`isSafeXCitation`): defense-in-depth on top of F3, only `https://` URLs whose hostname is in `{x.com, www.x.com, twitter.com, www.twitter.com}` reach the `<a href>`. Closes the residual risk that a cached/bypassed payload could ship a `javascript:` href into a Resend email.
+
+### Fixed
+- **`[object Object]` regression in 10-Q story bullets** (`components/ui/email/templates/10q-minimalist-template.tsx`): unified-prompts schema declares `guidanceUpdates` / `keyPoints` / `riskFactors.slice(0,3)` as `string[]`, but Grok occasionally returns `{metric, current, change}` object literals. Previously these rendered as the literal string `"[object Object]"` through `markdownToHtml`. New `coerceStoryItem(item: unknown)` helper extracts a displayable string from common object shapes (`text`/`description`/`summary`/`content`/`value`/`detail` keys, or synthesizes `**{metric}** {value}` if both are scalars) and drops anything else.
+
+### Repaired (drift)
+- **VERSION + package.json drift inherited from #485** (`VERSION=0.0.25.1`, `package.json=0.0.25.2`). Bumped both + `package-lock.json` to `0.0.25.3` so all three files agree, restoring the invariant that `/ship` enforces.
+
 ## [0.0.25.2] - 2026-04-29
 
 ### Changed

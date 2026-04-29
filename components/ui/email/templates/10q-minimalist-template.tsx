@@ -4,7 +4,41 @@ import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
+import { XSentimentSection, shouldRenderXSentiment } from './sections/XSentimentSection';
 import { FilingTemplateData } from '../../../../lib/email/types';
+
+/**
+ * Coerce a possibly-non-string array entry into a clean string.
+ *
+ * The unified-prompts schema declares `guidanceUpdates`/`keyPoints` as
+ * `string[]`, but Grok occasionally returns object literals (e.g.
+ * `{ metric, current, change }`) instead — which then render as
+ * "[object Object]" through `markdownToHtml`. This helper extracts a
+ * displayable string from common object shapes and drops anything else.
+ */
+function coerceStoryItem(item: unknown): string | null {
+  if (typeof item === 'string') {
+    const trimmed = item.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (item && typeof item === 'object') {
+    const obj = item as Record<string, unknown>;
+    for (const key of ['text', 'description', 'summary', 'content', 'value', 'detail']) {
+      const v = obj[key];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    // Synthesize "<metric>: <value>" if both are simple scalars
+    const metric = obj.metric ?? obj.label ?? obj.name;
+    const value = obj.current ?? obj.value ?? obj.amount;
+    if (
+      (typeof metric === 'string' || typeof metric === 'number') &&
+      (typeof value === 'string' || typeof value === 'number')
+    ) {
+      return `**${metric}** ${value}`;
+    }
+  }
+  return null;
+}
 
 interface Form10QMinimalistTemplateProps {
   filing: FilingTemplateData;
@@ -253,10 +287,15 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
     }
   }
 
-  // Story narrative: guidance updates + quarterly trends woven together
+  // Story narrative: guidance updates + quarterly trends woven together.
+  // Defensively coerce — schema says string[] but the LLM occasionally
+  // returns objects, which would otherwise render as "[object Object]".
   const storyParts: string[] = [];
   if (guidanceUpdates && guidanceUpdates.length > 0) {
-    storyParts.push(...guidanceUpdates);
+    for (const item of guidanceUpdates as unknown[]) {
+      const s = coerceStoryItem(item);
+      if (s) storyParts.push(s);
+    }
   }
   if (quarterlyTrends && quarterlyTrends.length > 0) {
     for (const trend of quarterlyTrends) {
@@ -266,14 +305,25 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
   }
   // If no guidance/trends but we have extra key points beyond the lead, include them
   if (storyParts.length === 0 && keyPoints && keyPoints.length > 1) {
-    storyParts.push(...keyPoints.slice(1, 4));
+    for (const item of keyPoints.slice(1, 4) as unknown[]) {
+      const s = coerceStoryItem(item);
+      if (s) storyParts.push(s);
+    }
   }
 
   // Watch for: risks + any remaining key points
   const watchFor: string[] = [];
   if (riskFactors && riskFactors.length > 0) {
-    watchFor.push(...riskFactors.slice(0, 3));
+    for (const item of riskFactors.slice(0, 3) as unknown[]) {
+      const s = coerceStoryItem(item);
+      if (s) watchFor.push(s);
+    }
   }
+
+  // X (Twitter) sentiment payload — only present when x_sentiment provider ran.
+  const xSentiment = rawData?.xSentiment as
+    NonNullable<FilingTemplateData['summaryData']>['xSentiment'] | undefined;
+  const renderXSentiment = shouldRenderXSentiment(xSentiment);
 
   // Build preheader text for inbox preview
   const preheaderText = leadSentence
@@ -510,6 +560,19 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                 </p>
               </td>
             </tr>
+          )}
+
+          {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
+          {renderXSentiment && xSentiment && (
+            <XSentimentSection
+              direction={xSentiment.direction}
+              shift={xSentiment.shift}
+              confidence={xSentiment.confidence}
+              discussionSynthesis={xSentiment.discussionSynthesis}
+              factClaims={xSentiment.factClaims}
+              citationUrls={xSentiment.citationUrls}
+              windowHours={xSentiment.windowHours}
+            />
           )}
 
           {/* Bottom spacer */}
