@@ -259,5 +259,20 @@ export interface FilingTemplateData {
     changeAmount?: string;
     changePercent?: string;
     footnote?: string;
+
+    // X (Twitter) sentiment enrichment payload — populated for high-importance
+    // mega-cap filings when the x_sentiment provider runs successfully.
+    // Mirrors the XSentiment interface in lib/ai/parsers/x-sentiment-validator.ts
+    // (kept inline to avoid a deep import in the email-types module).
+    xSentiment?: {
+      direction: 'bullish' | 'bearish' | 'mixed' | 'neutral' | 'no_signal';
+      shift: 'shifting_bullish' | 'shifting_bearish' | 'stable' | 'no_signal';
+      confidence: 'high' | 'medium' | 'low';
+      factClaims: string[];
+      opinionClaims: string[];
+      discussionSynthesis: string;
+      citationUrls: string[];
+      windowHours: number;
+    };
   };
-} 
+}
