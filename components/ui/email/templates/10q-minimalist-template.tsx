@@ -109,6 +109,36 @@ const fin = {
   },
 } as const;
 
+/**
+ * Normalize the "Latest" column value to two decimal places so the scorecard
+ * reads with consistent precision: `$611M` → `$611.00M`, `$3.59` → `$3.59`,
+ * `51.43%` → `51.43%`, `$1.2B` → `$1.20B`. Anything we can't parse (e.g.
+ * "N/A", "—") passes through unchanged.
+ */
+function formatValue(raw: string): string {
+  const trimmed = raw.trim();
+
+  const dollarMagnitude = trimmed.match(/^(\$?)(-?\d+(?:\.\d+)?)\s*([MBKT])$/i);
+  if (dollarMagnitude) {
+    const num = parseFloat(dollarMagnitude[2]);
+    if (!isNaN(num)) return `${dollarMagnitude[1]}${num.toFixed(2)}${dollarMagnitude[3].toUpperCase()}`;
+  }
+
+  const plainDollar = trimmed.match(/^(\$)(-?[\d,]+(?:\.\d+)?)$/);
+  if (plainDollar) {
+    const num = parseFloat(plainDollar[2].replace(/,/g, ''));
+    if (!isNaN(num)) return `${plainDollar[1]}${num.toFixed(2)}`;
+  }
+
+  const percent = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*%$/);
+  if (percent) {
+    const num = parseFloat(percent[1]);
+    if (!isNaN(num)) return `${num.toFixed(2)}%`;
+  }
+
+  return trimmed;
+}
+
 type DeltaTone = 'positive' | 'negative' | 'zero' | 'unparseable';
 
 /**
@@ -124,17 +154,33 @@ function parseDelta(value: string | number | undefined): { tone: DeltaTone; text
   if (value === undefined || value === null) return null;
   const raw = String(value).trim();
   if (!raw) return null;
+
+  // Percentage-point unit ("pp", "pts", "points") — used for margin changes.
+  // The LLM may emit pp suffixes; we normalize to "%" for display so the
+  // scorecard reads consistently across revenue (% relative) and margin
+  // (% point) rows. Disambiguation lives in the column label, not the unit.
+  const ppMatch = raw.match(/^([+-]?\d+(?:\.\d+)?)\s*(?:pp|pts|points?)$/i);
+  if (ppMatch) {
+    const num = parseFloat(ppMatch[1]);
+    if (isNaN(num)) return { tone: 'unparseable', text: raw };
+    if (num === 0) return { tone: 'zero', text: '0.00%' };
+    const isNegative = num < 0;
+    const abs = Math.abs(num);
+    const sign = isNegative ? '\u2212' : '+';
+    return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${abs.toFixed(2)}%` };
+  }
+
   const stripped = raw.replace(/[%+,$\s]/g, '');
   // Reject anything with non-numeric characters left after stripping the
-  // sign / unit decorations — "5points" → not a clean percentage.
+  // sign / unit decorations — catches "n/m", "N/A", and similar.
   if (!/^-?\d+(\.\d+)?$/.test(stripped)) return { tone: 'unparseable', text: raw };
   const num = parseFloat(stripped);
   if (isNaN(num)) return { tone: 'unparseable', text: raw };
-  if (num === 0) return { tone: 'zero', text: '0%' };
+  if (num === 0) return { tone: 'zero', text: '0.00%' };
   const isNegative = num < 0;
   const abs = Math.abs(num);
   const sign = isNegative ? '\u2212' : '+';
-  return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${abs}%` };
+  return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${abs.toFixed(2)}%` };
 }
 
 /**
@@ -252,8 +298,14 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
     if (withChanges.length > 0) {
       const parts = withChanges.slice(0, 2).map(h => {
         const pieces: string[] = [];
-        if (h.change) pieces.push(`${getChangeArrow(h.change)}${h.change} YoY`);
-        if (h.qoqChange) pieces.push(`${getChangeArrow(h.qoqChange)}${h.qoqChange} QoQ`);
+        if (h.change) {
+          const text = parseDelta(h.change)?.text ?? String(h.change);
+          pieces.push(`${getChangeArrow(h.change)}${text} YoY`);
+        }
+        if (h.qoqChange) {
+          const text = parseDelta(h.qoqChange)?.text ?? String(h.qoqChange);
+          pieces.push(`${getChangeArrow(h.qoqChange)}${text} QoQ`);
+        }
         return `${h.label} is ${pieces.join(', ')}`;
       });
       whyItMatters = parts.join('. ') + '.';
@@ -274,10 +326,12 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
     }
   }
 
-  // Data snapshot rows: financial metrics with YoY + QoQ in same row
+  // Data snapshot rows: financial metrics with YoY + QoQ in same row.
+  // Cap at 6 so the canonical 10-Q metric set fits without scrolling:
+  // Revenue, Gross Margin, Operating Margin, FCF Margin, Net Income, EPS.
   const dataRows: { label: string; value: string; change?: string | number; qoqChange?: string | number }[] = [];
   if (financialHighlights) {
-    for (const h of financialHighlights.slice(0, 5)) {
+    for (const h of financialHighlights.slice(0, 6)) {
       dataRows.push({
         label: h.label,
         value: String(h.value),
@@ -448,7 +502,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                         return (
                           <tr key={idx} style={{ backgroundColor: rowBg }}>
                             <td style={fin.cellMetric}>{row.label}</td>
-                            <td style={fin.cellValue}>{row.value}</td>
+                            <td style={fin.cellValue}>{formatValue(row.value)}</td>
                             <td style={fin.cellDelta}>
                               {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
                             </td>
