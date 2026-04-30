@@ -90,6 +90,14 @@ describe('FAQSectionV2', () => {
     );
   });
 
+  // Pro-vs-Max must differentiate Max via web-context enrichment — the core
+  // value prop introduced in the X Search MAX-only feature. If this test
+  // fails, the FAQ stopped explaining why Max costs more than Pro.
+  it('Pro-vs-Max answer calls out enriched/web-context differentiation', () => {
+    const pro = faqItems.find((i) => i.id === 'pro-vs-max');
+    expect(pro?.answerPlain).toMatch(/enrich|web context|web-context/i);
+  });
+
   it('removed FAQ items (companies, advice, data) are not present', () => {
     const ids = faqItems.map((i) => i.id);
     expect(ids).not.toContain('companies');
