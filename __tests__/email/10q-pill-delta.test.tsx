@@ -203,4 +203,31 @@ describe('Form10QMinimalistTemplate — PillDelta', () => {
     expect(cellSlice).not.toContain(PILL.positiveBg);
     expect(cellSlice).not.toContain(PILL.negativeBg);
   });
+
+  it('renders exactly 6 financial-highlight rows (canonical 10-Q metric set, drops 7th)', () => {
+    const html = renderHtml(makeFiling([
+      { label: 'Revenue', value: '$611M', change: '+7%' },
+      { label: 'Gross Margin', value: '51.43%', change: '+1.33pp' },
+      { label: 'Operating Margin', value: '30.27%', change: '+0.50pp' },
+      { label: 'FCF Margin', value: '28.00%', change: '+1pp' },
+      { label: 'Net Income', value: '$133M', change: '-8.15%' },
+      { label: 'EPS', value: '$3.59', change: '-6.75%' },
+      { label: 'Cash from Ops', value: '$200M', change: '+5%' },
+    ]));
+    expect(html).toContain('Revenue');
+    expect(html).toContain('FCF Margin');
+    expect(html).toContain('EPS');
+    expect(html).not.toContain('Cash from Ops');
+  });
+
+  it.each([
+    ['$5K', '$5.00K'],
+    ['$1T', '$1.00T'],
+    ['$3', '$3.00'],
+    ['$0M', '$0.00M'],
+    ['100%', '100.00%'],
+  ])('formatValue normalizes %s → %s in the Latest column', (input, expected) => {
+    const html = renderHtml(makeFiling([{ label: 'Metric', value: input }]));
+    expect(html).toContain(expected);
+  });
 });

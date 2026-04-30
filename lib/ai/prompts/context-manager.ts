@@ -8,8 +8,10 @@
 
 import { ContextWindowConfig, SECFilingSection, SECFilingType } from './prompt-types';
 
-// Default configuration for different filing types
-const DEFAULT_CONTEXT_CONFIGS: Record<SECFilingType, ContextWindowConfig> = {
+// Default configuration for different filing types.
+// Exported so regression tests can pin load-bearing values (e.g. the 10-Q
+// chunk size, which feeds the FCF / current-period extraction).
+export const DEFAULT_CONTEXT_CONFIGS: Record<SECFilingType, ContextWindowConfig> = {
   '10-K': {
     maxChunkSize: 12000,      // Large enough for most sections of a 10-K
     overlapSize: 1000,         // Significant overlap to maintain context

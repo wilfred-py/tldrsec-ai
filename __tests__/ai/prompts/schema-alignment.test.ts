@@ -165,6 +165,36 @@ describe('Schema Alignment', () => {
       expect(userPrompt).toContain('REQUIRED FINANCIAL METRICS');
     });
 
+    it('10-Q prompt enumerates all six required metrics in canonical order', () => {
+      const { userPrompt } = generateFilingPrompt({
+        formType: '10-Q',
+        filingContent: 'Test filing content'
+      });
+
+      // Anchor on the explicit metric block so we don't trip over other
+      // mentions of "Revenue"/"Gross Margin" elsewhere in the prompt.
+      const blockStart = userPrompt.indexOf('REQUIRED FINANCIAL METRICS (must include ALL SIX');
+      expect(blockStart).toBeGreaterThan(-1);
+      const block = userPrompt.slice(blockStart);
+
+      const order = ['Revenue', 'Gross Margin', 'Operating Margin', 'FCF Margin', 'Net Income', 'EPS'];
+      let lastIdx = -1;
+      for (const metric of order) {
+        const idx = block.indexOf(metric);
+        expect(idx).toBeGreaterThan(lastIdx);
+        lastIdx = idx;
+      }
+    });
+
+    it('10-Q prompt mandates two-decimal-place value formatting', () => {
+      const { userPrompt } = generateFilingPrompt({
+        formType: '10-Q',
+        filingContent: 'Test filing content'
+      });
+
+      expect(userPrompt.toLowerCase()).toContain('two decimal places');
+    });
+
     it('10-K prompt should list Revenue, Net Income, Gross Margin, EPS as required', () => {
       const { userPrompt } = generateFilingPrompt({
         formType: '10-K',

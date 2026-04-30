@@ -120,7 +120,10 @@ function ensureMinimumFields(
  * @param maxTokens - Maximum tokens allowed
  * @returns Processed document content and chunking info
  */
-function processDocumentContent(content: string, filingType: SECFilingType, maxTokens: number = 150000): {
+// Exported so regression tests can pin the case-insensitive key-section
+// match and the wider 10-Q/10-K extraction window — both load-bearing for
+// FCF and current-period extraction.
+export function processDocumentContent(content: string, filingType: SECFilingType, maxTokens: number = 150000): {
   processedContent: string;
   isChunked: boolean;
   chunkCount?: number;
