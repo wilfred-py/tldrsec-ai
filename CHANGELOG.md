@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.5] - 2026-05-01
+
+### Changed
+- **Consolidated three disagreeing "is trial active" call sites** into a single helper `lib/auth/tier-eligibility.ts`. Phase 1 of the X-search-MAX-only gating plan (`tasks/x-search-max-only.md`); refactor only, no observable user-facing change beyond a 5-min clock-skew grace harmonized across all sites.
+  - **Sites consolidated** (each previously had subtly different semantics):
+    1. `lib/cron/tier-priority.ts:28` — already had 5-min backwards grace; now imports `isActiveTrial`.
+    2. `lib/auth/trial-service.ts:80,173` — `checkTrialStatusFromUser` and `batchCheckTrialStatus` previously used `daysRemaining > 0` (no grace, day-ceiling math). Now uses `isActiveTrial({ isTrialing: true, trialEndsAt })`. Hard-coded `isTrialing: true` preserves legacy semantics where presence of `trialEndsAt` was treated as "in trial" regardless of `user.isTrialing`. Net effect: trials within the 5-minute clock-skew window keep access (was previously cut off mid-second).
+    3. `lib/cron/handlers/weekly-digest-handler.ts` — previously `trialEndsAt: { gt: now }` (strict, no grace). Now `trialEndsAt: { gt: getActiveTrialCutoffDate() }` (5-min grace). Eliminates a digest-skip race for users whose trial was about to expire when the cron fires.
+- **Single grace constant**: `MAX_ELIGIBILITY_GRACE_MS = 5 * 60 * 1000` defined once. Helper exports `isActiveTrial`, `isMaxEligible`, `hasActiveAccess`, `getActiveTrialCutoffDate`. `isMaxEligible` returns true for `tier === 'MAX'` OR active trial — used by Phase 4 producer-gate (not yet shipped).
+
+### Added
+- `__tests__/auth/tier-eligibility.test.ts` — basic helper coverage including 5-min grace zone behavior, MAX-only gating (PRO returns `false` from `isMaxEligible`), null-trial fallthrough.
+- `__tests__/auth/tier-eligibility-parity.test.ts` — golden-master parity matrix across `{tier: FREE/PRO/MAX} × {isTrialing: true/false/null} × {trialEndsAt: null/graceZone/past/future}` verifying the new helper matches legacy semantics for every combination, with documented grace-zone harmonization for sites B and C.
+- `__tests__/auth/tier-eligibility-purity.test.ts` — source-inspection guard asserting the helper file contains no `await`, `async`, or I/O imports. Stops the helper from drifting into a DB query and breaking the cron's tight loop.
+
 ## [0.0.25.4] - 2026-04-30
 
 ### Changed
