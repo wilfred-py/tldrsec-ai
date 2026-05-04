@@ -138,23 +138,35 @@ describe('Campaign token consumption (AC4)', () => {
   });
 
   describe('Render-time — band colors trace to SignalColors tokens', () => {
+    // E1 dropped the importance band entirely in PR 2 — the locked Hybrid
+    // voice puts the importance signal into the dry headline + gloss, not
+    // into a colored card. The digest (E2) keeps colored bands because
+    // scannability is the digest's reason to exist.
     it.each([
       ['high', 'HIGH'] as const,
       ['medium', 'MODERATE'] as const,
       ['low', 'LOW'] as const,
-    ])('importance=%s renders %s band bg + border tokens', async (importance, level) => {
+    ])('digest importance=%s renders %s band bg + border tokens', async (importance, level) => {
       const filing = makeFiling({ importance });
-      const { html } = await getCampaignEmailContent(1, { ...baseOptions, filings: [filing] });
+      const { html } = await getCampaignEmailContent(2, { ...baseOptions, filings: [filing] });
       expect(html).toContain(SignalColors[level].bgColor);
       expect(html).toContain(SignalColors[level].borderColor);
     });
 
-    it('importance=critical collapses into HIGH band (no fourth color)', async () => {
+    it('digest importance=critical collapses into HIGH band (no fourth color)', async () => {
       const filing = makeFiling({ importance: 'critical' });
-      const { html } = await getCampaignEmailContent(1, { ...baseOptions, filings: [filing] });
+      const { html } = await getCampaignEmailContent(2, { ...baseOptions, filings: [filing] });
       expect(html).toContain(SignalColors.HIGH.bgColor);
       // The MODERATE bg should NOT appear for a critical filing.
       expect(html).not.toContain(SignalColors.MODERATE.bgColor);
+    });
+
+    it('hero (E1) renders WITHOUT signal-band colors — band moved out of E1', async () => {
+      const filing = makeFiling({ importance: 'high' });
+      const { html } = await getCampaignEmailContent(1, { ...baseOptions, filings: [filing] });
+      expect(html).not.toContain(SignalColors.HIGH.bgColor);
+      expect(html).not.toContain(SignalColors.MODERATE.bgColor);
+      expect(html).not.toContain(SignalColors.LOW.bgColor);
     });
 
     it('digest renders 3 distinct signal palettes when filings span all bands', async () => {
@@ -169,10 +181,12 @@ describe('Campaign token consumption (AC4)', () => {
       expect(html).toContain(SignalColors.LOW.bgColor);
     });
 
-    it('hero copy uses EmailColors.text.headline + body tokens', async () => {
+    it('hero body copy uses EmailColors.text.body token', async () => {
+      // Headline + meta colors live inside <EmailHeroBlock> JSX (mocked at
+      // the renderAsync boundary in this suite — see EmailHeroBlock unit
+      // tests for those assertions). Here we only verify the body-paragraph
+      // color flowed through into the inline-template-literal output.
       const { html } = await getCampaignEmailContent(1, baseOptions);
-      // Headline + body color values flow from EmailColors.
-      expect(html).toContain(EmailColors.text.headline);
       expect(html).toContain(EmailColors.text.body);
     });
   });

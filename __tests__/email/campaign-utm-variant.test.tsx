@@ -80,13 +80,29 @@ describe('Campaign CTA href contract (AC12)', () => {
     it.todo('AC12: variant=B wraps invite CTA through /r/filing?v=B&...');
   });
 
-  describe('Email 1 — pure-value email (no CTA)', () => {
-    it('contains no marketing CTA href (only unsubscribe + settings)', async () => {
+  describe('Email 1 — product-as-demo email (landing-page CTA, EDGAR audit link)', () => {
+    it('CTA button routes to the landing page, not the trial signup flow', async () => {
+      // PR 2 reshape: E1 carries a single bottom CTA in the slot where
+      // production filing emails put "View on SEC Website". Recipients are
+      // unregistered, so the button → tldrsec.app (landing page), not
+      // /sign-up?plan=pro&ref=campaign (the E3 trial flow).
       const { html } = await getCampaignEmailContent(1, baseOptions);
       const hrefs = ctaHrefs(html);
-      // Logo image is wrapped at logo-email.png but not as <a>; the EmailHeader
-      // stub also has no anchors. Result: zero CTAs in the body.
-      expect(hrefs).toEqual([]);
+      expect(hrefs).toContain('https://tldrsec.app');
+      expect(hrefs.some(h => h.includes('/sign-up'))).toBe(false);
+    });
+
+    it('embeds an EDGAR source link so the summary is auditable', async () => {
+      // The source link goes through `getSecFilingViewerUrl()` — same path
+      // production filing emails use. The fallback fixture leaves
+      // `filingUrl` empty (hardcoded accession-based URLs rotted to 404s
+      // in QA), so the helper resolves to EDGAR's companysearch landing
+      // page — a real, working entry point. DB-driven sends with a real
+      // `Summary.filingUrl` get the proper `/Archives/edgar/data/...-index`
+      // pass-through.
+      const { html } = await getCampaignEmailContent(1, baseOptions);
+      const hrefs = ctaHrefs(html);
+      expect(hrefs.some(h => h.startsWith('https://www.sec.gov/'))).toBe(true);
     });
   });
 });

@@ -16,12 +16,32 @@
  * Acceptance criteria covered: AC1 (HTML escape), AC2 (subject CRLF strip).
  */
 
-// Stub @react-email/render: the suite tests inline-template-literal escaping
-// in email1/email2, not <EmailHeader> rendering (JSX auto-escapes there). The
-// real renderAsync resolves to dist/browser under jsdom and uses dynamic
-// import("react-dom/server"), which Jest's CJS environment can't execute.
+// Component-aware @react-email/render stub: serializes string props as
+// data-* attributes with full HTML escape, matching how renderToString would
+// escape JSX text content. Required because PR 2 moved companyName + title
+// (the dangerous fields under test) out of template-literal interpolation
+// into <EmailHeader> + <EmailHeroBlock> JSX. The stub lets these tests verify
+// that hostile input is HTML-escaped before reaching the rendered string.
 jest.mock('@react-email/render', () => ({
-  renderAsync: jest.fn(async () => '<table><tbody><tr><td>HEADER_STUB</td></tr></tbody></table>'),
+  renderAsync: jest.fn(async (element: unknown) => {
+    const el = element as {
+      type?: { name?: string; displayName?: string };
+      props?: Record<string, unknown>;
+    };
+    const name = el?.type?.name || el?.type?.displayName || 'Unknown';
+    const props = el?.props || {};
+    const escAttr = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const attrs = Object.entries(props)
+      .filter(([, v]) => typeof v === 'string' && v.length > 0)
+      .map(([k, v]) => `data-${k}="${escAttr(v as string)}"`)
+      .join(' ');
+    return `<div data-component="${name}" ${attrs}>STUB:${name}</div>`;
+  }),
 }));
 
 import {

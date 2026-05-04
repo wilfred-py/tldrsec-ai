@@ -18,18 +18,33 @@ import type { CampaignFiling } from '../campaign-templates';
 
 /**
  * Email 1 hero fallback — single illustrative filing.
- * Original copy preserved from `campaign-templates.ts` pre-extraction.
+ *
+ * Voice: locked Variant C Hybrid from `.claude/tasks/design-shotgun/email-1-hero-2026-04-29/`.
+ * `heroHeadline` is dry, ticker-prefixed, observational (Levine-style).
+ * `whyItMatters` carries the Hormozi value-equation framing — only the gloss
+ * does conversion work.
  */
 export interface CampaignFallbackHero {
   ticker: string;
   companyName: string;
-  heading: string;
+  /** Dry, ticker-prefixed headline. Cap at 90 chars (EmailHeroBlock enforces). */
+  heroHeadline: string;
+  /** Brand-purple "why it matters" gloss. Optional, but always set in fallback. */
+  whyItMatters: string;
   summaryBody: string;
   filingType: string;
   filingDate: Date;
   importance: 'critical' | 'high' | 'medium' | 'low';
   importanceLabel: string;
   filedDateLabel: string;
+  /**
+   * Real EDGAR archive URL for the "Source: SEC EDGAR" audit link in the
+   * hero. Mirrors what production filing emails get from `Summary.filingUrl`
+   * — the campaign code runs this through `getSecFilingViewerUrl()` so it
+   * opens the actual filing index, not a search-results listing. Refresh
+   * quarterly when the curated narrative is rotated to a new filing.
+   */
+  filingUrl: string;
   variantBSubject: string;
   variantASubject: string;
   variantBPreheader: string;
@@ -39,23 +54,35 @@ export interface CampaignFallbackHero {
 export const CAMPAIGN_FALLBACK_HERO: CampaignFallbackHero = {
   ticker: 'NVDA',
   companyName: 'NVIDIA Corp',
-  heading: 'NVIDIA Corp (NVDA) - Insider Purchase',
+  heroHeadline: 'NVDA: 3 customers each booked over 13% last quarter',
+  whyItMatters:
+    'Each of those three is shipping its own AI silicon to replace H100s. ' +
+    'The "customer concentration is temporary" footnote has widened for ' +
+    'three straight quarters now.',
   summaryBody:
-    'A senior executive acquired 15,000 shares at $142.50/share ($2.14M total). ' +
-    'This is notable because insider buying at this scale, during a period of ' +
-    'elevated valuation, signals strong internal confidence in near-term performance. ' +
-    'The executive now holds 185,000 shares directly.',
-  filingType: 'Form 4',
-  filingDate: new Date('2026-03-15'),
+    'Customer concentration disclosure widened for the third straight quarter. ' +
+    'Three customers each contributed more than 13% of total revenue, up from ' +
+    'two a year ago. Data center segment revenue grew 94% year-over-year while ' +
+    'China revenue fell to roughly 4% of total amid tightened export controls. ' +
+    'Inventory and supply commitments now exceed $32B against a $35B revenue quarter.',
+  filingType: '10-Q',
+  filingDate: new Date('2026-03-12'),
   importance: 'high',
   importanceLabel: 'HIGH',
   filedDateLabel: 'March 2026',
-  variantBSubject: 'NVDA insider bought $2.1M last week',
-  variantASubject: 'the form 4 filing most investors missed',
-  variantBPreheader:
-    'A senior executive acquired 15,000 NVDA shares at $142.50/share ($2.14M total).',
+  // Empty by design: the curated fallback narrative doesn't correspond to a
+  // single real filing, and hardcoded accession numbers rotted to 404s in
+  // QA. `getSecFilingViewerUrl('')` returns EDGAR's companysearch landing
+  // page — a real, working entry point where users can audit the source by
+  // searching the ticker themselves. DB-driven sends still get real URLs
+  // through `toCampaignFiling` → `Summary.filingUrl`.
+  filingUrl: '',
+  variantASubject: 'NVDA: 3 customers each booked over 13% last quarter',
+  variantBSubject: 'The 10-Q every NVDA holder needs to see',
   variantAPreheader:
-    'This is what our AI does with SEC filings, minutes after they hit EDGAR.',
+    'Each of those three is also shipping AI silicon to replace H100s.',
+  variantBPreheader:
+    'Customer concentration footnote widened for the third straight quarter.',
 };
 
 /**
@@ -75,32 +102,35 @@ export const CAMPAIGN_FALLBACK_DIGEST: CampaignFallbackDigestRow[] = [
   {
     importance: 'HIGH',
     importanceColorKey: 'high',
-    badge: 'Form 4',
+    badge: '10-K',
     company: 'Tesla Inc (TSLA)',
-    title: 'Director Stock Sale',
+    title: 'Going-concern language tied to Musk comp re-ratification',
     summary:
-      'Board member sold 50,000 shares at $248.30 ($12.4M). Scheduled sale ' +
-      'under 10b5-1 plan filed in January. Director retains 420,000 shares.',
+      'Annual report flags the shareholder re-ratification of the $56B 2018 ' +
+      'compensation package as a material risk. Delaware court voided the ' +
+      'original award; the 10-K discloses no documented plan B if the second ' +
+      'vote also fails.',
   },
   {
-    importance: 'MEDIUM',
-    importanceColorKey: 'medium',
-    badge: '8-K',
-    company: 'Apple Inc (AAPL)',
-    title: 'Material Definitive Agreement',
-    summary:
-      'Entered into a $5B revolving credit facility with a consortium of banks. ' +
-      'Replaces existing $3B facility expiring Q2 2026. Signals preparation for ' +
-      'potential large acquisition or capital deployment.',
-  },
-  {
-    importance: 'MEDIUM',
-    importanceColorKey: 'medium',
+    importance: 'HIGH',
+    importanceColorKey: 'high',
     badge: '10-Q',
-    company: 'Microsoft Corp (MSFT)',
-    title: 'Quarterly Report',
+    company: 'Meta Platforms (META)',
+    title: 'Reality Labs lost $4.5B this quarter, cumulative now over $60B',
     summary:
-      'Revenue $65.2B (+14% YoY). Cloud segment grew 22%. Operating margin ' +
-      'expanded 180bps to 44.2%. Raised full-year guidance by $2B on AI demand strength.',
+      'Reality Labs operating losses now exceed cumulative segment revenue ' +
+      'by 11x. Management reiterated the multi-year investment posture and ' +
+      'declined to project a breakeven year for the segment.',
+  },
+  {
+    importance: 'MEDIUM',
+    importanceColorKey: 'medium',
+    badge: '10-K',
+    company: 'Alphabet Inc (GOOGL)',
+    title: 'Search antitrust ruling now disclosed as a material risk',
+    summary:
+      'First annual report after the DOJ search-monopoly verdict. The risk ' +
+      'factor section names two structural remedies under DOJ consideration ' +
+      'and concedes either would force restated economics for Search.',
   },
 ];

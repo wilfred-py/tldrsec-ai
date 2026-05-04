@@ -91,18 +91,20 @@ describe('Campaign voice + tone (AC10)', () => {
       expect(text).toMatch(/within \d+ minutes|every \d+ minutes/);
     });
 
-    it('surfaces Effort/Sacrifice reversal (cancel + no charge)', async () => {
+    it('surfaces Effort/Sacrifice reversal (cancel-anytime line below CTA)', async () => {
       const { html } = await getCampaignEmailContent(3, baseOptions);
       const text = htmlToText(html).toLowerCase();
+      // PR 2 cleanup: the "card won't be charged" reassurance was dropped
+      // as redundant. The cancel beat alone carries the risk-reversal.
       expect(text).toMatch(/cancel/);
-      expect(text).toMatch(/(won't be charged|no charge|no questions asked)/);
     });
 
-    it('variant A sub-CTA leads with risk-reversal (card not charged)', async () => {
+    it('variant A sub-CTA is the punchy single-line cancel reassurance', async () => {
       const { html } = await getCampaignEmailContent(3, { ...baseOptions, variant: 'A' });
       const text = htmlToText(html);
-      // Variant A copy: "Your card won't be charged for 7 days. Cancel anytime in one click."
-      expect(text).toMatch(/card won't be charged/i);
+      expect(text).toMatch(/Cancel anytime in one click\./);
+      // The redundant "card won't be charged" line was dropped in PR 2.
+      expect(text).not.toMatch(/card won't be charged/i);
     });
 
     it('variant B sub-CTA leads with breadth (full access)', async () => {
@@ -112,33 +114,50 @@ describe('Campaign voice + tone (AC10)', () => {
     });
   });
 
-  describe('Email 1 — value-first framing', () => {
-    it('opens with what the AI does, not who tldrSEC is', async () => {
-      const filing = {
-        ticker: 'AAPL',
-        companyName: 'Apple Inc.',
-        filingType: '8-K',
-        filingDate: new Date('2026-04-28'),
-        importance: 'high' as const,
-        summary: 'Material agreement signed.',
-        title: 'Quarterly results',
-      };
-      const { html } = await getCampaignEmailContent(1, { ...baseOptions, filings: [filing] });
+  describe('Email 1 — product-as-demo framing', () => {
+    it('does NOT carry the old preamble or "what our AI does" framing', async () => {
+      // PR 2 reshape: E1 is now a sample of the product, not a pitch about
+      // it. The "You signed up for tldrSEC a few weeks ago. Here's what our
+      // AI does with SEC filings" preamble + the "On EDGAR, reading this
+      // 10-Q takes 15-20 minutes" closing were both stripped. The whole
+      // email body = the filing summary the recipient would receive as a
+      // paying user.
+      const { html } = await getCampaignEmailContent(1, baseOptions);
       const text = htmlToText(html);
-      // First non-header sentence should anchor on the AI/product, not "We are…".
-      // The locked intro sentence is: "You signed up for tldrSEC a few weeks ago.
-      // Here's what our AI does with SEC filings."
-      expect(text).toMatch(/Here's what our AI does/);
+      expect(text).not.toMatch(/Here's what our AI does/);
+      expect(text).not.toMatch(/15-20 minutes/);
       expect(text).not.toMatch(/^We are |^We're a /);
+      expect(text).not.toMatch(/This is a sample of what tldrSEC delivers/);
     });
 
-    it('explicitly contrasts AI speed vs manual reading time', async () => {
+    it('renders the filing summary body (the actual product output)', async () => {
       const { html } = await getCampaignEmailContent(1, baseOptions);
-      const text = htmlToText(html).toLowerCase();
-      // The locked closing comparison: "On EDGAR, reading this … takes 15-20
-      // minutes. Our AI extracted the key details in under 10 minutes…"
-      expect(text).toMatch(/15-20 minutes/);
-      expect(text).toMatch(/under 10 minutes|in 10 minutes/);
+      const text = htmlToText(html);
+      // The fallback `summaryBody` must reach the body text — that's the
+      // entire purpose of E1 now.
+      expect(text).toContain('Customer concentration disclosure widened');
+    });
+
+    it('routes the bottom CTA to the landing page (not EDGAR) for unregistered recipients', async () => {
+      const { html } = await getCampaignEmailContent(1, baseOptions);
+      // The button-positioned-where-View-on-SEC-Website-lives points to
+      // tldrsec.app, not edgar.sec.gov, since campaign recipients are
+      // unregistered waitlist members.
+      expect(html).toContain('See more filings like this');
+      expect(html).toMatch(/href="https:\/\/tldrsec\.app"[^>]*style="display:inline-block;background-color:#2563eb/);
+    });
+
+    it('keeps an EDGAR audit hyperlink in the body so users can verify the source', async () => {
+      const { html } = await getCampaignEmailContent(1, baseOptions);
+      // "Source: SEC EDGAR" anchor goes through `getSecFilingViewerUrl()`
+      // — same path production filing emails use, so a real `filing.filingUrl`
+      // resolves to an `/Archives/edgar/data/...-index.htm` page (the actual
+      // filing index) and an empty/missing URL falls back to EDGAR company
+      // search. Either way, the anchor is to sec.gov, brand-purple, and
+      // labeled "Source: SEC EDGAR".
+      expect(html).toMatch(/<a href="https:\/\/www\.sec\.gov\/[^"]*"[^>]*>\s*Source: SEC EDGAR\s*<\/a>/);
+      // Brand-purple EmailColors.semantic.accent (#7C3AED) for the link.
+      expect(html).toMatch(/<a href="https:\/\/www\.sec\.gov\/[^"]*" style="color:#7C3AED/);
     });
   });
 

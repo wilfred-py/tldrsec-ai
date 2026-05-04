@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.5] - 2026-05-01
+
+### Added
+- **3-email campaign voice + content — PR 2 of the email-campaign-revamp track.** Lands the locked Variant C Hybrid voice from `/design-shotgun` for the Email 1 hero, plus the curated top-30 S&P 500 fixture pool that powers fallback sends. Five sub-tasks executed under one PR per `.claude/tasks/email-campaign-revamp.md` § "PR 2: Voice + content."
+- **`<EmailHeroBlock>` section component** (`components/ui/email/templates/sections/EmailHeroBlock.tsx`). Renders the locked Hybrid hero: dry, ticker-prefixed observational headline (Levine-style) plus an optional brand-purple left-rail "why it matters" gloss (Hormozi value-equation framing). Sits below `<EmailHeader>` and runs the headline through `ensureTickerPrefix` + `capHeadline(90)` so it inherits the same defensive truncation contract as production filing emails. 10 unit tests cover ticker-prefix idempotency, capHeadline(90) truncation, custom `headlineMaxChars` override, empty-headline no-op, brand-purple rail toggle, and JSX auto-escape on hostile input.
+- **`headline?` + `whyItMatters?` craft-layer fields on `CampaignFiling`** (`lib/email/campaign-templates.ts`). Optional fields used by E1's Hybrid hero — when present the hero renders the dry observational headline + gloss; when absent the hero falls back to the raw filing `title` (production path with no LLM-enriched copy).
+- **Subject A/B variants for E1 — locked from `/design-shotgun`:**
+  - **A (default)**: `${ticker}: ${title}` — case-preserved (no longer lowercased), e.g. `AAPL: prepaid $4.5B for TSMC capacity through 2028`
+  - **B (test)**: `The ${filingType} every ${ticker} holder needs to see` — Hormozi pattern with embedded ticker
+- **`lib/email/sp500-top30.ts`** — single-source-of-truth top-30 S&P 500 ticker pool (`SP500_TOP_30: readonly SP500Top30Ticker[]`). 30 brand-recognizable, news-verifiable tickers ordered by approximate market cap. `SP500_TOP_30_TICKERS` Set + `isTop30Ticker(s)` case-insensitive predicate for membership checks. Spec at `.claude/tasks/email-campaign-revamp.md` §M3 ("needs to live in code, not plan markdown"). 7 contract tests pin the 30-element invariant and verify NVDA/TSLA/AAPL/MSFT remain in pool (campaign-fallback fixtures depend on them).
+- **Hybrid-voice fallback hero copy** — `CAMPAIGN_FALLBACK_HERO` in `lib/email/__fixtures__/campaign-fallback-filings.ts` now carries `heroHeadline` ("NVDA: insider bought $2.14M of stock at $142.50/share") + `whyItMatters` ("Insider purchases this size during elevated valuation are rare — they signal internal confidence in near-term performance that public numbers haven't shown yet"). Variant subjects updated to match the new locked patterns (variant A mirrors heroHeadline; variant B uses the Hormozi pattern).
+
+### Refactored (E1 layout)
+- **E1 dropped the importance-band card.** The locked Levine voice puts importance into the dry headline + gloss, not a colored card. The reader infers importance from the observation, not from amber/indigo signal palettes. E2 (digest) keeps colored bands because scannability is the digest's reason to exist. Affects `lib/email/campaign-templates.ts:email1` only — `email2`/`email3` and the React `campaign-demo-template.tsx` are unchanged.
+- **Plaintext alternative restructured** to mirror the new HTML structure: `${ticker} · ${companyName}` line + `${heroHeadline}` + optional `${whyItMatters}` + summary body. The "On EDGAR, this takes 15-20 minutes" closing comparison is preserved (pinned by prompt-eval tests).
+- **Preheader now prefers `whyItMatters` over `summary`** when the gloss is present — the inbox preview text leads with the conversion-doing line rather than the descriptive one. Falls back to summary when whyItMatters absent.
+
+### Tests updated for the new layout
+- **`__tests__/email/campaign-rendering.test.tsx`** — replaced the inline-summary-card assertions with a component-aware `renderAsync` mock (serializes string props as escape-encoded `data-*` attributes so the outer template can verify which component was composed in and with which key props). 21 tests covering: dynamic-filing hero composition for AAPL/MSFT/NVDA, curated `headline` + `whyItMatters` flow-through, fallback variant A/B subjects, preheader gloss-first / summary-fallback behavior, and the "no E1 importance band" assertion.
+- **`__tests__/email/campaign-xss.test.tsx`** — same component-aware mock applied so hostile `companyName` / `title` payloads (now flowing through `<EmailHeader>` + `<EmailHeroBlock>` JSX instead of template-literal interpolation) are still verified to be HTML-escaped before reaching the rendered string.
+- **`__tests__/email/campaign-subject-consistency.test.ts`** — pin updated to case-preserved `${ticker}: ${title}` schema (not lowercased), variant B's Hormozi pattern locked, and the marketing-scream heuristic relaxed to allow ALL-CAPS tickers anywhere (not just leading) so variant B's mid-string `NVDA` doesn't false-positive.
+- **`__tests__/email/campaign-token-consumption.test.ts`** — band-color assertions scoped to E2 (digest), with a new "hero E1 renders WITHOUT signal-band colors" inverse assertion locking the layout decision. Hero-color test reduced to body-token check (headline + meta colors live inside `<EmailHeroBlock>` JSX, covered by the new unit tests).
+
+### Verified
+- **All 60 email test suites green** (831 passing + 9 todo + 4 skipped). 10 campaign-related suites all pass: 107 passing across XSS, rendering, subject consistency, token consumption, performance, prompt eval, resend tags, UTM variant, EmailHeroBlock unit tests, and the new SP500 top-30 contract.
+- **No new TS errors introduced.** The pre-existing 4-error set in `campaign-demo-template.tsx` / `campaign-digest-template.tsx` / `campaign-invite-template.tsx` (`EmailFooterProps` extra `filingUrl` + `<td>` `bgcolor` typing) remains tracked for a separate chore PR.
+
 ## [0.0.25.4] - 2026-04-30
 
 ### Added

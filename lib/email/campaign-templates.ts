@@ -20,14 +20,17 @@ import { renderAsync } from '@react-email/render';
 import { getPrismaClient } from '../db/prisma';
 import { logger } from '../logging';
 import { escapeHtml } from './security-helpers';
+import { getSecFilingViewerUrl } from './url-utils';
 import {
   capHeadline,
+  ensureTickerPrefix,
   EmailColors,
   SignalColors,
   importanceToSignalLevel,
   type SignalLevel,
 } from '@/components/ui/email/design-system';
 import { EmailHeader } from '@/components/ui/email/templates/sections/EmailHeader';
+import { EmailHeroBlock } from '@/components/ui/email/templates/sections/EmailHeroBlock';
 import {
   CAMPAIGN_FALLBACK_HERO,
   CAMPAIGN_FALLBACK_DIGEST,
@@ -45,6 +48,13 @@ function stripCrlf(value: string): string {
 
 /**
  * A filing summary formatted for display in campaign emails.
+ *
+ * `headline` and `whyItMatters` are optional craft-layer fields used by E1's
+ * Hybrid hero (locked from `.claude/tasks/design-shotgun/email-1-hero-2026-04-29/`).
+ * When present, the hero renders the dry observational `headline` and the
+ * brand-purple "why it matters" gloss instead of the raw filing `title`.
+ * When absent (production path with no LLM-enriched copy), the hero falls
+ * back to `${companyName} (${ticker}) - ${title}`.
  */
 export interface CampaignFiling {
   ticker: string;
@@ -54,6 +64,16 @@ export interface CampaignFiling {
   importance: 'critical' | 'high' | 'medium' | 'low';
   summary: string;
   title: string;
+  headline?: string;
+  whyItMatters?: string;
+  /**
+   * Direct link to the filing on EDGAR. When present, the campaign hero's
+   * "Source: SEC EDGAR" anchor uses this URL via `getSecFilingViewerUrl()`
+   * — same path production filing emails use, so the link opens the actual
+   * archive index page, not a search-results listing. Optional because the
+   * fallback fixture stories may not always carry a real one.
+   */
+  filingUrl?: string;
 }
 
 interface CampaignEmailOptions {
@@ -80,7 +100,7 @@ const FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helv
  * `<EmailHeader>` section component). When omitted, falls back to the
  * legacy inline logo strip used by email2/email3 (no single-filing context).
  */
-function campaignShell(content: string, options: { unsubscribeUrl: string; preheader?: string; headerHtml?: string }): string {
+export function campaignShell(content: string, options: { unsubscribeUrl: string; preheader?: string; headerHtml?: string }): string {
   const year = new Date().getFullYear();
   // Preheader padding prevents email clients from appending body text to the inbox preview
   const preheaderPad = '&zwnj;&nbsp;'.repeat(40);
@@ -170,6 +190,7 @@ export interface ScoredSummaryRow {
   importance: string | null;
   smartSubject: string | null;
   tokensUsed: number | null;
+  filingUrl: string | null;
   ticker: { symbol: string; companyName: string };
   score: number;
 }
@@ -215,6 +236,7 @@ export async function fetchScoredSummariesLast30Days(limit: number = 50): Promis
         importance: true,
         smartSubject: true,
         tokensUsed: true,
+        filingUrl: true,
         ticker: {
           select: { symbol: true, companyName: true },
         },
@@ -277,6 +299,9 @@ function toCampaignFiling(s: ScoredSummaryRow): CampaignFiling {
     importance: (s.importance as CampaignFiling['importance']) || 'medium',
     summary: summaryText,
     title,
+    // Pass the real EDGAR URL through so the campaign hero's "Source" link
+    // resolves to the actual filing index, same path production uses.
+    filingUrl: s.filingUrl ?? undefined,
   };
 }
 
@@ -322,101 +347,131 @@ async function email1(options: CampaignEmailOptions): Promise<CampaignEmailConte
   // Use the top dynamic filing if available, otherwise fall back to hardcoded sample
   const filing = options.filings?.[0];
 
-  const signalLevel: SignalLevel = importanceToSignalLevel(filing?.importance ?? CAMPAIGN_FALLBACK_HERO.importance);
-  const signal = SignalColors[signalLevel];
-  const badge = { bg: FILING_BADGE_BG, text: FILING_BADGE_FG };
-
-  // Render the shared <EmailHeader> for this filing — gives the campaign hero
-  // the same logo + category + ticker · company strip as production filing emails.
-  const headerHtml = await renderAsync(
-    React.createElement(EmailHeader, {
-      ticker: filing?.ticker ?? CAMPAIGN_FALLBACK_HERO.ticker,
-      companyName: filing?.companyName ?? CAMPAIGN_FALLBACK_HERO.companyName,
-      filingType: filing?.filingType ?? CAMPAIGN_FALLBACK_HERO.filingType,
-      filingDate: filing?.filingDate ?? CAMPAIGN_FALLBACK_HERO.filingDate,
-    }),
-  );
-
   // Raw values (used for plaintext body + subject; subject path uses stripCrlf).
   // Fallback copy lives in __fixtures__/campaign-fallback-filings.ts.
-  const rawImpLabel = filing ? filing.importance.toUpperCase() : CAMPAIGN_FALLBACK_HERO.importanceLabel;
+  const rawTicker = filing?.ticker ?? CAMPAIGN_FALLBACK_HERO.ticker;
+  const rawCompanyName = filing?.companyName ?? CAMPAIGN_FALLBACK_HERO.companyName;
   const rawFilingType = filing?.filingType || CAMPAIGN_FALLBACK_HERO.filingType;
-  const rawHeading = filing
-    ? `${filing.companyName} (${filing.ticker}) - ${filing.title}`
-    : CAMPAIGN_FALLBACK_HERO.heading;
   const rawSummaryBody = filing?.summary || CAMPAIGN_FALLBACK_HERO.summaryBody;
+  // Hybrid hero headline — prefer curated `headline`, else fall back to filing.title.
+  // `EmailHeroBlock` runs the result through `ensureTickerPrefix` + `capHeadline(90)`.
+  const rawHeroHeadline = filing?.headline
+    ?? (filing ? filing.title : CAMPAIGN_FALLBACK_HERO.heroHeadline);
+  // Optional gloss — when missing, the hero renders without the brand-purple left rail.
+  const rawWhyItMatters = filing?.whyItMatters ?? CAMPAIGN_FALLBACK_HERO.whyItMatters;
   const filedDate = filing
     ? filing.filingDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : CAMPAIGN_FALLBACK_HERO.filedDateLabel;
 
-  // HTML-safe values (used inside template-literal HTML output)
-  const impLabel = escapeHtml(rawImpLabel);
-  const filingType = escapeHtml(rawFilingType);
-  const heading = escapeHtml(rawHeading);
+  // HTML-safe values (used inside template-literal HTML output). filingType is
+  // no longer interpolated into body copy (the "15-20 minutes" closing is
+  // gone), but rawFilingType is still used in the variant-B subject + EDGAR
+  // audit URL + plaintext body — keep the raw form too.
   const summaryBody = escapeHtml(rawSummaryBody);
 
-  // Subject is an RFC 5322 header — strip CRLF (header injection), not HTML
+  // Render the shared `<EmailHeader>` (logo + category + ticker · company
+  // strip — same as production filing emails) and the Hybrid `<EmailHeroBlock>`
+  // (dry ticker-prefixed headline + optional brand-purple gloss) in parallel.
+  // Each renderAsync is ~1-2ms; sequential awaits multiplied by N recipients
+  // adds up on batch sends. JSX auto-escapes user content in both.
+  const [headerHtml, heroHtml] = await Promise.all([
+    renderAsync(
+      React.createElement(EmailHeader, {
+        ticker: rawTicker,
+        companyName: rawCompanyName,
+        filingType: rawFilingType,
+        filingDate: filing?.filingDate ?? CAMPAIGN_FALLBACK_HERO.filingDate,
+      }),
+    ),
+    renderAsync(
+      React.createElement(EmailHeroBlock, {
+        ticker: rawTicker,
+        headline: rawHeroHeadline,
+        whyItMatters: rawWhyItMatters,
+      }),
+    ),
+  ]);
+
+  // Subject A/B variants — locked from /design-shotgun:
+  //   A (default): dry, factual — prefers the curated `filing.headline`
+  //                (the dry, fully-formed observation that also drives the
+  //                body hero). Falls back to `filing.title` for the
+  //                production path where no LLM-enriched copy exists yet.
+  //                Either way, dedup via `ensureTickerPrefix` so that an
+  //                LLM-built smartSubject like `AMZN: Q1 earnings results`
+  //                doesn't double up to `AMZN: AMZN: …`.
+  //   B (test):    Hormozi pattern — `The 8-K every ${ticker} holder needs to see`
+  const variantASubjectSource = filing?.headline || filing?.title || '';
+  const variantBSubject = `The ${rawFilingType} every ${rawTicker} holder needs to see`;
   const subject = filing
-    ? stripCrlf(`${filing.ticker}: ${filing.title}`).toLowerCase()
-    : (options.variant === 'B' ? CAMPAIGN_FALLBACK_HERO.variantBSubject : CAMPAIGN_FALLBACK_HERO.variantASubject);
+    ? stripCrlf(
+        options.variant === 'B'
+          ? variantBSubject
+          : ensureTickerPrefix(variantASubjectSource, rawTicker),
+      )
+    : (options.variant === 'B'
+        ? CAMPAIGN_FALLBACK_HERO.variantBSubject
+        : CAMPAIGN_FALLBACK_HERO.variantASubject);
 
   // Preheader renders inside <div> in campaignShell — escape user content
   const preheader = filing
-    ? escapeHtml(rawSummaryBody.substring(0, 100))
+    ? escapeHtml((rawWhyItMatters || rawSummaryBody).substring(0, 100))
     : (options.variant === 'B'
       ? CAMPAIGN_FALLBACK_HERO.variantBPreheader
       : CAMPAIGN_FALLBACK_HERO.variantAPreheader);
 
+  // EDGAR audit link — production filing emails store a real `filingUrl` on
+  // the Summary record and run it through `getSecFilingViewerUrl()` to land
+  // on the proper archive index page. Mirror that here. When the campaign
+  // filing carries no URL (e.g. the curated fallback fixture has no real
+  // accession number), the helper falls back to EDGAR's company-search
+  // landing — which is at least more useful than a 10-Q search results list.
+  const edgarUrl = getSecFilingViewerUrl(filing?.filingUrl ?? CAMPAIGN_FALLBACK_HERO.filingUrl ?? '', rawFilingType);
+
+  // Trial CTA target. Campaign recipients are unregistered waitlist members
+  // — clicking the bottom button (positioned where production filing emails
+  // put "View on SEC Website") routes them to the landing page, not EDGAR.
+  const ctaUrl = 'https://tldrsec.app';
+
   const content = `
-    <p style="margin:0 0 16px;font-size:15px;color:#334155;line-height:1.6;">You signed up for tldrSEC a few weeks ago. Here's what our AI does with SEC filings.</p>
+    ${heroHtml}
 
-    <p style="margin:0 0 16px;font-size:15px;color:#334155;line-height:1.6;">Below is a real summary, generated automatically within minutes of the filing hitting EDGAR.</p>
+    <p style="margin:0 0 16px 15px;color:${EmailColors.text.body};font-size:14px;line-height:1.6;">${summaryBody}</p>
 
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:${signal.bgColor};border-left:4px solid ${signal.borderColor};border-radius:4px;margin:20px 0;">
+    <p style="margin:0 0 32px 15px;color:${EmailColors.text.muted};font-size:12px;">
+      Filed: ${filedDate} &middot; <a href="${edgarUrl}" style="color:${EmailColors.semantic.accent};text-decoration:underline;font-weight:500;">Source: SEC EDGAR</a>
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 16px;">
       <tr>
-        <td style="padding:20px;">
-          <table role="presentation" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="padding-right:8px;"><span style="background:${signal.borderColor};color:#ffffff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;text-transform:uppercase;display:inline-block;">${impLabel}</span></td>
-              <td><span style="background:${badge.bg};color:${badge.text};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;display:inline-block;">${filingType}</span></td>
-            </tr>
-          </table>
-          <h3 style="margin:12px 0 8px;color:${EmailColors.text.headline};font-size:16px;font-weight:600;">${heading}</h3>
-          <p style="margin:0 0 12px;color:${EmailColors.text.body};font-size:14px;line-height:1.6;">${summaryBody}</p>
-          <p style="margin:0;color:${EmailColors.text.muted};font-size:12px;">
-            Filed: ${filedDate} &middot; Source: SEC EDGAR
-          </p>
+        <td align="center">
+          <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${ctaUrl}" style="height:46px;v-text-anchor:middle;width:280px;" arcsize="14%" fillcolor="#2563eb"><center style="color:#ffffff;font-family:${FONT_STACK};font-size:15px;font-weight:600;">See more filings like this</center></v:roundrect><![endif]-->
+          <!--[if !mso]><!-->
+          <a href="${ctaUrl}" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;">
+            See more filings like this
+          </a>
+          <!--<![endif]-->
         </td>
       </tr>
     </table>
 
-    <p style="margin:0 0 8px;color:#64748b;font-size:14px;line-height:1.6;">
-      On EDGAR, reading this ${filingType} takes 15-20 minutes. Our AI extracted the key details in under 10 minutes from the moment it was filed.
-    </p>
-
-    <p style="margin:24px 0 0;color:#94a3b8;font-size:13px;">
-      This is a sample of what tldrSEC delivers to your inbox within minutes of every SEC filing. More to come.
+    <p style="margin:0 15px 32px;font-size:13px;color:${EmailColors.text.muted};text-align:center;line-height:1.5;">
+      Watch any portfolio of public companies. Summaries within minutes of every filing.
     </p>
   `;
 
   const text = `${subject}
 
-You signed up for tldrSEC a few weeks ago. Here's what our AI does with SEC filings.
-
-Below is a real summary, generated automatically within minutes of the filing hitting EDGAR.
-
----
-${rawImpLabel} | ${rawFilingType}
-${rawHeading}
+${rawTicker} · ${rawCompanyName}
+${rawHeroHeadline}${rawWhyItMatters ? `\n\n${rawWhyItMatters}` : ''}
 
 ${rawSummaryBody}
 
-Filed: ${filedDate} | Source: SEC EDGAR
----
+Filed: ${filedDate} · Source: SEC EDGAR (${edgarUrl})
 
-On EDGAR, reading this ${rawFilingType} takes 15-20 minutes. Our AI extracted the key details in under 10 minutes from the moment it was filed.
+>> See more filings like this: ${ctaUrl}
 
-This is a sample of what tldrSEC delivers to your inbox within minutes of every SEC filing. More to come.
+Watch any portfolio of public companies. Summaries within minutes of every filing.
 
 ---
 Unsubscribe: ${options.unsubscribeUrl}`;
@@ -469,7 +524,12 @@ async function email2(options: CampaignEmailOptions): Promise<CampaignEmailConte
         };
       });
 
-  const subject = stripCrlf(`${filings.length} SEC filings you should know about`);
+  // Locked subject (PR 2): "Filings we caught for you this week" replaces
+  // the count-led "N SEC filings you should know about" — same Likelihood-
+  // proof framing per `.claude/tasks/email-campaign-revamp.md` § Email 2
+  // revision, but without the prescriptive "you should know about" tone
+  // that read as spam. Constant string regardless of count.
+  const subject = stripCrlf('Filings we caught for you this week');
 
   let filingsHtml = '';
   let filingsText = '';
@@ -494,7 +554,7 @@ async function email2(options: CampaignEmailOptions): Promise<CampaignEmailConte
   }
 
   const content = `
-    <p style="margin:0 0 16px;font-size:15px;color:#334155;line-height:1.6;">${filings.length} SEC filings from this week, ranked by importance:</p>
+    <p style="margin:0 0 16px;font-size:15px;color:#334155;line-height:1.6;">${filings.length} filings we caught for you this week, ranked by what each one actually says:</p>
 
     ${filingsHtml}
 
@@ -521,7 +581,7 @@ async function email2(options: CampaignEmailOptions): Promise<CampaignEmailConte
 
   const text = `${subject}
 
-${filings.length} SEC filings from this week, ranked by importance:
+${filings.length} filings we caught for you this week, ranked by what each one actually says:
 
 ${filingsText}On EDGAR, each of these would take 30-60 minutes to read and analyze. Our AI summarized all three within minutes of filing.
 
@@ -542,140 +602,125 @@ Unsubscribe: ${options.unsubscribeUrl}`;
 }
 
 /**
- * Email 3: "Your Trial Is Ready"
+ * Email 3: FOMO + information-asymmetry pitch.
  *
- * Conversion email. CTA above the fold, FAQ handles objections.
- * Uses A/B variant testing for below-CTA copy.
+ * Replaces the prior FAQ-led "Your Trial Is Ready" pitch (deleted in PR 2 —
+ * the FAQ structure read like every other SaaS conversion email and didn't
+ * connect to the prior two emails).
  *
- * Structure (post-design-review):
- *   Pain-first intro (2 sentences) > CTA button > Sub-CTA reassurance >
- *   Value steps (reinforcement) > FAQ (objection handling)
+ * New structure: lead with the pain (a stock you watch is moving and you
+ * don't know why), name the gap (institutions read filings the moment they
+ * post; retail reads coverage of those filings the next day), then deliver
+ * three concrete truths about EDGAR. CTA at the bottom.
  *
- * Hormozi Grand Slam Offer framework applied:
- *   - Dream Outcome: every filing, every company, in your inbox
- *   - Perceived Likelihood: "you've already seen it work" (emails 1-2)
- *   - Time Delay: first summary within 10 minutes
- *   - Effort & Sacrifice: CC acknowledged honestly with risk reversal
+ * Variant A/B differ only in the sub-CTA copy under the trial button.
  */
 async function email3(options: CampaignEmailOptions): Promise<CampaignEmailContent> {
-  // Static subject — no user content, but use stripCrlf for symmetry with email1/2
-  const subject = stripCrlf('your 7-day trial is ready');
+  const subject = stripCrlf('the multibaggers you didn\'t buy');
+  const trialUrl = 'https://tldrsec.app/sign-up?plan=pro&ref=campaign';
 
+  // Two sub-CTA copy variants — A leads on risk reversal, B leads on breadth.
+  // Both kept tight to a single line — the "card won't be charged"
+  // reassurance was redundant alongside the cancel-anytime line and was
+  // dropped in PR 2.
   const subCtaCopy = options.variant === 'B'
-    ? 'Full access for 7 days — every filing type, every company on EDGAR.<br>Your card won\'t be charged until the trial ends. Cancel in one click.'
-    : 'Your card won\'t be charged for 7 days. Cancel anytime in one click.<br>First filing summary hits your inbox within 10 minutes of signing up.';
-
-  const subCtaText = options.variant === 'B'
-    ? 'Full access for 7 days — every filing type, every company on EDGAR. Your card won\'t be charged until the trial ends. Cancel in one click.'
-    : 'Your card won\'t be charged for 7 days. Cancel anytime in one click. First filing summary hits your inbox within 10 minutes of signing up.';
+    ? 'Full access for 7 days. Every filing type, every public company on EDGAR.'
+    : 'Cancel anytime in one click.';
 
   const content = `
-    <p style="margin:0 0 8px;font-size:15px;color:#334155;line-height:1.6;">You've been reading 50-page filings manually. Or worse, missing them entirely.</p>
-    <p style="margin:0 0 24px;font-size:15px;color:#334155;line-height:1.6;">Pick your companies, and we'll handle the rest.</p>
+    <p style="margin:0 0 16px;font-size:16px;color:${EmailColors.text.headline};line-height:1.5;font-weight:600;">In 2020, Caterpillar traded at $150. Spotify hit $100 in late 2022. Vertiv was under $20 in early 2021.</p>
 
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 8px;">
+    <p style="margin:0 0 16px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;">
+      You watched at least one of them. You knew the company was interesting. The catalysts were obvious — pandemic capex cycle, the podcast pivot, hyperscaler liquid cooling. You weren't wrong about the thesis.
+    </p>
+
+    <p style="margin:0 0 16px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;">
+      You didn't pull the trigger. Not because you didn't have the capital. Because you didn't have the <em>information</em>.
+    </p>
+
+    <p style="margin:0 0 24px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;">
+      You couldn't read every 10-K cover to cover, parse every 8-K, watch every insider Form 4. You didn't have the bandwidth to know what was actually happening inside the company — what the CFO was saying about margins, which directors were buying, what the auditor was flagging. So you sat it out.
+    </p>
+
+    <p style="margin:0 0 28px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;font-weight:600;">
+      Five years later, all three multibagged.
+    </p>
+
+    <p style="margin:24px 0 16px;font-size:15px;color:${EmailColors.text.headline};font-weight:600;line-height:1.5;">What every hedge fund desk knows that you don't:</p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">
+      <tr>
+        <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;vertical-align:top;" width="28"><strong>1.</strong></td>
+        <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;">The market-moving line is on page 47, not page one. Filings that actually move stocks run 50-100 pages of legal language, with the load-bearing sentence buried somewhere in the back third.</td>
+      </tr>
+      <tr>
+        <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;vertical-align:top;" width="28"><strong>2.</strong></td>
+        <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;">The trade is finished before CNBC writes the headline. By the time mainstream coverage finishes parsing, the move is over and the tape has settled.</td>
+      </tr>
+      <tr>
+        <td style="font-size:15px;color:${EmailColors.text.body};line-height:1.5;vertical-align:top;" width="28"><strong>3.</strong></td>
+        <td style="font-size:15px;color:${EmailColors.text.body};line-height:1.5;">You're 24 hours behind. Institutional desks read the filing in 20 minutes. Retail reads coverage of the filing the next morning, in a clip.</td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 28px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;">
+      tldrSEC closes the gap. Every SEC filing on every company you follow, summarized in your inbox within 10 minutes of being filed. Same speed institutions get. The thesis you were already right about — now with the bandwidth to commit.
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 32px;">
       <tr>
         <td align="center">
-          <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="https://tldrsec.app/sign-up?plan=pro&ref=campaign" style="height:50px;v-text-anchor:middle;width:260px;" arcsize="12%" fillcolor="#2563eb"><center style="color:#ffffff;font-family:${FONT_STACK};font-size:16px;font-weight:600;">Start Your 7-Day Trial</center></v:roundrect><![endif]-->
+          <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${trialUrl}" style="height:50px;v-text-anchor:middle;width:260px;" arcsize="12%" fillcolor="#2563eb"><center style="color:#ffffff;font-family:${FONT_STACK};font-size:16px;font-weight:600;">Start Your 7-Day Trial</center></v:roundrect><![endif]-->
           <!--[if !mso]><!-->
-          <a href="https://tldrsec.app/sign-up?plan=pro&ref=campaign" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:16px;font-weight:600;padding:14px 36px;border-radius:6px;text-decoration:none;">
+          <a href="${trialUrl}" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:16px;font-weight:600;padding:14px 36px;border-radius:6px;text-decoration:none;">
             Start Your 7-Day Trial
           </a>
           <!--<![endif]-->
         </td>
       </tr>
       <tr>
-        <td align="center" style="padding-top:10px;">
-          <p style="margin:0;color:#64748b;font-size:13px;line-height:1.5;">
+        <td align="center" style="padding-top:14px;">
+          <p style="margin:0;color:${EmailColors.text.muted};font-size:13px;line-height:1.5;">
             ${subCtaCopy}
           </p>
         </td>
       </tr>
     </table>
-
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;border-radius:8px;margin:28px 0;">
-      <tr>
-        <td style="padding:20px;">
-          <p style="margin:0 0 12px;font-size:14px;color:#334155;font-weight:600;">Here's what happens when you sign up:</p>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
-            <tr>
-              <td style="padding:0 0 10px;font-size:14px;color:#334155;line-height:1.5;vertical-align:top;" width="24">1.</td>
-              <td style="padding:0 0 10px;font-size:14px;color:#334155;line-height:1.5;"><strong>Pick the companies you follow</strong> — any sector, any size. Every public company on EDGAR.</td>
-            </tr>
-            <tr>
-              <td style="padding:0 0 10px;font-size:14px;color:#334155;line-height:1.5;vertical-align:top;" width="24">2.</td>
-              <td style="padding:0 0 10px;font-size:14px;color:#334155;line-height:1.5;"><strong>Get AI summaries within minutes</strong> of every SEC filing: 10-K, 10-Q, 8-K, Form 4, Form 144.</td>
-            </tr>
-            <tr>
-              <td style="font-size:14px;color:#334155;line-height:1.5;vertical-align:top;" width="24">3.</td>
-              <td style="font-size:14px;color:#334155;line-height:1.5;"><strong>Never miss an insider trade or material event again.</strong> We check EDGAR every 10 minutes, 24/7.</td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #e2e8f0;margin-top:4px;">
-      <tr>
-        <td style="padding:20px 0 0;">
-          <p style="margin:0 0 16px;font-size:15px;color:#1e293b;font-weight:600;">Common Questions</p>
-
-          <p style="margin:0 0 4px;font-size:14px;color:#1e293b;font-weight:600;">What if I don't like it?</p>
-          <p style="margin:0 0 16px;font-size:13px;color:#64748b;line-height:1.5;">Cancel in one click during the trial. Your card won't be charged. No questions asked.</p>
-
-          <p style="margin:0 0 4px;font-size:14px;color:#1e293b;font-weight:600;">What do I get during the trial?</p>
-          <p style="margin:0 0 16px;font-size:13px;color:#64748b;line-height:1.5;">The full product. Every filing type — 10-K (annual), 10-Q (quarterly), 8-K (material events), Form 4 (insider trades), Form 144 (planned sales). Every company on EDGAR. AI summaries within 10 minutes. Same product our paying users get.</p>
-
-          <p style="margin:0 0 4px;font-size:14px;color:#1e293b;font-weight:600;">How fast are the summaries?</p>
-          <p style="margin:0 0 16px;font-size:13px;color:#64748b;line-height:1.5;">Within 10 minutes of the filing appearing on SEC EDGAR. We check every 10 minutes, 24/7.</p>
-
-          <p style="margin:0 0 4px;font-size:14px;color:#1e293b;font-weight:600;">What does it cost after the trial?</p>
-          <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5;">Pro: $199/month (25 companies). Max: $349/month (unlimited). That's less than the cost of missing one insider trade.</p>
-        </td>
-      </tr>
-    </table>
   `;
 
-  const text = `your 7-day trial is ready
+  const text = `${subject}
 
-You've been reading 50-page filings manually. Or worse, missing them entirely.
+In 2020, Caterpillar traded at $150. Spotify hit $100 in late 2022. Vertiv was under $20 in early 2021.
 
-Pick your companies, and we'll handle the rest.
+You watched at least one of them. You knew the company was interesting. The catalysts were obvious — pandemic capex cycle, the podcast pivot, hyperscaler liquid cooling. You weren't wrong about the thesis.
 
->> Start Your 7-Day Trial: https://tldrsec.app/sign-up?plan=pro&ref=campaign
+You didn't pull the trigger. Not because you didn't have the capital. Because you didn't have the information.
 
-${subCtaText}
+You couldn't read every 10-K cover to cover, parse every 8-K, watch every insider Form 4. You didn't have the bandwidth to know what was actually happening inside the company — what the CFO was saying about margins, which directors were buying, what the auditor was flagging. So you sat it out.
 
----
+Five years later, all three multibagged.
 
-Here's what happens when you sign up:
+What every hedge fund desk knows that you don't:
 
-1. Pick the companies you follow — any sector, any size. Every public company on EDGAR.
-2. Get AI summaries within minutes of every SEC filing: 10-K, 10-Q, 8-K, Form 4, Form 144.
-3. Never miss an insider trade or material event again. We check EDGAR every 10 minutes, 24/7.
+1. The market-moving line is on page 47, not page one. Filings that actually move stocks run 50-100 pages of legal language, with the load-bearing sentence buried in the back third.
+2. The trade is finished before CNBC writes the headline. By the time mainstream coverage finishes parsing, the move is over.
+3. You're 24 hours behind. Institutional desks read the filing in 20 minutes. Retail reads coverage of the filing the next morning, in a clip.
 
----
+tldrSEC closes the gap. Every SEC filing on every company you follow, summarized in your inbox within 10 minutes of being filed. Same speed institutions get. The thesis you were already right about — now with the bandwidth to commit.
 
-Common Questions
+>> Start Your 7-Day Trial: ${trialUrl}
 
-Q: What if I don't like it?
-A: Cancel in one click during the trial. Your card won't be charged. No questions asked.
-
-Q: What do I get during the trial?
-A: The full product. Every filing type — 10-K (annual), 10-Q (quarterly), 8-K (material events), Form 4 (insider trades), Form 144 (planned sales). Every company on EDGAR. AI summaries within 10 minutes. Same product our paying users get.
-
-Q: How fast are the summaries?
-A: Within 10 minutes of the filing appearing on SEC EDGAR. We check every 10 minutes, 24/7.
-
-Q: What does it cost after the trial?
-A: Pro: $199/month (25 companies). Max: $349/month (unlimited). That's less than the cost of missing one insider trade.
+${subCtaCopy.replace(/<br>/g, ' ')}
 
 ---
 Unsubscribe: ${options.unsubscribeUrl}`;
 
   return {
     subject,
-    html: campaignShell(content, { unsubscribeUrl: options.unsubscribeUrl, preheader: 'Full access, 7 days free. Every filing type, every company on EDGAR.' }),
+    html: campaignShell(content, {
+      unsubscribeUrl: options.unsubscribeUrl,
+      preheader: 'You knew Caterpillar at $150. You knew Vertiv at $20. You weren\'t wrong about the thesis — you just didn\'t have the information to commit.',
+    }),
     text,
   };
 }
