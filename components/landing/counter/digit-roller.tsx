@@ -35,11 +35,15 @@ export function DigitRoller({
   // CRITICAL FIX: Start visible to avoid SSR hydration mismatch
   // Content-first approach: digits are always visible, animation enhances the transition
   // Easing: cubic-bezier(0.34, 1.56, 0.64, 1) creates elastic ease-out with 10% overshoot
+  //
+  // Direction: incrementing-odometer style. Old digit rolls UP and out;
+  // new digit rolls IN from below. (Both callers — WaitlistCounter and
+  // MinutesSavedCounter — only ever increment, so this matches user intuition.)
   const animationVariants = {
     initial: prefersReducedMotion
       ? { opacity: 1, y: 0 } // ✅ START VISIBLE for reduced motion
       : {
-          y: -20, // Subtle slide from above (reduced from -100 to prevent clipping)
+          y: 20, // New digit starts BELOW
           opacity: 1  // ✅ START VISIBLE to prevent SSR mismatch
         },
     animate: {
@@ -49,7 +53,7 @@ export function DigitRoller({
     exit: prefersReducedMotion
       ? { opacity: 0, y: 0 } // Simple fade for reduced motion
       : {
-          y: 20, // Subtle slide down (reduced from 100)
+          y: -20, // Old digit slides UP and out
           opacity: 0
         }
   };
