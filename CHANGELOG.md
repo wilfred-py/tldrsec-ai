@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.8] - 2026-05-03
+
+### Fixed
+- **Dashboard "two waves" loading skeleton** (`app/dashboard/loading.tsx`). The route-level loading boundary rendered an obsolete 8-row table mock with pagination that did not match the dashboard's actual card-list UI. Users saw a fake table skeleton → blank flash → real card skeletons that did not match the table they had just seen — that is the literal "skeleton then MORE skeleton" experience the dashboard had been giving. Replaced with a shell that mirrors `app/dashboard/page.tsx` and reuses the same `StatsSkeleton` and `ActivitySkeleton` components the page's Suspense boundaries fall back to. Net `-178` lines, including the dead table mock and its tests.
+- Rewrote `app/dashboard/__tests__/loading.test.tsx` to match the new card-list shape and added a regression test asserting no `<table>` element is rendered, so the table mock cannot silently come back the next time the dashboard layout is touched.
+
 ## [0.0.25.5] - 2026-05-01
 
 ### Changed
