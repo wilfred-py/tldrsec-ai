@@ -18,6 +18,7 @@ import { sendEmail } from '../../email/email-core';
 import { resendConfig } from '../../email/config';
 import { generateFeedbackToken } from '../../email/feedback-tokens';
 import { escapeHtml } from '../../email/security-helpers';
+import { getActiveTrialCutoffDate } from '../../auth/tier-eligibility';
 
 const digestLogger = logger.child('weekly-digest-handler');
 
@@ -83,11 +84,11 @@ export async function handleWeeklyDigest(): Promise<WeeklyDigestResult> {
         OR: [
           // Paid users (PRO/MAX)
           { subscriptionTier: { in: ['PRO', 'MAX'] } },
-          // Active trial users (FREE tier with future expiry)
+          // Active trial users (FREE tier with future expiry, 5-min clock-skew grace)
           {
             subscriptionTier: 'FREE',
             isTrialing: true,
-            trialEndsAt: { gt: now },
+            trialEndsAt: { gt: getActiveTrialCutoffDate() },
           },
         ],
       },

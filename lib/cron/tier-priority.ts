@@ -10,6 +10,8 @@
  *   5 — FREE tier (and any unknown tiers)
  */
 
+import { isActiveTrial } from '@/lib/auth/tier-eligibility';
+
 /**
  * Get job priority based on subscription tier and trial status.
  *
@@ -23,14 +25,9 @@ export function getPriorityForTier(
   isTrialing?: boolean,
   trialEndsAt?: Date | null
 ): number {
-  // Active trial users get MAX priority
-  // 5-min grace period for clock skew between services
-  if (isTrialing && trialEndsAt && trialEndsAt > new Date(Date.now() - 5 * 60 * 1000)) {
+  if (isActiveTrial({ isTrialing, trialEndsAt })) {
     return 9;
   }
-  // When trial expires, isTrialing may still be true but trialEndsAt < now - grace period,
-  // so we fall through to tier-based priority. subscriptionTier remains FREE during/after
-  // trial, so expired trials correctly get priority 5.
 
   switch (tier) {
     case 'MAX':

@@ -1201,25 +1201,51 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
   * Part I (Financial Information): Item 1 (Financial Statements), Item 2 (MD&A), Item 3 (Market Risk), Item 4 (Controls)
   * Part II (Other Information): Items 1-6 (Legal, Risk Factors, Sales, Defaults, Mine Safety, Other)
 - ITEM 2 MD&A IS KEY: Most valuable section for investors - contains management's analysis of results
-- REQUIRED FINANCIAL METRICS (must include ALL of these in financialHighlights):
-  1. Revenue - Quarterly revenue with YoY AND QoQ changes (e.g., "$28.1B (+12% YoY, +3% QoQ)")
-  2. Net Income - Quarterly net income with YoY change
-  3. Gross Margin - ALWAYS calculate and include as percentage (e.g., "18%") - this is MANDATORY
-  4. EPS - Earnings per share (diluted) with YoY change
-  5. Operating Margin or Operating Income - If disclosed
-  6. Cash Flow from Operations - If materially significant
+
+CRITICAL — CURRENT-PERIOD COLUMN ONLY:
+- 10-Q income statements show MULTIPLE columns: current quarter, prior-year same quarter, current YTD, prior-year YTD. The "value" you report MUST be the CURRENT quarter (the period this 10-Q covers — matching the fiscalQuarter field), NEVER the prior-year comparison column.
+- The current-period column is typically LEFTMOST, with the period-end date in the column header matching the filing date (e.g., "Three Months Ended November 30, 2025" — NOT "Three Months Ended November 30, 2024").
+- If you see two dollar amounts side-by-side (e.g., "$611,256" then "$569,432"), the LEFT/FIRST is current — use that. The right is prior-year and is ONLY for computing YoY change.
+- DO NOT copy figures from the "Historical Context" section at the top of the prompt — those are STALE summaries from PRIOR quarters. They are reference only; the authoritative numbers come from the current filing's financial statements.
+
+REQUIRED FINANCIAL METRICS (must include ALL SIX in financialHighlights, in this exact order — the email scorecard renders them in order):
+  1. Revenue - CURRENT quarter revenue with YoY AND QoQ % changes (e.g., "$611.02M (+7.07% YoY, +0.56% QoQ)")
+  2. Gross Margin - (Revenue − COGS/Cost of services) ÷ Revenue, as percentage (e.g., "51.43%"). Report YoY/QoQ changes as percentage-point deltas formatted with a "%" suffix (e.g., "-1.33%", meaning the margin moved by 1.33 percentage points). If margin moved <0.005 percentage points, report "0.00%" not "flat".
+  3. Operating Margin - Operating Income ÷ Revenue, as percentage (e.g., "30.27%"). Report YoY/QoQ changes as percentage-point deltas with "%" suffix. Do NOT include a separate "Operating Income $" row — the margin is more comparable.
+  4. FCF Margin - Free Cash Flow ÷ Revenue, as percentage. FCF = Net cash from operating activities − capital expenditures (both from the Cash Flow Statement). Report YoY/QoQ changes as percentage-point deltas with "%" suffix.
+     PERIOD MATCHING (this trips up most issuers):
+     • Cash flow statements in 10-Qs are typically presented YTD only (e.g., "Six Months Ended February 28, 2026"), NOT for the 3-month current quarter.
+     • If the cash flow statement shows a "Three Months Ended" column matching the current quarter, use it directly.
+     • Otherwise, derive Q-only FCF: (current YTD FCF) − (prior-quarter YTD FCF from Historical Context summary). Then FCF Margin = Q-only FCF ÷ Q-only Revenue.
+     • If neither path is reliable (no 3M column AND no prior-quarter Historical Context), return "N/A" for value/change/qoqChange — do NOT approximate from net income, and do NOT report YTD FCF margin as if it were Q-only.
+     • "Capital expenditures" is the line typically labeled "Purchases of property, equipment, and leasehold improvements" or similar; if "Capitalized software" is also disclosed under investing activities, include it.
+  5. Net Income - CURRENT quarter net income with YoY and QoQ % changes (e.g., "$133.06M (-8.15% YoY)")
+  6. EPS (diluted) - Earnings per share, DILUTED (not basic) with YoY and QoQ % changes (e.g., "$3.59 (-6.75% YoY)")
+
+VALUE FORMATTING (the "value" field, i.e. the "Latest" column):
+- Dollar amounts MUST be reported to two decimal places: "$611.02M", "$133.06M", "$3.59" — NEVER "$611M" or "$3".
+- Percentages (margins) MUST be reported to two decimal places: "51.43%" — NEVER "51%" or "51.4%".
+- Use M/B suffixes for revenue / net income. Use raw dollar amount for EPS.
+- For unavailable values, return the literal string "N/A".
+
+YoY/QoQ COMPUTATION:
+- YoY change = (current quarter ÷ prior-year same quarter − 1) × 100. The prior-year column is in the SAME income statement table.
+- QoQ change = (current quarter ÷ immediately preceding quarter − 1) × 100. The preceding quarter is in the prior 10-Q (or 10-K Q4) — use Historical Context summaries for this comparison ONLY (never for the current "value" itself).
+- For margin metrics, use percentage-point arithmetic: (current margin − prior margin), formatted with "%" suffix. The "%" suffix on margin deltas is a UNIT label, not a relative change.
+- Report changes to TWO decimal places (e.g., "+7.42%", "-2.13%"). Single-decimal or integer percentages are unacceptable.
+- Always populate both "change" (YoY) and "qoqChange". If the prior-quarter figure is not available, return "N/A" — do NOT leave the field empty and do NOT fabricate.
+
+OTHER GUIDANCE:
 - LIQUIDITY METRICS: Extract Days Sales Outstanding (DSO), Days Payable Outstanding (DPO) if disclosed - these indicate working capital health
 - NON-GAAP MEASURES: If company uses non-GAAP metrics, note the GAAP comparison and reconciliation
 - FOOTNOTE CONTEXT: Verify whether numbers are annualized vs quarterly, and whether they include/exclude subsidiaries
-- Gross margin is CRITICAL for quarterly comparisons - if not explicitly stated, derive from (Revenue - Cost of Revenue) / Revenue
+- Gross margin: if not explicitly stated, derive from (Revenue - Cost of Revenue) / Revenue using CURRENT-quarter columns
 - Include quarterly trends (up/down/flat) for key metrics
 - Extract guidance updates if management provides forward-looking statements
 - RED FLAGS: Bloated inventory, slower demand signals, supply chain issues, decreasing profit margins
 - For fiscal quarter, format as "Q3 2024" or "Q1 FY2025"
-- The summary MUST lead with: company name, quarterly revenue, and margin performance
-- DELTA-AWARE: Compare to BOTH the prior quarter (QoQ) AND same quarter last year (YoY). State which comparison is more meaningful for each metric.
-- Flag any metric that moved more than 10% in either direction, whether that is revenue, margins, or operating metrics
-- For each financial highlight, populate both "change" (YoY) and "qoqChange" fields when data is available`,
+- The summary MUST lead with: company name, CURRENT quarter revenue, and margin performance
+- Flag any metric that moved more than 10% in either direction, whether that is revenue, margins, or operating metrics`,
 
   '3': `FORM 3 INITIAL STATEMENT OF BENEFICIAL OWNERSHIP EXTRACTION RULES:
 - COMPANY FIELD IS REQUIRED: The "company" field must contain the ISSUER name (the company whose securities are held). Extract from "Name of Issuer" field on the form. NEVER leave blank.

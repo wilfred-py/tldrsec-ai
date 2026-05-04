@@ -8,8 +8,10 @@
 
 import { ContextWindowConfig, SECFilingSection, SECFilingType } from './prompt-types';
 
-// Default configuration for different filing types
-const DEFAULT_CONTEXT_CONFIGS: Record<SECFilingType, ContextWindowConfig> = {
+// Default configuration for different filing types.
+// Exported so regression tests can pin load-bearing values (e.g. the 10-Q
+// chunk size, which feeds the FCF / current-period extraction).
+export const DEFAULT_CONTEXT_CONFIGS: Record<SECFilingType, ContextWindowConfig> = {
   '10-K': {
     maxChunkSize: 12000,      // Large enough for most sections of a 10-K
     overlapSize: 1000,         // Significant overlap to maintain context
@@ -17,8 +19,14 @@ const DEFAULT_CONTEXT_CONFIGS: Record<SECFilingType, ContextWindowConfig> = {
     chunkStrategy: 'section-based', // Chunk by document sections
   },
   '10-Q': {
-    maxChunkSize: 8000,        // Moderate size for quarterly reports
-    overlapSize: 800,
+    // Bumped 8000→24000 so chunks span full income-statement tables.
+    // Why: 10-Q income statements are wide (current Q + prior-year Q + YTD
+    // columns) and routinely exceed 8k chars after the section heading. With
+    // an 8k chunk, the table got truncated mid-row, leaving Grok with only
+    // the prior-year comparison column visible — producing wrong "Latest"
+    // figures (e.g., Apr 2026 FDS 10-Q reported $560M revenue instead of $611M).
+    maxChunkSize: 24000,
+    overlapSize: 2000,
     useSemanticChunking: true,
     chunkStrategy: 'section-based',
   },

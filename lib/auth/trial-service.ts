@@ -16,6 +16,7 @@
 
 import { getPrismaClient } from '@/lib/db/prisma';
 import { TRIAL_CONFIG } from './trial-config';
+import { isActiveTrial } from './tier-eligibility';
 
 export interface TrialStatus {
   isActive: boolean;
@@ -72,10 +73,11 @@ export class TrialService {
       const daysRemaining = Math.ceil(
         (user.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       );
-      const isActive = daysRemaining > 0;
 
       return {
-        isActive,
+        // Legacy semantics: presence of trialEndsAt was treated as "in trial",
+        // ignoring user.isTrialing. Preserve that here, but gain the 5-min grace.
+        isActive: isActiveTrial({ isTrialing: true, trialEndsAt: user.trialEndsAt }),
         daysRemaining,
         trialEndsAt: user.trialEndsAt,
         isGrandfathered: false,
@@ -168,7 +170,7 @@ export class TrialService {
           (user.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
         );
         statusMap.set(user.id, {
-          isActive: daysRemaining > 0,
+          isActive: isActiveTrial({ isTrialing: true, trialEndsAt: user.trialEndsAt }),
           daysRemaining,
           trialEndsAt: user.trialEndsAt,
           isGrandfathered: false,
