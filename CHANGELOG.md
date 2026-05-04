@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.25.9] - 2026-05-03
+
+### Changed
+- **Onboarding final step is now the email-promise confirmation screen.** The reminder note "We'll email you when new filings are posted for N companies" used to live inline at the bottom of the "Tell us about yourself" profile step. New users now see it as a dedicated final step with a hero treatment: brand-blue mail icon, larger heading with the company-count number rendered in brand-blue, and a single brand-blue "Complete setup" CTA. Email-frequency selector is collapsed behind a "Change" toggle by default so the promise stays the focal point. Replaces the existing A/B fork: `useOnboardingVariant` fallback shifted from `inline` → `step4` (`lib/hooks/use-onboarding-variant.ts:15`), so every new user gets the polished 4-step flow. Returning users mid-experiment retain their assigned bucket via sessionStorage/cookie. The `ONBOARDING_COMPLETED` analytics event now emits `variant: "step4-polished"` so PostHog funnels keyed on this property survive the rollout cleanly.
+- **Vertical progress bar shows celebratory completion on the final step.** Steps 1-3 (Sectors, Companies, Profile) and step 4 (Review) all render the brand-blue check icon when the user reaches the final screen. The active step keeps `aria-current="step"` and a subtle ring overlay so "you're here" remains clear without losing the "you're done" feeling.
+
 ## [0.0.25.8] - 2026-05-03
 
 ### Fixed
