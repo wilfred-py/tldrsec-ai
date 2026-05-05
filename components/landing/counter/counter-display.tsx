@@ -104,7 +104,7 @@ export function CounterDisplay({
               onAnimationComplete={handleDigitComplete}
             />
             {shouldShowSeparator(index) && (
-              <span className="opacity-70 mx-0.5">,</span>
+              <span className="opacity-70">,</span>
             )}
           </span>
         ))}
