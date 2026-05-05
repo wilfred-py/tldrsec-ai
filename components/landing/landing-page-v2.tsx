@@ -12,6 +12,12 @@ import {
 import { LandingNavbar } from './landing-navbar';
 import { AuthProvider } from '@/contexts/auth-context';
 import { SubscriptionProvider } from '@/contexts/subscription-context';
+import type { GlobalMinutesSaved } from '@/lib/db/landing-stats';
+
+interface LandingPageV2Props {
+  /** Server-fetched platform-wide minutes-saved totals + projection rate. */
+  globalStats?: GlobalMinutesSaved;
+}
 
 /**
  * Landing Page V2 Component
@@ -33,7 +39,7 @@ import { SubscriptionProvider } from '@/contexts/subscription-context';
  * - Click any email to see full AI analysis
  *
  */
-export function LandingPageV2() {
+export function LandingPageV2({ globalStats }: LandingPageV2Props = {}) {
   // Ref for hero section - used by navbar's Intersection Observer
   const heroRef = useRef<HTMLElement>(null);
 
@@ -45,7 +51,7 @@ export function LandingPageV2() {
           <LandingNavbar heroRef={heroRef} />
 
           {/* Hero section with ref for navbar visibility tracking */}
-          <GmailInboxHero heroRef={heroRef} />
+          <GmailInboxHero heroRef={heroRef} globalStats={globalStats} />
 
           <FeaturesSectionV2 />
           <PricingSectionV2 />

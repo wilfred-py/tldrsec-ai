@@ -2,11 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.25.9] - 2026-05-03
+## [0.0.26.2] - 2026-05-05
 
 ### Changed
 - **Onboarding final step is now the email-promise confirmation screen.** The reminder note "We'll email you when new filings are posted for N companies" used to live inline at the bottom of the "Tell us about yourself" profile step. New users now see it as a dedicated final step with a hero treatment: brand-blue mail icon, larger heading with the company-count number rendered in brand-blue, and a single brand-blue "Complete setup" CTA. Email-frequency selector is collapsed behind a "Change" toggle by default so the promise stays the focal point. Replaces the existing A/B fork: `useOnboardingVariant` fallback shifted from `inline` → `step4` (`lib/hooks/use-onboarding-variant.ts:15`), so every new user gets the polished 4-step flow. Returning users mid-experiment retain their assigned bucket via sessionStorage/cookie. The `ONBOARDING_COMPLETED` analytics event now emits `variant: "step4-polished"` so PostHog funnels keyed on this property survive the rollout cleanly.
 - **Vertical progress bar shows celebratory completion on the final step.** Steps 1-3 (Sectors, Companies, Profile) and step 4 (Review) all render the brand-blue check icon when the user reaches the final screen. The active step keeps `aria-current="step"` and a subtle ring overlay so "you're here" remains clear without losing the "you're done" feeling.
+
+## [0.0.26.0] - 2026-05-04
+
+### Added
+- **Collective "Reading time saved across all investors" counter on the landing-page hero** (`components/landing/sections-v2/gmail-inbox-hero.tsx`, `components/landing/minutes-saved-counter.tsx`, `lib/db/landing-stats.ts`). A continuously-incrementing whole-minutes counter, anchored to a server-side aggregate of `Summary.inputTokens - outputTokens` across the entire platform, projected forward client-side at random intervals so it always feels alive. Sits in the Stripe slot — small line above the H1 — to flex platform scale to prospects rather than report individual usage. The "FOR INVESTORS AND ANALYSTS" eyebrow above the H1 was deleted to avoid stacking labels.
+- `lib/db/landing-stats.ts` — `fetchGlobalMinutesSaved()` returns `{ totalMinutes, ratePerSecond }`. 30-day token aggregate drives the projection rate, with a `0.5 min/sec` floor so the counter is always visibly ticking even during quiet periods. Cached at the route level via `app/page.tsx` `revalidate = 60` (one DB hit per minute, regardless of visitor count).
+- `components/landing/minutes-saved-counter.tsx` — random-interval scheduler picks tick intervals in `[base × 0.4, base × 1.8]` (0.5–2.5s observed in practice) so the counter doesn't read as mechanical. Pauses on `document.hidden`, resumes on visibility change. Respects `prefers-reduced-motion` (renders static integer). Server-fetched anchor used as the SSR initial state for hydration parity.
+- `__tests__/components/landing/minutes-saved-counter.test.tsx` — 11 tests covering initial render, zero/NaN/negative-rate fallbacks, tabular-nums styling, scheduler activation, cleanup, prop re-anchoring, className passthrough, and aria-hidden suppression of the inner live region.
+
+### Changed
+- **`components/landing/counter/digit-roller.tsx` animation direction flipped to mechanical-odometer-forward.** Previously new digits slid in from above and old digits slid down — visually that reads as "rewinding." Now new digits enter from below and old digits exit upward, matching the user intuition for an incrementing counter. Applies to both the landing-page collective counter and the existing `WaitlistCounter` (both increment-only, so the change is uniformly an improvement).
+- **`components/landing/counter/counter-display.tsx` thousands-separator spacing tightened** by removing `mx-0.5` from the comma span. With 5+ digit values the previous `mx-0.5` (4px total) read as a visible gap; commas now sit flush against adjacent digits.
+
+### Removed
+- "FOR INVESTORS AND ANALYSTS" uppercase eyebrow above the hero H1 (`components/landing/sections-v2/gmail-inbox-hero.tsx`).
 
 ## [0.0.25.8] - 2026-05-03
 
