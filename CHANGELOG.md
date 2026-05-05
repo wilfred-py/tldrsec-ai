@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.26.2] - 2026-05-06
+
+### Fixed
+- **First-visit confetti on the dashboard fires again in dev** (`components/dashboard/dashboard-onboarding.tsx`). Under Next.js 15 + React 19's default-on strict-mode dev double-invoke, the original code flipped `confettiFiredRef` to `true` *before* scheduling the 500ms `setTimeout`. The strict-mode cleanup cancelled the timer; the second mount's effect saw the ref already set and returned early, so confetti never fired locally. Production builds were unaffected (no double-invoke), which is why this looked like "it was working." Moved the ref flip inside the timer callback so the second effect run can reschedule. One-line move + a 3-line comment explaining the strict-mode interaction.
+
 ## [0.0.26.1] - 2026-05-05
 
 ### Changed
