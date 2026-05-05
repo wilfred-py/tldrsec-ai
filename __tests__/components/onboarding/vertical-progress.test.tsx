@@ -54,4 +54,22 @@ describe('VerticalProgress — steps prop', () => {
     expect(screen.getByText('Step B')).toBeInTheDocument();
     expect(screen.queryByText('3')).not.toBeInTheDocument();
   });
+
+  it('hybrid: on the final step, all four step indicators show as completed (numbers replaced by checks)', () => {
+    render(<VerticalProgress currentStep={4} steps={ONBOARDING_STEPS_WITH_CONFIRM} />);
+    // No raw step numbers should be visible — all four dots render the check icon.
+    expect(screen.queryByText('1')).not.toBeInTheDocument();
+    expect(screen.queryByText('2')).not.toBeInTheDocument();
+    expect(screen.queryByText('3')).not.toBeInTheDocument();
+    expect(screen.queryByText('4')).not.toBeInTheDocument();
+    // Active marker still on the current step.
+    const dots = document.querySelectorAll('[aria-current="step"]');
+    expect(dots).toHaveLength(1);
+  });
+
+  it('hybrid: the final/active step keeps the active overlay ring', () => {
+    render(<VerticalProgress currentStep={4} steps={ONBOARDING_STEPS_WITH_CONFIRM} />);
+    const activeDot = document.querySelector('[aria-current="step"]') as HTMLElement | null;
+    expect(activeDot?.className).toMatch(/ring-2/);
+  });
 });
