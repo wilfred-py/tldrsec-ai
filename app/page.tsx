@@ -1,6 +1,12 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
+import { fetchGlobalMinutesSaved } from '@/lib/db/landing-stats';
+
+// Revalidate every 60s so the global counter's anchor value stays roughly
+// fresh without hammering the DB on every visit. Client projects forward
+// from the anchor via requestAnimationFrame.
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: 'AI SEC Filing Summaries - 10-K, 10-Q, 8-K & Form 4',
@@ -72,10 +78,19 @@ function HeroSkeleton() {
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  // Server-side fetch: at most one DB hit per ISR window.
+  // If this fails (DB unreachable, etc.) fall back to zeros so the page still ships.
+  let globalStats = { totalMinutes: 0, ratePerSecond: 0 };
+  try {
+    globalStats = await fetchGlobalMinutesSaved();
+  } catch (error) {
+    console.error('[landing] Failed to fetch global minutes stats:', error);
+  }
+
   return (
     <Suspense fallback={<HeroSkeleton />}>
-      <LandingPageV2 />
+      <LandingPageV2 globalStats={globalStats} />
     </Suspense>
   );
 }

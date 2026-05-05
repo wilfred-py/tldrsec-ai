@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.26.0] - 2026-05-04
+
+### Added
+- **Collective "Reading time saved across all investors" counter on the landing-page hero** (`components/landing/sections-v2/gmail-inbox-hero.tsx`, `components/landing/minutes-saved-counter.tsx`, `lib/db/landing-stats.ts`). A continuously-incrementing whole-minutes counter, anchored to a server-side aggregate of `Summary.inputTokens - outputTokens` across the entire platform, projected forward client-side at random intervals so it always feels alive. Sits in the Stripe slot — small line above the H1 — to flex platform scale to prospects rather than report individual usage. The "FOR INVESTORS AND ANALYSTS" eyebrow above the H1 was deleted to avoid stacking labels.
+- `lib/db/landing-stats.ts` — `fetchGlobalMinutesSaved()` returns `{ totalMinutes, ratePerSecond }`. 30-day token aggregate drives the projection rate, with a `0.5 min/sec` floor so the counter is always visibly ticking even during quiet periods. Cached at the route level via `app/page.tsx` `revalidate = 60` (one DB hit per minute, regardless of visitor count).
+- `components/landing/minutes-saved-counter.tsx` — random-interval scheduler picks tick intervals in `[base × 0.4, base × 1.8]` (0.5–2.5s observed in practice) so the counter doesn't read as mechanical. Pauses on `document.hidden`, resumes on visibility change. Respects `prefers-reduced-motion` (renders static integer). Server-fetched anchor used as the SSR initial state for hydration parity.
+- `__tests__/components/landing/minutes-saved-counter.test.tsx` — 11 tests covering initial render, zero/NaN/negative-rate fallbacks, tabular-nums styling, scheduler activation, cleanup, prop re-anchoring, className passthrough, and aria-hidden suppression of the inner live region.
+
+### Changed
+- **`components/landing/counter/digit-roller.tsx` animation direction flipped to mechanical-odometer-forward.** Previously new digits slid in from above and old digits slid down — visually that reads as "rewinding." Now new digits enter from below and old digits exit upward, matching the user intuition for an incrementing counter. Applies to both the landing-page collective counter and the existing `WaitlistCounter` (both increment-only, so the change is uniformly an improvement).
+- **`components/landing/counter/counter-display.tsx` thousands-separator spacing tightened** by removing `mx-0.5` from the comma span. With 5+ digit values the previous `mx-0.5` (4px total) read as a visible gap; commas now sit flush against adjacent digits.
+
+### Removed
+- "FOR INVESTORS AND ANALYSTS" uppercase eyebrow above the hero H1 (`components/landing/sections-v2/gmail-inbox-hero.tsx`).
+
 ## [0.0.25.8] - 2026-05-03
 
 ### Fixed

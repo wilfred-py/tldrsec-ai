@@ -24,3 +24,24 @@ identical signature). Not caused by the X sentiment email integration.
 **Smallest next action**: open a single `chore: fix pre-existing email test
 infra` PR that addresses all three — they're cheap individually but each one
 on its own is too small to ship.
+
+## P3 — Dashboard counter follow-ups (deferred from /autoplan #wilfred-py/animated-minutes-counter)
+
+Deferred during /autoplan review of the animated minutes-saved counter. These
+came from the CEO/Design adversarial reviews and are out of scope for the
+initial ship but worth doing later.
+
+- ~~**Move minutes-saved stat from muted-header sub-line to a dedicated hero
+  card.**~~ ✅ Superseded 2026-05-04 by full pivot: removed from dashboard
+  entirely; collective platform-wide counter now lives on landing-page hero
+  (Stripe-GDP-counter analog). Closes the original CEO category-mistake
+  critique — marketing pattern is now on a marketing surface.
+- **A/B test "minutes saved" against a forward-looking metric** ("next 10-Q
+  in 4d", "3 filings in your watchlist this week"). CEO review flagged
+  minutes-saved as a retrospective ego stat that doesn't drive return visits.
+- **Add PostHog instrumentation on dashboard stat hover/visibility** to
+  measure whether the counter actually changes user behavior (CEO
+  recommendation: measure before optimizing further).
+- **Add formula tooltip explaining 250 WPM assumption** — the initial
+  `(est.)` suffix is shallow; deeper disclosure of the
+  `(input - output) * 0.75 / 250` derivation lives behind a "?" affordance.
