@@ -25,6 +25,32 @@ identical signature). Not caused by the X sentiment email integration.
 infra` PR that addresses all three — they're cheap individually but each one
 on its own is too small to ship.
 
+## P3 — auth pages backlog (surfaced by /autoplan + /ship for v0.0.26.1)
+
+Deferred during `wilfred-py/auth-oauth-unified`. None block onboarding or sign-up.
+
+- **Playwright visual regression for `/sign-in` and `/sign-up`.** Tests mock
+  `@clerk/nextjs` so we can't auto-detect when Clerk's internal class names or
+  layout change. Today the only safety net is manual checklist in PR bodies.
+  Smallest action: install Playwright, snapshot both pages on Chromium + iOS
+  Safari at three viewports, run on PR.
+- **Pin `@clerk/nextjs` to an exact version** (currently `^6.19.3`). When Clerk
+  bumps a minor and changes internal `appearance.elements` keys, our chrome
+  overrides go stale silently. Repo-wide policy decision; not auth-only.
+- **Logo + value-prop above the auth card.** Adversarial review flagged the
+  page reads as generic Clerk. A one-line tagline ("SEC filings, summarized.
+  Free trial, no card.") above `<SignUp>` would brand it. Out of scope for
+  layout PR; pair with PostHog conversion data before/after.
+- **Move `?plan` / `?ref` cookie capture to `lib/auth/captureSignupAttribution.ts`.**
+  Currently inline in `app/(auth)/sign-up/.../page.tsx` with a `// CRITICAL`
+  comment. A future cleanup pass might delete it as "unused effect"; a named
+  util makes the campaign-attribution intent grep-able and unit-testable
+  without the page render.
+- **Memoize `useSearchParams()` derived strings.** The cookie-capture
+  `useEffect` re-runs on every render because `searchParams` returns a new
+  reference. Harmless (we set the same cookie value), but wasteful. Wrap
+  `[plan, ref]` in `useMemo`.
+
 ## P3 — Dashboard counter follow-ups (deferred from /autoplan #wilfred-py/animated-minutes-counter)
 
 Deferred during /autoplan review of the animated minutes-saved counter. These
