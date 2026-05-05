@@ -2,11 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.26.2] - 2026-05-05
+## [0.0.26.3] - 2026-05-06
 
 ### Changed
 - **Onboarding final step is now the email-promise confirmation screen.** The reminder note "We'll email you when new filings are posted for N companies" used to live inline at the bottom of the "Tell us about yourself" profile step. New users now see it as a dedicated final step with a hero treatment: brand-blue mail icon, larger heading with the company-count number rendered in brand-blue, and a single brand-blue "Complete setup" CTA. Email-frequency selector is collapsed behind a "Change" toggle by default so the promise stays the focal point. Replaces the existing A/B fork: `useOnboardingVariant` fallback shifted from `inline` → `step4` (`lib/hooks/use-onboarding-variant.ts:15`), so every new user gets the polished 4-step flow. Returning users mid-experiment retain their assigned bucket via sessionStorage/cookie. The `ONBOARDING_COMPLETED` analytics event now emits `variant: "step4-polished"` so PostHog funnels keyed on this property survive the rollout cleanly.
 - **Vertical progress bar shows celebratory completion on the final step.** Steps 1-3 (Sectors, Companies, Profile) and step 4 (Review) all render the brand-blue check icon when the user reaches the final screen. The active step keeps `aria-current="step"` and a subtle ring overlay so "you're here" remains clear without losing the "you're done" feeling.
+
+## [0.0.26.2] - 2026-05-06
+
+### Fixed
+- **First-visit confetti on the dashboard fires again in dev** (`components/dashboard/dashboard-onboarding.tsx`). Under Next.js 15 + React 19's default-on strict-mode dev double-invoke, the original code flipped `confettiFiredRef` to `true` *before* scheduling the 500ms `setTimeout`. The strict-mode cleanup cancelled the timer; the second mount's effect saw the ref already set and returned early, so confetti never fired locally. Production builds were unaffected (no double-invoke), which is why this looked like "it was working." Moved the ref flip inside the timer callback so the second effect run can reschedule. One-line move + a 3-line comment explaining the strict-mode interaction.
 
 ## [0.0.26.1] - 2026-05-05
 

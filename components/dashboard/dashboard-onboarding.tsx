@@ -33,9 +33,12 @@ export function DashboardOnboarding({
   // Fire confetti on first visit
   useEffect(() => {
     if (!isFirstVisit || confettiFiredRef.current) return;
-    confettiFiredRef.current = true;
 
     const timer = setTimeout(() => {
+      // Set the guard inside the timer (after cleanup window) so React 19
+      // strict-mode dev double-invoke can reschedule on remount instead of
+      // being blocked by a ref the cancelled first run already flipped.
+      confettiFiredRef.current = true;
       setShowConfetti(true);
 
       updateTutorialProgress(100, {
