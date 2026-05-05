@@ -1,67 +1,72 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import SignUpPage from '@/app/(auth)/sign-up/[[...sign-up]]/page';
 
-const mockAuthenticateWithRedirect = jest.fn();
-
-// Mock the Clerk SignUp component and useSignUp hook
 jest.mock('@clerk/nextjs', () => ({
-  SignUp: ({ appearance }: { appearance?: Record<string, unknown> }) => (
-    <div data-testid="clerk-sign-up" data-appearance={JSON.stringify(appearance)}>
-      Clerk SignUp Component
-    </div>
-  ),
-  useSignUp: () => ({
-    signUp: { authenticateWithRedirect: mockAuthenticateWithRedirect },
-    isLoaded: true,
-  }),
+  SignUp: () => <div data-testid="clerk-sign-up">Clerk SignUp Component</div>,
 }));
 
-// Mock next/navigation
+const mockSearchParams = new URLSearchParams();
 jest.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams,
 }));
 
 describe('SignUpPage', () => {
   beforeEach(() => {
-    mockAuthenticateWithRedirect.mockClear();
-  });
-
-  it('renders the Clerk SignUp component and Google button', () => {
-    render(<SignUpPage />);
-
-    expect(screen.getByTestId('clerk-sign-up')).toBeInTheDocument();
-    expect(screen.getByText('Continue with Google')).toBeInTheDocument();
-  });
-
-  it('calls authenticateWithRedirect with oidcPrompt and onboarding redirect', async () => {
-    render(<SignUpPage />);
-
-    fireEvent.click(screen.getByText('Continue with Google'));
-
-    expect(mockAuthenticateWithRedirect).toHaveBeenCalledWith({
-      strategy: 'oauth_google',
-      redirectUrl: '/sign-up/sso-callback',
-      redirectUrlComplete: '/onboarding',
-      oidcPrompt: 'select_account',
+    // Clear all cookies between tests
+    document.cookie.split(';').forEach((c) => {
+      const name = c.split('=')[0].trim();
+      document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
     });
+    mockSearchParams.delete('plan');
+    mockSearchParams.delete('ref');
   });
 
-  it('hides social buttons via appearance prop', () => {
+  it('captures ?plan=pro into a signup_plan cookie', () => {
+    mockSearchParams.set('plan', 'pro');
+
     render(<SignUpPage />);
 
-    const signUp = screen.getByTestId('clerk-sign-up');
-    const appearance = JSON.parse(signUp.getAttribute('data-appearance') || '{}');
-    expect(appearance.elements.socialButtons).toEqual({ display: 'none' });
-    expect(appearance.elements.dividerRow).toEqual({ display: 'none' });
+    expect(document.cookie).toContain('signup_plan=pro');
   });
 
-  it('shows error message when Google auth fails', async () => {
-    mockAuthenticateWithRedirect.mockRejectedValueOnce(new Error('Network error'));
+  it('captures ?ref=campaign into a signup_ref cookie', () => {
+    mockSearchParams.set('ref', 'campaign');
 
     render(<SignUpPage />);
-    fireEvent.click(screen.getByText('Continue with Google'));
 
-    expect(await screen.findByText('Unable to connect to Google. Please try again.')).toBeInTheDocument();
+    expect(document.cookie).toContain('signup_ref=campaign');
+  });
+
+  it('does not set cookies when plan and ref are absent', () => {
+    render(<SignUpPage />);
+
+    expect(document.cookie).not.toContain('signup_plan=');
+    expect(document.cookie).not.toContain('signup_ref=');
+  });
+
+  it('rejects plan values containing cookie-attribute injection', () => {
+    mockSearchParams.set('plan', 'pro;Domain=evil.com');
+
+    render(<SignUpPage />);
+
+    expect(document.cookie).not.toContain('signup_plan=');
+    expect(document.cookie).not.toContain('Domain=evil');
+  });
+
+  it('rejects oversized ref values', () => {
+    mockSearchParams.set('ref', 'a'.repeat(200));
+
+    render(<SignUpPage />);
+
+    expect(document.cookie).not.toContain('signup_ref=');
+  });
+
+  it('rejects plan values with non-allowlisted characters', () => {
+    mockSearchParams.set('plan', 'PRO_TIER');
+
+    render(<SignUpPage />);
+
+    expect(document.cookie).not.toContain('signup_plan=');
   });
 });

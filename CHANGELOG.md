@@ -7,6 +7,20 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **First-visit confetti on the dashboard fires again in dev** (`components/dashboard/dashboard-onboarding.tsx`). Under Next.js 15 + React 19's default-on strict-mode dev double-invoke, the original code flipped `confettiFiredRef` to `true` *before* scheduling the 500ms `setTimeout`. The strict-mode cleanup cancelled the timer; the second mount's effect saw the ref already set and returned early, so confetti never fired locally. Production builds were unaffected (no double-invoke), which is why this looked like "it was working." Moved the ref flip inside the timer callback so the second effect run can reschedule. One-line move + a 3-line comment explaining the strict-mode interaction.
 
+## [0.0.26.1] - 2026-05-05
+
+### Changed
+- **Sign-in and sign-up pages now show one cohesive form**, not a custom Google button floating above a separate Clerk card. Both pages render Clerk's native `<SignIn>` / `<SignUp>` directly with `appearance` overrides for Geist font, brand color, and Tailwind chrome. Net -185 LOC across both pages: deleted the custom `GoogleIcon`, the `MutationObserver` skeleton glue, the duplicated OAuth handlers, and ~95 lines of hydration-state plumbing. Sign-up requires Name + Google enabled in the Clerk dashboard for first/last name fields to render.
+
+### Fixed
+- **Cookie injection on `/sign-up?plan=...&ref=...`**. The campaign attribution effect previously interpolated raw query-string values into `Set-Cookie` strings without validation. A URL like `?plan=pro;Domain=evil.com` could splice attributes; oversized values could corrupt the header. Plan values are now matched against `^[a-z]{1,16}$`, ref values against `^[a-zA-Z0-9_-]{1,64}$`, and both are `encodeURIComponent`-wrapped. Three regression tests added.
+- **WCAG AA contrast on auth pages**. The footer "Sign up" / "Sign in" link color was `#0079F2` (4.06:1 on white, fails AA for normal text). Switched to `#0066CC` (5.86:1, passes AA).
+- **Onboarding skip via `redirect_url` query param**. The deleted custom Google button used `redirectUrlComplete` (forced redirect). Clerk's `signUpFallbackRedirectUrl` only fires when no `redirect_url` is present, meaning a marketing link with `?redirect_url=/dashboard` could land users on the dashboard without provisioning. Added `forceRedirectUrl="/onboarding"` (sign-up) and `forceRedirectUrl="/dashboard"` (sign-in) to override.
+- **Mobile keyboard pushing submit below the fold** on iOS. Swapped `min-h-screen` → `min-h-dvh` on both auth pages and added `items-start sm:items-center pt-12 sm:pt-0` so the form pins to the top with breathing room when the keyboard is up, and centers normally on tablet+.
+
+### Removed
+- `__tests__/app/(auth)/sign-in/page.test.tsx` rewritten as a minimal smoke test. The previous version asserted properties of the deleted custom Google button (button text, redirect args, appearance shape) — none of which exist anymore.
+
 ## [0.0.26.0] - 2026-05-04
 
 ### Added
