@@ -27,7 +27,6 @@ import {
   EmailColors,
   SignalColors,
   importanceToSignalLevel,
-  type SignalLevel,
 } from '@/components/ui/email/design-system';
 import { EmailHeader } from '@/components/ui/email/templates/sections/EmailHeader';
 import { EmailHeroBlock } from '@/components/ui/email/templates/sections/EmailHeroBlock';
