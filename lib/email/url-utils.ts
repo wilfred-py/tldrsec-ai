@@ -107,6 +107,15 @@ function isSchedule13Type(formType?: string): boolean {
  */
 const PRIMARY_DOC_CACHE = new Map<string, string>();
 
+/**
+ * @internal — test helper. Production code never needs to clear the cache;
+ * accession numbers are immutable so a hit is always correct. Exported only
+ * so unit tests for the resolver can run with a clean slate per test.
+ */
+export function __clearPrimaryDocCacheForTesting(): void {
+  PRIMARY_DOC_CACHE.clear();
+}
+
 interface EdgarIndexItem {
   name: string;
   type: string;
