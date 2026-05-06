@@ -60,7 +60,7 @@ export default function OnboardingPage() {
 
   // A/B variant — resolved async, bucket-stable on Clerk userId.
   const { variant, resolved } = useOnboardingVariant(userId);
-  const steps = getOnboardingSteps(variant ?? "inline");
+  const steps = getOnboardingSteps(variant ?? "step4");
   const TOTAL_STEPS_FOR_VARIANT = steps.length;
 
   // Email frequency — wired as real state (was readonly before). Variant A
@@ -212,9 +212,13 @@ export default function OnboardingPage() {
         throw new Error(result.error || "Failed to complete onboarding");
       }
 
-      // Funnel events — variant-aware.
+      // Funnel events — variant-aware. Emit "step4-polished" as the canonical
+      // label so PostHog funnels keyed on this property survive the inline →
+      // step4 transition without dropping data. Original assignment ("inline" /
+      // "step4") still flows through ONBOARDING_VARIANT_ASSIGNED for historical
+      // attribution.
       const now = Date.now();
-      const resolvedVariant = variant ?? "inline";
+      const resolvedVariant = "step4-polished";
       const lastStepName = STEP_NAMES[currentStep - 1] ?? "profile";
       trackEvent(EVENTS.ONBOARDING_STEP_COMPLETED, {
         step_name: lastStepName,

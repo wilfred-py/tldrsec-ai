@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.25.6] - 2026-05-04
+## [0.0.26.4] - 2026-05-07
 
 ### Added
 - **3-email campaign revamp — full track ships in one PR.** Combines PR 1 (security + design-token foundation) and PR 2 (locked Hybrid voice + curated story content) into a single landing because main advanced past the originally claimed v0.0.25.4/v0.0.25.5 slots.
@@ -46,6 +46,52 @@ All notable changes to this project will be documented in this file.
 
 ### Pre-existing issues confirmed (not introduced by this PR)
 - `campaign-demo-template.tsx`, `campaign-digest-template.tsx`, `campaign-invite-template.tsx` have 4 pre-existing TS errors against `EmailFooterProps` (extra `filingUrl` arg) and a `<td>` `bgcolor` typing mismatch. Confirmed identical errors on bare `origin/main`. Tracked for a separate `chore: fix campaign-template TS errors` PR.
+
+## [0.0.26.3] - 2026-05-06
+
+### Changed
+- **Onboarding final step is now the email-promise confirmation screen.** The reminder note "We'll email you when new filings are posted for N companies" used to live inline at the bottom of the "Tell us about yourself" profile step. New users now see it as a dedicated final step with a hero treatment: brand-blue mail icon, larger heading with the company-count number rendered in brand-blue, and a single brand-blue "Complete setup" CTA. Email-frequency selector is collapsed behind a "Change" toggle by default so the promise stays the focal point. Replaces the existing A/B fork: `useOnboardingVariant` fallback shifted from `inline` → `step4` (`lib/hooks/use-onboarding-variant.ts:15`), so every new user gets the polished 4-step flow. Returning users mid-experiment retain their assigned bucket via sessionStorage/cookie. The `ONBOARDING_COMPLETED` analytics event now emits `variant: "step4-polished"` so PostHog funnels keyed on this property survive the rollout cleanly.
+- **Vertical progress bar shows celebratory completion on the final step.** Steps 1-3 (Sectors, Companies, Profile) and step 4 (Review) all render the brand-blue check icon when the user reaches the final screen. The active step keeps `aria-current="step"` and a subtle ring overlay so "you're here" remains clear without losing the "you're done" feeling.
+
+## [0.0.26.2] - 2026-05-06
+
+### Fixed
+- **First-visit confetti on the dashboard fires again in dev** (`components/dashboard/dashboard-onboarding.tsx`). Under Next.js 15 + React 19's default-on strict-mode dev double-invoke, the original code flipped `confettiFiredRef` to `true` *before* scheduling the 500ms `setTimeout`. The strict-mode cleanup cancelled the timer; the second mount's effect saw the ref already set and returned early, so confetti never fired locally. Production builds were unaffected (no double-invoke), which is why this looked like "it was working." Moved the ref flip inside the timer callback so the second effect run can reschedule. One-line move + a 3-line comment explaining the strict-mode interaction.
+
+## [0.0.26.1] - 2026-05-05
+
+### Changed
+- **Sign-in and sign-up pages now show one cohesive form**, not a custom Google button floating above a separate Clerk card. Both pages render Clerk's native `<SignIn>` / `<SignUp>` directly with `appearance` overrides for Geist font, brand color, and Tailwind chrome. Net -185 LOC across both pages: deleted the custom `GoogleIcon`, the `MutationObserver` skeleton glue, the duplicated OAuth handlers, and ~95 lines of hydration-state plumbing. Sign-up requires Name + Google enabled in the Clerk dashboard for first/last name fields to render.
+
+### Fixed
+- **Cookie injection on `/sign-up?plan=...&ref=...`**. The campaign attribution effect previously interpolated raw query-string values into `Set-Cookie` strings without validation. A URL like `?plan=pro;Domain=evil.com` could splice attributes; oversized values could corrupt the header. Plan values are now matched against `^[a-z]{1,16}$`, ref values against `^[a-zA-Z0-9_-]{1,64}$`, and both are `encodeURIComponent`-wrapped. Three regression tests added.
+- **WCAG AA contrast on auth pages**. The footer "Sign up" / "Sign in" link color was `#0079F2` (4.06:1 on white, fails AA for normal text). Switched to `#0066CC` (5.86:1, passes AA).
+- **Onboarding skip via `redirect_url` query param**. The deleted custom Google button used `redirectUrlComplete` (forced redirect). Clerk's `signUpFallbackRedirectUrl` only fires when no `redirect_url` is present, meaning a marketing link with `?redirect_url=/dashboard` could land users on the dashboard without provisioning. Added `forceRedirectUrl="/onboarding"` (sign-up) and `forceRedirectUrl="/dashboard"` (sign-in) to override.
+- **Mobile keyboard pushing submit below the fold** on iOS. Swapped `min-h-screen` → `min-h-dvh` on both auth pages and added `items-start sm:items-center pt-12 sm:pt-0` so the form pins to the top with breathing room when the keyboard is up, and centers normally on tablet+.
+
+### Removed
+- `__tests__/app/(auth)/sign-in/page.test.tsx` rewritten as a minimal smoke test. The previous version asserted properties of the deleted custom Google button (button text, redirect args, appearance shape) — none of which exist anymore.
+
+## [0.0.26.0] - 2026-05-04
+
+### Added
+- **Collective "Reading time saved across all investors" counter on the landing-page hero** (`components/landing/sections-v2/gmail-inbox-hero.tsx`, `components/landing/minutes-saved-counter.tsx`, `lib/db/landing-stats.ts`). A continuously-incrementing whole-minutes counter, anchored to a server-side aggregate of `Summary.inputTokens - outputTokens` across the entire platform, projected forward client-side at random intervals so it always feels alive. Sits in the Stripe slot — small line above the H1 — to flex platform scale to prospects rather than report individual usage. The "FOR INVESTORS AND ANALYSTS" eyebrow above the H1 was deleted to avoid stacking labels.
+- `lib/db/landing-stats.ts` — `fetchGlobalMinutesSaved()` returns `{ totalMinutes, ratePerSecond }`. 30-day token aggregate drives the projection rate, with a `0.5 min/sec` floor so the counter is always visibly ticking even during quiet periods. Cached at the route level via `app/page.tsx` `revalidate = 60` (one DB hit per minute, regardless of visitor count).
+- `components/landing/minutes-saved-counter.tsx` — random-interval scheduler picks tick intervals in `[base × 0.4, base × 1.8]` (0.5–2.5s observed in practice) so the counter doesn't read as mechanical. Pauses on `document.hidden`, resumes on visibility change. Respects `prefers-reduced-motion` (renders static integer). Server-fetched anchor used as the SSR initial state for hydration parity.
+- `__tests__/components/landing/minutes-saved-counter.test.tsx` — 11 tests covering initial render, zero/NaN/negative-rate fallbacks, tabular-nums styling, scheduler activation, cleanup, prop re-anchoring, className passthrough, and aria-hidden suppression of the inner live region.
+
+### Changed
+- **`components/landing/counter/digit-roller.tsx` animation direction flipped to mechanical-odometer-forward.** Previously new digits slid in from above and old digits slid down — visually that reads as "rewinding." Now new digits enter from below and old digits exit upward, matching the user intuition for an incrementing counter. Applies to both the landing-page collective counter and the existing `WaitlistCounter` (both increment-only, so the change is uniformly an improvement).
+- **`components/landing/counter/counter-display.tsx` thousands-separator spacing tightened** by removing `mx-0.5` from the comma span. With 5+ digit values the previous `mx-0.5` (4px total) read as a visible gap; commas now sit flush against adjacent digits.
+
+### Removed
+- "FOR INVESTORS AND ANALYSTS" uppercase eyebrow above the hero H1 (`components/landing/sections-v2/gmail-inbox-hero.tsx`).
+
+## [0.0.25.8] - 2026-05-03
+
+### Fixed
+- **Dashboard "two waves" loading skeleton** (`app/dashboard/loading.tsx`). The route-level loading boundary rendered an obsolete 8-row table mock with pagination that did not match the dashboard's actual card-list UI. Users saw a fake table skeleton → blank flash → real card skeletons that did not match the table they had just seen — that is the literal "skeleton then MORE skeleton" experience the dashboard had been giving. Replaced with a shell that mirrors `app/dashboard/page.tsx` and reuses the same `StatsSkeleton` and `ActivitySkeleton` components the page's Suspense boundaries fall back to. Net `-178` lines, including the dead table mock and its tests.
+- Rewrote `app/dashboard/__tests__/loading.test.tsx` to match the new card-list shape and added a regression test asserting no `<table>` element is rendered, so the table mock cannot silently come back the next time the dashboard layout is touched.
 
 ## [0.0.25.5] - 2026-05-01
 
