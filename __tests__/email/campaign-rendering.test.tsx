@@ -232,14 +232,14 @@ describe('Campaign rendering', () => {
       // names the institutional adversary and promises an inside view.
       expect(html).toContain("What every hedge fund desk knows that you don't");
       expect(html).not.toContain('Three things that are true on EDGAR');
-      // Each truth: long filings, mainstream lag, institutional speed.
-      // "Lede" was replaced with "market-moving line" after preview review
-      // (jargon flagged as obscure). Pin keyword fragments rather than exact
-      // prose so copy nudges don't cascade into test churn.
+      // Each truth, after the post-chart concise rewrite (5-15 word
+      // sentences, blog cadence). "Lede" jargon was replaced with
+      // "market-moving line" earlier; the long "50-100 pages of legal
+      // language" sentence was tightened to "Page one is decoration."
       expect(html).toContain('market-moving line is on page 47');
       expect(html).not.toContain('lede');
-      expect(html).toMatch(/50-100 pages/);
-      expect(html).toMatch(/mainstream coverage finishes parsing/);
+      expect(html).toContain('Page one is decoration');
+      expect(html).toContain('CNBC writes the headline');
       expect(html).toMatch(/Institutional desks/);
     });
 

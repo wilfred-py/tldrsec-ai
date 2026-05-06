@@ -628,18 +628,14 @@ async function email3(options: CampaignEmailOptions): Promise<CampaignEmailConte
     : 'Cancel anytime in one click.';
 
   const content = `
-    <p style="margin:0 0 16px;font-size:16px;color:${EmailColors.text.headline};line-height:1.5;font-weight:600;">In 2020, Caterpillar traded at $150. Spotify hit $100 in late 2022. Vertiv was under $20 in early 2021.</p>
+    <p style="margin:0 0 16px;font-size:16px;color:${EmailColors.text.headline};line-height:1.5;font-weight:600;">In 2020, Caterpillar was $150. Spotify dropped to $100 in 2022. Vertiv traded under $20 in early 2021.</p>
 
     <p style="margin:0 0 16px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;">
-      You watched at least one of them. You knew the company was interesting. The catalysts were obvious — pandemic capex cycle, the podcast pivot, hyperscaler liquid cooling. You weren't wrong about the thesis.
+      You watched. You knew the thesis. You didn't pull the trigger.
     </p>
 
     <p style="margin:0 0 16px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;">
-      You didn't pull the trigger. Not because you didn't have the capital. Because you didn't have the <em>information</em>.
-    </p>
-
-    <p style="margin:0 0 24px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;">
-      You couldn't read every 10-K cover to cover, parse every 8-K, watch every insider Form 4. You didn't have the bandwidth to know what was actually happening inside the company — what the CFO was saying about margins, which directors were buying, what the auditor was flagging. So you sat it out.
+      Not because you didn't have the capital. Because you didn't have the <em>information</em>. You couldn't read every 10-K, every 8-K, every Form 4 — and the price kept moving without you.
     </p>
 
     <p style="margin:0 0 28px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;font-weight:600;">
@@ -651,20 +647,20 @@ async function email3(options: CampaignEmailOptions): Promise<CampaignEmailConte
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">
       <tr>
         <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;vertical-align:top;" width="28"><strong>1.</strong></td>
-        <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;">The market-moving line is on page 47, not page one. Filings that actually move stocks run 50-100 pages of legal language, with the load-bearing sentence buried somewhere in the back third.</td>
+        <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;">The market-moving line is on page 47. Page one is decoration.</td>
       </tr>
       <tr>
         <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;vertical-align:top;" width="28"><strong>2.</strong></td>
-        <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;">The trade is finished before CNBC writes the headline. By the time mainstream coverage finishes parsing, the move is over and the tape has settled.</td>
+        <td style="padding:0 0 12px;font-size:15px;color:${EmailColors.text.body};line-height:1.5;">The trade is finished before CNBC writes the headline.</td>
       </tr>
       <tr>
         <td style="font-size:15px;color:${EmailColors.text.body};line-height:1.5;vertical-align:top;" width="28"><strong>3.</strong></td>
-        <td style="font-size:15px;color:${EmailColors.text.body};line-height:1.5;">You're 24 hours behind. Institutional desks read the filing in 20 minutes. Retail reads coverage of the filing the next morning, in a clip.</td>
+        <td style="font-size:15px;color:${EmailColors.text.body};line-height:1.5;">Institutional desks read the filing in 20 minutes. Retail gets a clip the next morning.</td>
       </tr>
     </table>
 
     <p style="margin:0 0 28px;font-size:15px;color:${EmailColors.text.body};line-height:1.6;">
-      tldrSEC closes the gap. Every SEC filing on every company you follow, summarized in your inbox within 10 minutes of being filed. Same speed institutions get. The thesis you were already right about — now with the bandwidth to commit.
+      tldrSEC closes the gap. Every filing on every company you watch, in your inbox within 10 minutes. Same speed institutions get. The thesis you had — now with the bandwidth to commit.
     </p>
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 32px;">
@@ -690,23 +686,21 @@ async function email3(options: CampaignEmailOptions): Promise<CampaignEmailConte
 
   const text = `${subject}
 
-In 2020, Caterpillar traded at $150. Spotify hit $100 in late 2022. Vertiv was under $20 in early 2021.
+In 2020, Caterpillar was $150. Spotify dropped to $100 in 2022. Vertiv traded under $20 in early 2021.
 
-You watched at least one of them. You knew the company was interesting. The catalysts were obvious — pandemic capex cycle, the podcast pivot, hyperscaler liquid cooling. You weren't wrong about the thesis.
+You watched. You knew the thesis. You didn't pull the trigger.
 
-You didn't pull the trigger. Not because you didn't have the capital. Because you didn't have the information.
-
-You couldn't read every 10-K cover to cover, parse every 8-K, watch every insider Form 4. You didn't have the bandwidth to know what was actually happening inside the company — what the CFO was saying about margins, which directors were buying, what the auditor was flagging. So you sat it out.
+Not because you didn't have the capital. Because you didn't have the information. You couldn't read every 10-K, every 8-K, every Form 4 — and the price kept moving without you.
 
 Five years later, all three multibagged.
 
 What every hedge fund desk knows that you don't:
 
-1. The market-moving line is on page 47, not page one. Filings that actually move stocks run 50-100 pages of legal language, with the load-bearing sentence buried in the back third.
-2. The trade is finished before CNBC writes the headline. By the time mainstream coverage finishes parsing, the move is over.
-3. You're 24 hours behind. Institutional desks read the filing in 20 minutes. Retail reads coverage of the filing the next morning, in a clip.
+1. The market-moving line is on page 47. Page one is decoration.
+2. The trade is finished before CNBC writes the headline.
+3. Institutional desks read the filing in 20 minutes. Retail gets a clip the next morning.
 
-tldrSEC closes the gap. Every SEC filing on every company you follow, summarized in your inbox within 10 minutes of being filed. Same speed institutions get. The thesis you were already right about — now with the bandwidth to commit.
+tldrSEC closes the gap. Every filing on every company you watch, in your inbox within 10 minutes. Same speed institutions get. The thesis you had — now with the bandwidth to commit.
 
 >> Start Your 7-Day Trial: ${trialUrl}
 
