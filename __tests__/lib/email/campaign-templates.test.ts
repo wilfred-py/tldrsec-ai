@@ -207,6 +207,9 @@ describe('fetchCampaignFilings (post-refactor regression)', () => {
   });
 
   test('truncates summary text >200 chars with ellipsis', async () => {
+    // PR 1.6 swapped the inline `.slice(0, 197) + '...'` for `capHeadline(text, 200)`.
+    // The new helper cuts to `max` chars and appends `…` (single Unicode char,
+    // U+2026), so the final length is `max + 1` and the suffix is `…`, not `...`.
     const longText = 'A'.repeat(300);
     const findMany = jest.fn().mockResolvedValue([
       row({ ticker: 'AAPL', summaryText: longText }),
@@ -214,8 +217,8 @@ describe('fetchCampaignFilings (post-refactor regression)', () => {
     mockGetPrismaClient.mockReturnValue({ summary: { findMany } } as unknown as ReturnType<typeof getPrismaClient>);
 
     const [filing] = await fetchCampaignFilings(1);
-    expect(filing.summary).toHaveLength(200);
-    expect(filing.summary.endsWith('...')).toBe(true);
+    expect(filing.summary).toHaveLength(201);
+    expect(filing.summary.endsWith('…')).toBe(true);
   });
 
   test('falls back to summaryJSON.eventType when smartSubject missing', async () => {
