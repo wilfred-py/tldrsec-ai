@@ -139,9 +139,9 @@ export async function POST(request: NextRequest) {
 
     // Queue emails via Resend batch (up to 100 per batch call)
     const resend = new Resend(resendApiKey);
-    const emails = targetSubscribers.map(subscriber => {
+    const emails = await Promise.all(targetSubscribers.map(async subscriber => {
       const unsubscribeUrl = generateUnsubscribeUrl(subscriber.email);
-      const content = getCampaignEmailContent(emailNumber, {
+      const content = await getCampaignEmailContent(emailNumber, {
         unsubscribeUrl,
         variant,
         filings: filings || undefined,
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
           { name: 'variant', value: variant || 'none' },
         ],
       };
-    });
+    }));
 
     // Resend batch API supports up to 100 emails per call
     const batchSize = 100;

@@ -318,6 +318,35 @@ export const EmailStyles = {
 } as const;
 
 /**
+ * Signal/importance color palette — bg + border + text for the canonical
+ * HIGH / MODERATE / LOW pill + accent-stroke pattern. Shared by `campaign-demo-template.tsx`
+ * and the inline-HTML campaign emails (`lib/email/campaign-templates.ts`) so the
+ * same importance level renders the same color in every surface.
+ *
+ * Use with `importanceToSignalLevel(importance)` when the input is the canonical
+ * `'critical' | 'high' | 'medium' | 'low'` string.
+ */
+export const SignalColors = {
+  HIGH:     { bgColor: '#FEF3C7', borderColor: '#F59E0B', textColor: '#92400E' },
+  MODERATE: { bgColor: '#EEF2FF', borderColor: '#6366F1', textColor: '#4338CA' },
+  LOW:      { bgColor: '#F1F5F9', borderColor: '#94A3B8', textColor: '#475569' },
+} as const;
+
+export type SignalLevel = keyof typeof SignalColors;
+
+/**
+ * Map a Summary.importance value (`critical | high | medium | low`) to the
+ * canonical 3-tier signal palette (HIGH | MODERATE | LOW). Critical collapses
+ * into HIGH because the design system intentionally avoids a fourth band.
+ */
+export function importanceToSignalLevel(importance: string | null | undefined): SignalLevel {
+  const norm = (importance || '').toLowerCase();
+  if (norm === 'critical' || norm === 'high') return 'HIGH';
+  if (norm === 'medium' || norm === 'moderate') return 'MODERATE';
+  return 'LOW';
+}
+
+/**
  * Muted badge color palette — 12% opacity backgrounds for subtle, non-jarring badges
  */
 export const BadgeColors = {
