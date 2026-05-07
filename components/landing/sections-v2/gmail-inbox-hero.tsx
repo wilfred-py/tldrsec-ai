@@ -32,6 +32,8 @@ import {
   type FinancialHighlight,
 } from '@/lib/landing/gmail-mock-summaries';
 import { getHeroCopy, type HeroVariant } from '@/lib/landing/copy';
+import type { GlobalMinutesSaved } from '@/lib/db/landing-stats';
+import { MinutesSavedCounter } from '@/components/landing/minutes-saved-counter';
 
 // Constants for animation and layout
 const INITIAL_EMAIL_COUNT = 6;
@@ -48,6 +50,8 @@ interface GmailInboxHeroProps {
    * Unrecognized values fall back to 'control' inside `getHeroCopy`.
    */
   variant?: HeroVariant;
+  /** Server-fetched platform-wide minutes-saved totals + projection rate. */
+  globalStats?: GlobalMinutesSaved;
 }
 
 /**
@@ -414,7 +418,7 @@ function formatSecondsAgo(seconds: number): string {
  * widget caption, and a large centered Gmail-style inbox widget.
  * Real curated summaries that users can click to preview.
  */
-export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroRef, variant }) => {
+export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroRef, variant, globalStats }) => {
   // Hero copy bundle for the active experiment arm. Falls back to control
   // inside getHeroCopy on any unrecognized variant value.
   const heroCopy = getHeroCopy(variant);
@@ -665,13 +669,39 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
             animate="animate"
             className="text-center max-w-4xl mx-auto"
           >
-            <motion.p
-              variants={staggerItem}
-              className="mb-5 text-center text-[13px] font-semibold uppercase tracking-[0.12em]"
-              style={{ color: 'var(--brand-primary)' }}
-            >
-              {heroCopy.eyebrow}
-            </motion.p>
+            {globalStats && globalStats.totalMinutes >= 1 ? (
+              // Live stats counter (origin/main #496) takes the eyebrow slot when
+              // the DB query returns data — stronger social proof than the static
+              // "For investors and analysts" string. Falls back to the static
+              // eyebrow below on DB miss / cold start.
+              <motion.div
+                variants={staggerItem}
+                role="status"
+                aria-label={`${Math.round(globalStats.totalMinutes).toLocaleString()} minutes of reading saved across all investors using tldrSEC`}
+                className="mb-5 text-center text-[13px]"
+              >
+                <span aria-hidden="true">
+                  <span className="font-bold text-[var(--brand-secondary)]">
+                    Reading time saved across all investors:
+                  </span>{' '}
+                  <span className="text-[var(--brand-text-muted)]">
+                    <MinutesSavedCounter
+                      anchorMinutes={globalStats.totalMinutes}
+                      ratePerSecond={globalStats.ratePerSecond}
+                    />{' '}
+                    minutes
+                  </span>
+                </span>
+              </motion.div>
+            ) : (
+              <motion.p
+                variants={staggerItem}
+                className="mb-5 text-center text-[13px] font-semibold uppercase tracking-[0.12em]"
+                style={{ color: 'var(--brand-primary)' }}
+              >
+                {heroCopy.eyebrow}
+              </motion.p>
+            )}
 
             <motion.h1 variants={staggerItem} className="brand-hero-display mb-5 text-center text-black lg:!text-[3.5rem]">
               {heroCopy.h1.parts.map((part, i) =>

@@ -135,7 +135,9 @@ describe('useOnboardingVariant — resolution chain', () => {
     expect(last()).toEqual({ variant: 'inline', resolved: true, source: 'posthog' });
   });
 
-  it('falls back to "inline" after 500ms when PostHog never resolves', async () => {
+  it('falls back to "step4" after 500ms when PostHog never resolves', async () => {
+    // FALLBACK_VARIANT was flipped from "inline" to "step4" in v0.0.25.9
+    // (the polished 4-step flow is now the default for every new user).
     getFeatureFlag.mockReturnValue(undefined);
     onFeatureFlags.mockImplementation(() => undefined);
 
@@ -147,10 +149,10 @@ describe('useOnboardingVariant — resolution chain', () => {
     });
 
     await waitFor(() => {
-      expect(last()).toEqual({ variant: 'inline', resolved: true, source: 'fallback' });
+      expect(last()).toEqual({ variant: 'step4', resolved: true, source: 'fallback' });
     });
     expect(trackEvent).toHaveBeenCalledWith('onboarding_variant_assigned', {
-      variant: 'inline',
+      variant: 'step4',
       source: 'fallback',
     });
   });
@@ -166,7 +168,7 @@ describe('useOnboardingVariant — resolution chain', () => {
     act(() => jest.advanceTimersByTime(500));
     await waitFor(() => {
       expect(last().source).toBe('fallback');
-      expect(last().variant).toBe('inline');
+      expect(last().variant).toBe('step4');
     });
   });
 

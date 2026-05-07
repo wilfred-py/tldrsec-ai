@@ -3,6 +3,12 @@ import { Suspense } from 'react';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
 import { PAGE_METADATA } from '@/lib/landing/copy';
 import { resolveHeroVariant } from '@/lib/analytics/landing-flags';
+import { fetchGlobalMinutesSaved } from '@/lib/db/landing-stats';
+
+// Revalidate every 60s so the global counter's anchor value stays roughly
+// fresh without hammering the DB on every visit. Client projects forward
+// from the anchor via requestAnimationFrame.
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: PAGE_METADATA.title,
@@ -67,9 +73,18 @@ export default async function Home() {
   // lib/analytics/landing-flags.ts and .claude/tasks/landing-copy-rework.md (13A).
   const heroVariant = await resolveHeroVariant();
 
+  // Server-side fetch: at most one DB hit per ISR window.
+  // If this fails (DB unreachable, etc.) fall back to zeros so the page still ships.
+  let globalStats = { totalMinutes: 0, ratePerSecond: 0 };
+  try {
+    globalStats = await fetchGlobalMinutesSaved();
+  } catch (error) {
+    console.error('[landing] Failed to fetch global minutes stats:', error);
+  }
+
   return (
     <Suspense fallback={<HeroSkeleton />}>
-      <LandingPageV2 heroVariant={heroVariant} />
+      <LandingPageV2 heroVariant={heroVariant} globalStats={globalStats} />
     </Suspense>
   );
 }

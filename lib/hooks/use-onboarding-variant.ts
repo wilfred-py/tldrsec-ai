@@ -12,7 +12,7 @@ const FLAG_KEY = "onboarding-email-notice-variant";
 const SESSION_PREFIX = "ob_variant_v1:";
 const COOKIE_KEY = "ob_variant";
 const FALLBACK_TIMEOUT_MS = 500;
-const FALLBACK_VARIANT: OnboardingVariant = "inline";
+const FALLBACK_VARIANT: OnboardingVariant = "step4";
 
 interface UseOnboardingVariantResult {
   variant: OnboardingVariant | null;

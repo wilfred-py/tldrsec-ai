@@ -69,7 +69,7 @@ export type EventProps = {
     total_duration_ms: number;
     companies_count: number;
     sectors_count: number;
-    variant: 'step4' | 'inline';
+    variant: 'step4' | 'inline' | 'step4-polished';
     step_count: 3 | 4;
     email_frequency: 'IMMEDIATE' | 'DAILY' | 'NONE';
     ticker_count: number;

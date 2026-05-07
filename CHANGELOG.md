@@ -2,6 +2,97 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.26.4] - 2026-05-07
+
+### Added
+- **3-email campaign revamp — full track ships in one PR.** Combines PR 1 (security + design-token foundation) and PR 2 (locked Hybrid voice + curated story content) into a single landing because main advanced past the originally claimed v0.0.25.4/v0.0.25.5 slots.
+- **`<EmailHeroBlock>` section component** (`components/ui/email/templates/sections/EmailHeroBlock.tsx`). Renders the locked Variant C Hybrid hero from `.claude/tasks/design-shotgun/email-1-hero-2026-04-29/`: dry, ticker-prefixed observational headline (Levine-style) plus an optional brand-purple left-rail "why it matters" gloss. Headline runs through `ensureTickerPrefix` + `capHeadline(90)` for the same defensive truncation contract as production filing emails. 10 unit tests cover ticker-prefix idempotency, capHeadline(90) truncation, custom `headlineMaxChars` override, empty-headline no-op, brand-purple rail toggle, and JSX auto-escape on hostile input.
+- **`headline?` + `whyItMatters?` + `filingUrl?` craft-layer fields on `CampaignFiling`.** When present, the hero renders the curated dry observation + gloss; when absent, falls back to raw `filing.title`. `filingUrl` flows from `Summary.filingUrl` through `toCampaignFiling` so the "Source: SEC EDGAR" link resolves through `getSecFilingViewerUrl()` to the actual archive index page (the same path production filing emails use).
+- **Subject A/B variants for E1 — locked from `/design-shotgun`:**
+  - **A (default):** `${ticker}: ${headline || title}` — case-preserved, deduped via `ensureTickerPrefix` so an LLM-built `smartSubject` like `AMZN: Q1 results` never doubles to `AMZN: AMZN:`. Subject prefers the curated `headline` over `title` so the inbox preview matches the body hero.
+  - **B (test):** `The ${filingType} every ${ticker} holder needs to see` — Hormozi pattern with embedded ticker.
+- **E2 digest now leads with curated stories on popular tickers.** Static subject is `Filings we caught for you this week` (replaces the spammier "N SEC filings you should know about"). Three fallback rows feature TSLA 10-K (Musk comp re-ratification material risk + no plan B), META 10-Q (Reality Labs $4.5B quarterly loss / $60B cumulative), GOOGL 10-K (first annual after DOJ search-monopoly verdict).
+- **E3 reframed around regret-trade FOMO and tightened to blog cadence.** Subject: `the multibaggers you didn't buy`. Opener cut from 4 paragraphs to 2 — short punchy sentences ("You watched. You knew the thesis. You didn't pull the trigger."). Three hedge-fund truths reduced to single declaratives ("The market-moving line is on page 47. Page one is decoration."). FAQ block deleted entirely. Sub-CTA: `Cancel anytime in one click.` (the redundant "card won't be charged" line was dropped).
+- **E1 "Source: SEC EDGAR" link now opens the actual filing document, not a documents catalog or data viewer.** New `resolveSecPrimaryDocumentUrl()` helper in `lib/email/url-utils.ts` fetches EDGAR's `index.json` for a given filing, picks the primary `.htm` matching the form type (or largest `.htm` as fallback), and returns the direct document URL. Caches by accession-no to avoid hitting EDGAR on per-cohort sends. Gracefully degrades to the input URL on any fetch/parse failure so recipients never get a broken link. Handles all three URL shapes production stores in `Summary.filingUrl`: `-index.htm` files, directory URLs with trailing slash, and bare directory URLs. Preview script's `resolveFilingUrl()` chains through this helper after the DB lookup.
+- **`lib/email/sp500-top30.ts`** — single-source-of-truth top-30 S&P 500 ticker pool. 30 brand-recognizable, news-verifiable tickers ordered by approximate market cap. `SP500_TOP_30_TICKERS` Set + `isTop30Ticker(s)` predicate. 7 contract tests pin the 30-element invariant and verify NVDA/TSLA/AAPL/MSFT remain in pool (campaign-fallback fixtures depend on them).
+- **`SignalColors` + `importanceToSignalLevel` design tokens** (`components/ui/email/design-system.ts`). Canonical 3-tier importance palette (HIGH amber / MODERATE indigo / LOW slate) shared by `campaign-demo-template.tsx` and the inline-HTML campaign emails. `critical` collapses into `HIGH` — design system intentionally avoids a fourth band.
+- **`lib/email/__fixtures__/campaign-fallback-filings.ts`** — extracted fallback hero + 3-row digest from `campaign-templates.ts`. NVDA 10-Q hero with `heroHeadline: "NVDA: 3 customers each booked over 13% last quarter"` + Hybrid `whyItMatters`. Test suites assert against the fixture export instead of duplicating string literals.
+- **`scripts/preview-campaign.ts`** — dev-only preview tool that renders all 4 campaign permutations (E1A / E1B / E2 / E3) plus a 5-story curated pool (NVDA / TSLA / META / AAPL / AMD) and sends them to a single inbox via Resend. Tags as `campaign=preview-pr2` to keep production analytics clean.
+- **10 campaign test suites — 117 passing + 9 todo:**
+  - `campaign-xss.test.tsx` (14 tests) — XSS coverage with a component-aware `renderAsync` mock that escape-encodes string props as `data-*` attributes, so hostile `companyName`/`title` payloads flowing through `<EmailHeader>` + `<EmailHeroBlock>` JSX are still verified to be HTML-escaped.
+  - `campaign-subject-consistency.test.ts` — case-preserved subject schema, variant B Hormozi pattern, ticker-prefix dedup, headline-priority assertion, ALL-CAPS-tickers-anywhere heuristic for variant B mid-string `NVDA`.
+  - `campaign-rendering.test.tsx` (21 tests) — dynamic-filing hero composition for AAPL/MSFT/NVDA, curated headline + whyItMatters flow-through, fallback variant A/B subjects, preheader gloss-first / summary-fallback, and the "no E1 importance band" assertion.
+  - `campaign-token-consumption.test.ts` — band colors scoped to E2 only (E1 dropped its band); `KNOWN_LAYOUT_HEX` whitelist + token-source scan.
+  - `campaign-prompt-eval.test.ts` — pins voice rules: no filler verbs, ≤2 exclamation marks, no marketing scream, FOMO opener + hedge-fund subhead pinned, "lede" word forbidden, EDGAR brand-purple link asserted.
+  - `campaign-resend-tags.test.ts`, `campaign-utm-variant.test.tsx`, `campaign-performance.test.ts`, `email-hero-block.test.tsx`, `sp500-top30.test.ts` round out the surface.
+
+### Hardened
+- **`escapeHtml` applied at every dynamic interpolation site in `lib/email/campaign-templates.ts`** (PR 1.1). Closes the residual XSS risk that user-controllable `Summary.title` / `Summary.summary` / `Filing.companyName` strings could inject `<script>` or break out of HTML attributes when rendered into the inline campaign HTML. Mirrors the defensive posture already in place for `8k-minimalist-template.tsx`.
+- **`stripCrlf` applied to subject + preheader composition** so header-injection attempts via filing-derived strings cannot insert `\r\n` into Resend `To:` / `Subject:` headers.
+
+### Refactored
+- **E1 stripped its preamble and closing pitch.** The "You signed up for tldrSEC a few weeks ago. Here's what our AI does..." opener and "On EDGAR, reading this 10-Q takes 15-20 minutes" closer were both deleted. The whole email body is now the actual product output the recipient would receive as a paying user — hero + summary + filed-date line + CTA.
+- **E1 dropped the importance-band card.** Locked Levine voice puts importance into the dry headline + gloss, not a colored card. E2 (digest) keeps colored bands because scannability is the digest's reason to exist.
+- **E1 added a CTA button + brand-purple EDGAR audit link.** Bottom button (`See more filings like this`) routes to `https://tldrsec.app` (campaign recipients are unregistered — they go to the landing page, not the trial flow). Inline `Source: SEC EDGAR` hyperlink on the filed-date line uses `EmailColors.semantic.accent` (`#7C3AED`, the same brand purple as the why-it-matters left rail).
+- **Two `renderAsync` calls in `email1()` parallelized via `Promise.all`** — saves 1-2ms per recipient render; multiplies on batch sends.
+- **`getCampaignEmailContent` is now async** (`campaign-templates.ts` + `app/api/admin/campaign/send/route.ts`). The route awaits per-recipient renders in parallel.
+- **Section composition in `campaign-demo-template.tsx`** (PR 1.3) — replaced inline header markup with `<EmailHeader>`, matching the 11 minimalist filing templates.
+- **`capHeadline` from `design-system.ts` reused for digest summary truncation** (PR 1.6) — replaces a one-off slice + ellipsis at 200 chars with the design-system helper.
+- **Inline color helpers deleted in favor of `SignalColors[importanceToSignalLevel(x)]`** (PR 1.4) at the importance-band interpolation sites.
+
+### Verified
+- **`Summary.filingDate` index already present in `prisma/schema.prisma`** (PR 1.7). The `fetchScoredSummariesLast30Days` query plan was at risk of a sequential scan on the 30-day window; existing `@@index([filingDate])` is sufficient. No schema migration required.
+- **Full email surface green** (60 suites): 852 passing + 9 todo + 4 skipped. 11 campaign + url-utils suites cover the new primary-doc resolver, brand-purple source link, and the FOMO E3 voice.
+
+### Pre-existing issues confirmed (not introduced by this PR)
+- `campaign-demo-template.tsx`, `campaign-digest-template.tsx`, `campaign-invite-template.tsx` have 4 pre-existing TS errors against `EmailFooterProps` (extra `filingUrl` arg) and a `<td>` `bgcolor` typing mismatch. Confirmed identical errors on bare `origin/main`. Tracked for a separate `chore: fix campaign-template TS errors` PR.
+
+## [0.0.26.3] - 2026-05-06
+
+### Changed
+- **Onboarding final step is now the email-promise confirmation screen.** The reminder note "We'll email you when new filings are posted for N companies" used to live inline at the bottom of the "Tell us about yourself" profile step. New users now see it as a dedicated final step with a hero treatment: brand-blue mail icon, larger heading with the company-count number rendered in brand-blue, and a single brand-blue "Complete setup" CTA. Email-frequency selector is collapsed behind a "Change" toggle by default so the promise stays the focal point. Replaces the existing A/B fork: `useOnboardingVariant` fallback shifted from `inline` → `step4` (`lib/hooks/use-onboarding-variant.ts:15`), so every new user gets the polished 4-step flow. Returning users mid-experiment retain their assigned bucket via sessionStorage/cookie. The `ONBOARDING_COMPLETED` analytics event now emits `variant: "step4-polished"` so PostHog funnels keyed on this property survive the rollout cleanly.
+- **Vertical progress bar shows celebratory completion on the final step.** Steps 1-3 (Sectors, Companies, Profile) and step 4 (Review) all render the brand-blue check icon when the user reaches the final screen. The active step keeps `aria-current="step"` and a subtle ring overlay so "you're here" remains clear without losing the "you're done" feeling.
+
+## [0.0.26.2] - 2026-05-06
+
+### Fixed
+- **First-visit confetti on the dashboard fires again in dev** (`components/dashboard/dashboard-onboarding.tsx`). Under Next.js 15 + React 19's default-on strict-mode dev double-invoke, the original code flipped `confettiFiredRef` to `true` *before* scheduling the 500ms `setTimeout`. The strict-mode cleanup cancelled the timer; the second mount's effect saw the ref already set and returned early, so confetti never fired locally. Production builds were unaffected (no double-invoke), which is why this looked like "it was working." Moved the ref flip inside the timer callback so the second effect run can reschedule. One-line move + a 3-line comment explaining the strict-mode interaction.
+
+## [0.0.26.1] - 2026-05-05
+
+### Changed
+- **Sign-in and sign-up pages now show one cohesive form**, not a custom Google button floating above a separate Clerk card. Both pages render Clerk's native `<SignIn>` / `<SignUp>` directly with `appearance` overrides for Geist font, brand color, and Tailwind chrome. Net -185 LOC across both pages: deleted the custom `GoogleIcon`, the `MutationObserver` skeleton glue, the duplicated OAuth handlers, and ~95 lines of hydration-state plumbing. Sign-up requires Name + Google enabled in the Clerk dashboard for first/last name fields to render.
+
+### Fixed
+- **Cookie injection on `/sign-up?plan=...&ref=...`**. The campaign attribution effect previously interpolated raw query-string values into `Set-Cookie` strings without validation. A URL like `?plan=pro;Domain=evil.com` could splice attributes; oversized values could corrupt the header. Plan values are now matched against `^[a-z]{1,16}$`, ref values against `^[a-zA-Z0-9_-]{1,64}$`, and both are `encodeURIComponent`-wrapped. Three regression tests added.
+- **WCAG AA contrast on auth pages**. The footer "Sign up" / "Sign in" link color was `#0079F2` (4.06:1 on white, fails AA for normal text). Switched to `#0066CC` (5.86:1, passes AA).
+- **Onboarding skip via `redirect_url` query param**. The deleted custom Google button used `redirectUrlComplete` (forced redirect). Clerk's `signUpFallbackRedirectUrl` only fires when no `redirect_url` is present, meaning a marketing link with `?redirect_url=/dashboard` could land users on the dashboard without provisioning. Added `forceRedirectUrl="/onboarding"` (sign-up) and `forceRedirectUrl="/dashboard"` (sign-in) to override.
+- **Mobile keyboard pushing submit below the fold** on iOS. Swapped `min-h-screen` → `min-h-dvh` on both auth pages and added `items-start sm:items-center pt-12 sm:pt-0` so the form pins to the top with breathing room when the keyboard is up, and centers normally on tablet+.
+
+### Removed
+- `__tests__/app/(auth)/sign-in/page.test.tsx` rewritten as a minimal smoke test. The previous version asserted properties of the deleted custom Google button (button text, redirect args, appearance shape) — none of which exist anymore.
+
+## [0.0.26.0] - 2026-05-04
+
+### Added
+- **Collective "Reading time saved across all investors" counter on the landing-page hero** (`components/landing/sections-v2/gmail-inbox-hero.tsx`, `components/landing/minutes-saved-counter.tsx`, `lib/db/landing-stats.ts`). A continuously-incrementing whole-minutes counter, anchored to a server-side aggregate of `Summary.inputTokens - outputTokens` across the entire platform, projected forward client-side at random intervals so it always feels alive. Sits in the Stripe slot — small line above the H1 — to flex platform scale to prospects rather than report individual usage. The "FOR INVESTORS AND ANALYSTS" eyebrow above the H1 was deleted to avoid stacking labels.
+- `lib/db/landing-stats.ts` — `fetchGlobalMinutesSaved()` returns `{ totalMinutes, ratePerSecond }`. 30-day token aggregate drives the projection rate, with a `0.5 min/sec` floor so the counter is always visibly ticking even during quiet periods. Cached at the route level via `app/page.tsx` `revalidate = 60` (one DB hit per minute, regardless of visitor count).
+- `components/landing/minutes-saved-counter.tsx` — random-interval scheduler picks tick intervals in `[base × 0.4, base × 1.8]` (0.5–2.5s observed in practice) so the counter doesn't read as mechanical. Pauses on `document.hidden`, resumes on visibility change. Respects `prefers-reduced-motion` (renders static integer). Server-fetched anchor used as the SSR initial state for hydration parity.
+- `__tests__/components/landing/minutes-saved-counter.test.tsx` — 11 tests covering initial render, zero/NaN/negative-rate fallbacks, tabular-nums styling, scheduler activation, cleanup, prop re-anchoring, className passthrough, and aria-hidden suppression of the inner live region.
+
+### Changed
+- **`components/landing/counter/digit-roller.tsx` animation direction flipped to mechanical-odometer-forward.** Previously new digits slid in from above and old digits slid down — visually that reads as "rewinding." Now new digits enter from below and old digits exit upward, matching the user intuition for an incrementing counter. Applies to both the landing-page collective counter and the existing `WaitlistCounter` (both increment-only, so the change is uniformly an improvement).
+- **`components/landing/counter/counter-display.tsx` thousands-separator spacing tightened** by removing `mx-0.5` from the comma span. With 5+ digit values the previous `mx-0.5` (4px total) read as a visible gap; commas now sit flush against adjacent digits.
+
+### Removed
+- "FOR INVESTORS AND ANALYSTS" uppercase eyebrow above the hero H1 (`components/landing/sections-v2/gmail-inbox-hero.tsx`).
+
+## [0.0.25.8] - 2026-05-03
+
+### Fixed
+- **Dashboard "two waves" loading skeleton** (`app/dashboard/loading.tsx`). The route-level loading boundary rendered an obsolete 8-row table mock with pagination that did not match the dashboard's actual card-list UI. Users saw a fake table skeleton → blank flash → real card skeletons that did not match the table they had just seen — that is the literal "skeleton then MORE skeleton" experience the dashboard had been giving. Replaced with a shell that mirrors `app/dashboard/page.tsx` and reuses the same `StatsSkeleton` and `ActivitySkeleton` components the page's Suspense boundaries fall back to. Net `-178` lines, including the dead table mock and its tests.
+- Rewrote `app/dashboard/__tests__/loading.test.tsx` to match the new card-list shape and added a regression test asserting no `<table>` element is rendered, so the table mock cannot silently come back the next time the dashboard layout is touched.
+
 ## [0.0.25.5] - 2026-05-01
 
 ### Changed

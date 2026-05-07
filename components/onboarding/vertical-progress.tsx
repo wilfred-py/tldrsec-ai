@@ -20,6 +20,12 @@ export function VerticalProgress({ currentStep, steps = ONBOARDING_STEPS_BASE }:
         const isCompleted = currentStep > stepNum;
         const isActive = currentStep === stepNum;
         const isLast = index === steps.length - 1;
+        // Hybrid (D2=C): on the final/confirm step, render the active step
+        // with a checkmark + filled brand-blue background AND an active ring
+        // overlay. Everything before the click reads as "done" while still
+        // signaling "you're here".
+        const isActiveLast = isActive && isLast;
+        const showCheck = isCompleted || isActiveLast;
 
         return (
           <div key={step.key} className="flex flex-col items-center sm:items-start">
@@ -29,12 +35,14 @@ export function VerticalProgress({ currentStep, steps = ONBOARDING_STEPS_BASE }:
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all duration-300",
                   isCompleted && "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white",
-                  isActive && "border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]",
+                  isActiveLast &&
+                    "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white ring-2 ring-[var(--brand-primary)]/30 ring-offset-2 ring-offset-background",
+                  isActive && !isLast && "border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]",
                   !isCompleted && !isActive && "border-gray-300 text-gray-400 dark:border-gray-600"
                 )}
                 aria-current={isActive ? "step" : undefined}
               >
-                {isCompleted ? (
+                {showCheck ? (
                   <CheckCircle className="h-4 w-4" />
                 ) : (
                   <span className="text-xs font-semibold">{stepNum}</span>
@@ -45,8 +53,9 @@ export function VerticalProgress({ currentStep, steps = ONBOARDING_STEPS_BASE }:
               <span
                 className={cn(
                   "hidden sm:block text-sm transition-colors duration-300",
-                  isActive && "font-semibold text-foreground",
-                  isCompleted && "font-medium text-[var(--brand-primary)]",
+                  isActive && !isActiveLast && "font-semibold text-foreground",
+                  (isCompleted || isActiveLast) && "font-medium text-[var(--brand-primary)]",
+                  isActiveLast && "font-semibold",
                   !isCompleted && !isActive && "text-muted-foreground"
                 )}
               >

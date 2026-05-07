@@ -13,6 +13,17 @@ import { LandingNavbar } from './landing-navbar';
 import { AuthProvider } from '@/contexts/auth-context';
 import { SubscriptionProvider } from '@/contexts/subscription-context';
 import type { HeroVariant } from '@/lib/landing/copy';
+import type { GlobalMinutesSaved } from '@/lib/db/landing-stats';
+
+interface LandingPageV2Props {
+  /**
+   * Hero copy experiment arm, resolved server-side in app/page.tsx.
+   * Defaults to 'control' so direct mounts (tests, storybook, etc.) work.
+   */
+  heroVariant?: HeroVariant;
+  /** Server-fetched platform-wide minutes-saved totals + projection rate. */
+  globalStats?: GlobalMinutesSaved;
+}
 
 /**
  * Landing Page V2 Component
@@ -34,15 +45,7 @@ import type { HeroVariant } from '@/lib/landing/copy';
  * - Click any email to see full AI analysis
  *
  */
-interface LandingPageV2Props {
-  /**
-   * Hero copy experiment arm, resolved server-side in app/page.tsx.
-   * Defaults to 'control' so direct mounts (tests, storybook, etc.) work.
-   */
-  heroVariant?: HeroVariant;
-}
-
-export function LandingPageV2({ heroVariant = 'control' }: LandingPageV2Props = {}) {
+export function LandingPageV2({ heroVariant = 'control', globalStats }: LandingPageV2Props = {}) {
   // Ref for hero section - used by navbar's Intersection Observer
   const heroRef = useRef<HTMLElement>(null);
 
@@ -54,7 +57,7 @@ export function LandingPageV2({ heroVariant = 'control' }: LandingPageV2Props = 
           <LandingNavbar heroRef={heroRef} />
 
           {/* Hero section with ref for navbar visibility tracking */}
-          <GmailInboxHero heroRef={heroRef} variant={heroVariant} />
+          <GmailInboxHero heroRef={heroRef} variant={heroVariant} globalStats={globalStats} />
 
           <FeaturesSectionV2 />
           <PricingSectionV2 />

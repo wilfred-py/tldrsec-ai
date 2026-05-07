@@ -92,6 +92,100 @@ function isSchedule13Type(formType?: string): boolean {
 }
 
 /**
+ * Resolve a `-index.htm` filing URL to the actual primary document URL by
+ * fetching EDGAR's `index.json` for that filing. The index page lists every
+ * document in the submission (the filing itself, exhibits, graphics, XBRL
+ * fragments) — this picks the primary HTM matching the form type so the
+ * email link drops the reader straight into the filing they care about
+ * rather than a documents catalog.
+ *
+ * Returns the resolved document URL on success. Returns the original input
+ * URL on any failure (network, parse, no matching doc) — caller never gets
+ * a broken link, just falls back to the original `-index.htm`.
+ *
+ * Caches by accession-no so a per-cohort send doesn't slam EDGAR.
+ */
+const PRIMARY_DOC_CACHE = new Map<string, string>();
+
+/**
+ * @internal — test helper. Production code never needs to clear the cache;
+ * accession numbers are immutable so a hit is always correct. Exported only
+ * so unit tests for the resolver can run with a clean slate per test.
+ */
+export function __clearPrimaryDocCacheForTesting(): void {
+  PRIMARY_DOC_CACHE.clear();
+}
+
+interface EdgarIndexItem {
+  name: string;
+  type: string;
+  size: string;
+}
+interface EdgarIndexJson {
+  directory?: {
+    item?: EdgarIndexItem[];
+  };
+}
+
+export async function resolveSecPrimaryDocumentUrl(
+  filingUrl: string,
+  formType: string | undefined,
+  options: { fetchImpl?: typeof fetch } = {},
+): Promise<string> {
+  // Accept three URL shapes that all encode the same filing directory:
+  //   1. /Archives/edgar/data/{CIK}/{ACC18}/{ACC-DASHED}-index.htm[l]
+  //   2. /Archives/edgar/data/{CIK}/{ACC18}/        (directory URL with slash)
+  //   3. /Archives/edgar/data/{CIK}/{ACC18}         (directory URL no slash)
+  // Production stores all three shapes in `Summary.filingUrl` depending on
+  // ingestion path. We extract the directory base + accession from any of
+  // them, then fetch index.json from there.
+  const m = filingUrl.match(
+    /^(https:\/\/www\.sec\.gov\/Archives\/edgar\/data\/\d+\/(\d{18}))(?:\/[^/]*)?\/?$/i,
+  );
+  if (!m) return filingUrl;
+  const [, basePath, accession] = m;
+  const cacheKey = accession;
+  const cached = PRIMARY_DOC_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const fetchFn = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchFn !== 'function') return filingUrl;
+
+  try {
+    const indexJsonUrl = `${basePath}/index.json`;
+    const res = await fetchFn(indexJsonUrl, {
+      headers: { 'User-Agent': 'tldrsec.app campaign@tldrsec.app' },
+    });
+    if (!res.ok) return filingUrl;
+    const data = (await res.json()) as EdgarIndexJson;
+    const items = data?.directory?.item ?? [];
+    const wanted = (formType || '').toUpperCase().replace(/^FORM\s+/, '').trim();
+
+    // 1. Exact form-type match on a .htm document (e.g. type "10-Q")
+    let primary = items.find(
+      (i) => i.type?.toUpperCase() === wanted && /\.htm$/i.test(i.name),
+    );
+    // 2. Largest .htm in the filing — almost always the primary doc
+    if (!primary) {
+      const htmItems = items.filter(
+        (i) =>
+          /\.htm$/i.test(i.name) &&
+          !/-index\.html?$/i.test(i.name) &&
+          i.type !== 'GRAPHIC',
+      );
+      htmItems.sort((a, b) => Number(b.size || 0) - Number(a.size || 0));
+      primary = htmItems[0];
+    }
+    if (!primary?.name) return filingUrl;
+    const resolved = `${basePath}/${primary.name}`;
+    PRIMARY_DOC_CACHE.set(cacheKey, resolved);
+    return resolved;
+  } catch {
+    return filingUrl;
+  }
+}
+
+/**
  * UTM variants for click-through attribution on the "Why it matters" rollout.
  * - `ai`: AI-generated whyItMatters rendered
  * - `fallback`: hardcoded fallback copy rendered
@@ -197,7 +291,10 @@ function resolveSecFilingUrl(filingUrl: string, formType?: string): string {
     }
   }
 
-  // If already an index URL (non-Schedule 13 types), return as-is
+  // If already an index URL (non-Schedule 13 types), return as-is. The
+  // caller is responsible for upgrading this to the primary document URL
+  // when needed (see `resolveSecPrimaryDocumentUrl` in this file — fetches
+  // EDGAR's index.json to find the actual filing document).
   if (filingUrl.includes('-index.htm')) {
     return filingUrl;
   }

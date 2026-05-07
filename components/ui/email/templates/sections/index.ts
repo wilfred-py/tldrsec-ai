@@ -9,6 +9,7 @@ export { BulletList } from './BulletList';
 export { DataRow } from './DataRow';
 export { CTAButton } from './CTAButton';
 export { EmailHeader } from './EmailHeader';
+export { EmailHeroBlock } from './EmailHeroBlock';
 export { EmailFooter } from './EmailFooter';
 export { TotalsLine } from './TotalsLine';
 export { TranchesList } from './TranchesList';
