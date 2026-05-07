@@ -5,16 +5,13 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { viewportOnce } from '@/lib/animations/landing-animations';
 import Link from 'next/link';
+import { CTA_SECTION } from '@/lib/landing/copy';
 
 /**
- * Trust points displayed below the CTA
- * Reduces friction and builds confidence
+ * Trust points displayed below the CTA.
+ * Sourced from lib/landing/copy.ts (single source of truth).
  */
-const trustPoints = [
-  '7-day free trial',
-  'Start with unlimited tickers',
-  'Cancel anytime',
-];
+const trustPoints = CTA_SECTION.trustPoints;
 
 /**
  * CTA Section V2 Component
@@ -52,18 +49,18 @@ export function CTASectionV2() {
         >
           {/* Headline */}
           <h2 className="brand-heading mb-4">
-            Start Monitoring SEC Filings Today
+            {CTA_SECTION.heading}
           </h2>
 
           <p className="brand-body mb-8">
-            Join thousands of investors who save hours every week with AI-powered filing summaries.
+            {CTA_SECTION.body}
           </p>
 
           {/* CTA Button */}
           <div className="mb-8">
             <Button asChild className="brand-button-gradient">
               <Link href="/sign-up">
-                Get Started
+                {CTA_SECTION.buttonLabel}
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Link>
             </Button>

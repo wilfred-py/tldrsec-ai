@@ -1,36 +1,25 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
+import { PAGE_METADATA } from '@/lib/landing/copy';
+import { resolveHeroVariant } from '@/lib/analytics/landing-flags';
 
 export const metadata: Metadata = {
-  title: 'AI SEC Filing Summaries - 10-K, 10-Q, 8-K & Form 4',
-  description: 'Get AI-powered summaries of SEC filings delivered to your inbox. Instant analysis of 10-K annual reports, 10-Q quarterly filings, 8-K events, and Form 4 insider trades for smarter investment decisions.',
-  keywords: [
-    'SEC filing summary',
-    '10-K summary',
-    '10-Q summary',
-    '8-K filing summary',
-    'Form 4 insider trading',
-    'SEC filing analysis',
-    'AI financial analysis',
-    'SEC filing alerts',
-    'earnings report summary',
-    'investment research tool',
-    'SEC EDGAR summary',
-    'portfolio filing alerts',
-  ],
+  title: PAGE_METADATA.title,
+  description: PAGE_METADATA.description,
+  keywords: [...PAGE_METADATA.keywords],
   openGraph: {
-    title: 'AI SEC Filing Summaries - 10-K, 10-Q, 8-K & Form 4',
-    description: 'Get AI-powered summaries of SEC filings delivered to your inbox. Instant analysis for smarter investment decisions.',
+    title: PAGE_METADATA.openGraph.title,
+    description: PAGE_METADATA.openGraph.description,
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AI SEC Filing Summaries - 10-K, 10-Q, 8-K & Form 4',
-    description: 'Get AI-powered summaries of SEC filings delivered to your inbox. Instant analysis for smarter investment decisions.',
+    title: PAGE_METADATA.twitter.title,
+    description: PAGE_METADATA.twitter.description,
   },
   alternates: {
-    canonical: 'https://tldrsec.app',
+    canonical: PAGE_METADATA.canonical,
   },
 };
 
@@ -72,10 +61,15 @@ function HeroSkeleton() {
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  // Resolve hero copy experiment variant on the server so first paint matches
+  // the hydrated value. Falls back to 'control' on any error path. See
+  // lib/analytics/landing-flags.ts and .claude/tasks/landing-copy-rework.md (13A).
+  const heroVariant = await resolveHeroVariant();
+
   return (
     <Suspense fallback={<HeroSkeleton />}>
-      <LandingPageV2 />
+      <LandingPageV2 heroVariant={heroVariant} />
     </Suspense>
   );
 }

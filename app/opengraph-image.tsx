@@ -1,7 +1,8 @@
 import { ImageResponse } from 'next/og';
+import { OG_IMAGE } from '@/lib/landing/copy';
 
 export const runtime = 'edge';
-export const alt = 'tldrSEC - AI-Powered SEC Filing Summaries';
+export const alt = OG_IMAGE.alt;
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 export const revalidate = 86400;
@@ -59,7 +60,7 @@ export default async function Image() {
               marginBottom: '24px',
             }}
           >
-            AI-Powered SEC Filing Summaries
+            {OG_IMAGE.headline}
           </div>
           <div
             style={{
@@ -70,7 +71,7 @@ export default async function Image() {
               lineHeight: 1.5,
             }}
           >
-            10-K, 10-Q, 8-K &amp; Form 4 analysis delivered to your inbox
+            {OG_IMAGE.subhead}
           </div>
           <div
             style={{
@@ -79,11 +80,9 @@ export default async function Image() {
               marginTop: '40px',
             }}
           >
-            <div style={{ padding: '8px 20px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa', fontSize: '18px', fontWeight: 500 }}>10-K</div>
-            <div style={{ padding: '8px 20px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa', fontSize: '18px', fontWeight: 500 }}>10-Q</div>
-            <div style={{ padding: '8px 20px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa', fontSize: '18px', fontWeight: 500 }}>8-K</div>
-            <div style={{ padding: '8px 20px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa', fontSize: '18px', fontWeight: 500 }}>Form 4</div>
-            <div style={{ padding: '8px 20px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa', fontSize: '18px', fontWeight: 500 }}>13F</div>
+            {OG_IMAGE.filingTypeChips.map((chip) => (
+              <div key={chip} style={{ padding: '8px 20px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa', fontSize: '18px', fontWeight: 500 }}>{chip}</div>
+            ))}
           </div>
         </div>
       ),
