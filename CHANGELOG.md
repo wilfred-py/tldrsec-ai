@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.27.0] - 2026-05-07
+
+### Added
+- **Single best summary email at onboarding** — a new user finishing onboarding gets one email with the highest-ranked existing summary across their tracked tickers (no fresh AI run, no waiting for the cron sweep). Replaces the prior top-2-per-ticker behavior that could send up to 6 emails. Lands instantly via `unstable_after()` from the onboarding server action — even if the user closes the tab during the dashboard transition, the email still goes out. (`lib/onboarding/cached-summary-delivery.ts`, `app/(auth)/onboarding/actions.ts`)
+- **Richer ranking formula** — composite score of importance (0.25) + form-type materiality (0.40) + analysis depth (0.20) + recency (0.15). Analysis depth is structural-fidelity scoring on `summaryJSON`: bonuses for X sentiment present, financial scorecard rows, deal terms or debt tranches, normalized Form 4 transactions, smart-subject set, and substantial body length. Routes around degenerate "no body content" parses that dominated under the old materiality+recency-only formula. (`lib/onboarding/analysis-depth.ts`)
+- **Summary-content variant of the post-onboarding hero card** — when a chosen pick exists, the dashboard's hero card renders the summary inline with a deep-link to `/summary/{id}`; the inbox-CTA demoted to a secondary action. Card and email show the same chosen pick (persisted on `User.onboardingFirstSummaryId`) so the user's first wow moment is the dashboard render, not the email round-trip. (`components/dashboard/post-onboarding-hero-card.tsx`)
+- **Long-tail fallback notice** — when no cached cross-user summaries exist for any tracked ticker (the rare unique-ticker case), a dedicated "we're watching" template fires instead of a silent dead-end. Honors the "you'll receive an email shortly" promise. (`components/ui/email/templates/onboarding-fallback-notice-template.tsx`, `lib/email/onboarding-fallback-service.ts`, new `EmailType.ONBOARDING_FALLBACK_NOTICE`)
+- **Onboarding emails now route through the production wrapper.** Bespoke `getEmailTemplate(EmailType.IMMEDIATE)` block replaced with `sendFilingSummaryEmail`. Onboarding inherits the Form 4 quality gate (blocks all-zero transaction emails), `importance` badge, `smartSubject` line, feedback up/down URLs, and production tag schema (`type:filing-notification`, `filing-type:X`, `ticker:Y`) — analytics dashboards see onboarding emails alongside cron emails.
+- **6 new test suites, 102 unit tests** covering the ranking formula, analysis-depth helper (Zod-validated, defends against malformed legacy data), pick-best logic with two-stage select, idempotency guards, fallback service, fallback template, and the headline-extraction helper. The hero card test suite expands from 12 to 19 tests.
+- **Idempotency tracking on User row** — `User.onboardingFirstEmailSentAt` and `User.onboardingFirstSummaryId` columns plus a backfill (`onboardingFirstEmailSentAt = createdAt`) for existing onboarded users so the new guard treats them as already-sent. Migration is split: `20260505_add_onboarding_user_columns.sql` (transactional, safe under `prisma migrate deploy`) + `20260506_add_summary_status_index.sql` (CONCURRENTLY index, applied via psql out-of-band).
+- **Covering index** `Summary(processingStatus, tickerId, filingDate DESC)` for the cross-user ranking query at scale.
+
+### Changed
+- **Two-stage Prisma select** for ranking — thin candidate pull (50 rows, no large JSON fields beyond what analysis-depth needs) → fat re-fetch by id of the winner only. ~50× memory reduction at the ranking step.
+- **`SUCCESS_STATUSES` extracted** to `lib/db/summary-status.ts` as a single source of truth for the four legacy mixed-case `processingStatus` values that indicate a usable summary.
+
 ## [0.0.26.5] - 2026-05-07
 
 ### Added
