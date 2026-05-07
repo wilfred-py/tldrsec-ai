@@ -2,7 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.26.4] - 2026-05-07
+## [0.0.26.5] - 2026-05-07
+
+### Added
+- **Email-template defensive helpers + grounding utilities (foundation for next phase).** Three pure-function modules and one design-system addition land independently of the consuming pipeline so they can be wired in incrementally without re-reviewing the whole AI integration:
+  - `lib/ai/processing-status.ts` — `ProcessingStatus` const enum + `isSuppressedFromEmail()` helper. Single source of truth for the four `Summary.processingStatus` values (`PROCESSING`, `COMPLETED`, `COMPLETED_WITH_WARNINGS`, `OUTPUT_TRUNCATED`, `FAILED`) so writer (`lib/ai/summarize.ts`) and email-gate readers reference the same identifiers instead of scattered string literals.
+  - `lib/ai/prompts/strict-schema.ts` — `toStrictSchema()` mechanically converts any JSON Schema to OpenAI strict-mode-compatible form (every property in `required`, optional fields nullable via `type: ['X', 'null']`, strips `oneOf`/`anyOf`/`format`/`pattern`/`enum`). `auditStrictCompliance()` exposed for tests so future schema additions are verified at unit-test time. Designed to apply at the API boundary so the source schemas in `unified-prompts.ts` stay readable.
+  - `lib/ai/parsers/ticker-grounding.ts` — `findForeignTickers()` and `validateTickerGrounding()`. Detects `$TICKER`-prefixed and bare-word UPPERCASE 2-5-char tokens (filtered against a ~70-item acronym allowlist: CEO, EPS, USD, IPO, NYSE, FDA, …) PLUS a top-15 company-name alias map (Tesla, Apple, Microsoft, Google, Amazon, Meta, NVIDIA, Berkshire, JPMorgan, Coca-Cola, Disney, Netflix, Intel, Oracle, Palantir, Stripe). Triggered by a real failure: a JPM S-3 fresh summary said "This $5B shelf provides TSLA flexible..." — model swapped tickers mid-sentence. Wired-in version (P2) will redact the contaminated AI string and emit a counter.
+  - `components/ui/email/design-system.ts` — three new exports: `isUsableMetricRow()` filters AI-emitted financial-highlight rows that are `$NaN`/`N/A`/`null`/`Not disclosed`/character-indexed-object artifacts, so 10-K/10-Q templates never render "undefined undefined". `sanitizeBodyProse()` strips `--`/em-dashes/inline arrows/redundant `YoY|QoQ` suffix from cached AI body prose. `stripPeriodSuffix()` strips a trailing `YoY`/`QoQ` from values headed into a column whose header already conveys the period.
+- **5 new test suites, 146 unit tests.** All Phase F/G/H utilities have parameterized coverage including: char-indexed-object detection, AI-placeholder rejection, every acronym-allowlist case, top-15 company-name aliases, every JSON-Schema converter rule, every `ProcessingStatus` × `isPartialResult` combination, and S-3 helper utilities (`formatShelfDate` for `DD Month YYYY`, `dilutionColor` severity-aware logic).
+
+
 
 ### Added
 - **3-email campaign revamp — full track ships in one PR.** Combines PR 1 (security + design-token foundation) and PR 2 (locked Hybrid voice + curated story content) into a single landing because main advanced past the originally claimed v0.0.25.4/v0.0.25.5 slots.
