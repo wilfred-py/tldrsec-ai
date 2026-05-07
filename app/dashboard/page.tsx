@@ -36,6 +36,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let tutorialCompleted = false;
   let subscriptionTier: "FREE" | "PRO" | "MAX" = "FREE";
   let isFirstVisit = false;
+  let firstSummary: import('@/components/dashboard/post-onboarding-hero-card').FirstSummaryHeroSummary | null = null;
+  let dbUserId: string | null = null;
+  let onboardingFirstSummaryId: string | null = null;
 
   const email = user.emailAddresses?.[0]?.emailAddress;
   if (email) {
@@ -63,6 +66,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         tickerIds = dbUser.tickers.map((t) => t.id);
         initialCompanies = mapTickersToCompanies(dbUser.tickers);
         isFirstVisit = !tutorialCompleted;
+        dbUserId = dbUser.id;
+        onboardingFirstSummaryId = dbUser.onboardingFirstSummaryId;
       }
     } catch (error) {
       console.error("Failed to prefetch user:", error);
@@ -72,6 +77,44 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   const tickerLimit = THREE_TIER_LIMITS[subscriptionTier];
+
+  // Load the chosen first-summary pick for hero card render. Two cases:
+  //   1. onboardingFirstSummaryId already set (email send already chose) →
+  //      load that exact summary so card + email show the same pick.
+  //   2. Not set yet (action's after() may still be running) → render the
+  //      original inbox-CTA variant; the next dashboard load picks up the
+  //      summary once the after() write lands.
+  if (isFirstVisit && dbUserId && onboardingFirstSummaryId) {
+    try {
+      const prisma = getPrismaClient();
+      const chosen = await prisma.summary.findUnique({
+        where: { id: onboardingFirstSummaryId },
+        select: {
+          id: true,
+          filingType: true,
+          filingDate: true,
+          summaryText: true,
+          importance: true,
+          ticker: { select: { symbol: true, companyName: true } },
+        },
+      });
+      if (chosen) {
+        const { extractHeadline } = await import('@/lib/onboarding/extract-headline');
+        const headline = extractHeadline(chosen.summaryText);
+        firstSummary = {
+          id: chosen.id,
+          ticker: chosen.ticker.symbol,
+          companyName: chosen.ticker.companyName,
+          filingType: chosen.filingType,
+          filingDate: chosen.filingDate.toISOString(),
+          headline,
+          importance: chosen.importance,
+        };
+      }
+    } catch (err) {
+      console.error('Failed to load first-summary pick:', err);
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -89,6 +132,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           tickers={initialCompanies.map((c) => ({ symbol: c.symbol, name: c.name }))}
           userEmail={email}
           firstName={user.firstName ?? undefined}
+          summary={firstSummary}
         />
       )}
 

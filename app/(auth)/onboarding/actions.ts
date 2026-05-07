@@ -2,6 +2,7 @@
 
 import { getPrismaClient } from '@/lib/db/prisma';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { auth, currentUser, clerkClient } from '@clerk/nextjs/server';
 import type {
   FilingTypePreferences,
@@ -449,6 +450,58 @@ export async function completeOnboardingBatched(input: {
     // Queue welcome email async (doesn't block user)
     queueWelcomeEmail(result.id, primaryEmail, userName).catch((err) => {
       console.error('[Onboarding] Failed to queue welcome email:', err);
+    });
+
+    // Deliver the post-onboarding "first filing email" via Next.js after().
+    // Runs after the response is sent — onboarding action returns fast,
+    // email send happens in the same invocation. Idempotent on
+    // User.onboardingFirstEmailSentAt.
+    after(async () => {
+      try {
+        const { deliverFirstOnboardingEmail } = await import(
+          '@/lib/onboarding/cached-summary-delivery'
+        );
+        const deliveryResult = await deliverFirstOnboardingEmail(
+          result.id,
+          primaryEmail
+        );
+        console.log(
+          '[Onboarding] Cached-summary delivery:',
+          JSON.stringify({
+            userId: result.id,
+            delivered: deliveryResult.delivered,
+            reason: deliveryResult.reason,
+            summaryId: deliveryResult.summaryId,
+            score: deliveryResult.score,
+          })
+        );
+
+        // Long-tail fallback: no cached summaries available across the user's
+        // tickers (unique-ticker case). Send the dedicated fallback notice so
+        // the "you'll receive an email shortly" promise isn't broken silently.
+        if (
+          !deliveryResult.delivered &&
+          (deliveryResult.reason === 'no_cached_summaries' ||
+            deliveryResult.reason === 'no_tickers')
+        ) {
+          const { sendOnboardingFallbackNotice } = await import(
+            '@/lib/email/onboarding-fallback-service'
+          );
+          await sendOnboardingFallbackNotice({
+            userId: result.id,
+            email: primaryEmail,
+            recipientName: userName,
+            trackedTickers: input.tickers.map((t) => t.symbol),
+          });
+        }
+
+        // TODO: if reason === 'no_cached_summaries', enqueue
+        // ASYNC_DISCOVER_FILINGS for the user's tickers to shorten the wait
+        // for their first real filing email. Requires understanding cron auth
+        // + idempotency-key pattern. Deferred to follow-up — see TODOS.md.
+      } catch (err) {
+        console.error('[Onboarding] Cached-summary delivery threw:', err);
+      }
     });
 
     // Reconcile Stripe subscription (fire-and-forget)
