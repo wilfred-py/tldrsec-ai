@@ -17,52 +17,59 @@ datasource db {
 // =============================================================================
 
 model User {
-  id                    String                 @id @default(uuid())
-  email                 String                 @unique
-  name                  String?
-  authProvider          String
-  authProviderId        String
-  createdAt             DateTime               @default(now())
-  preferences           Json?
-  onboardingCompleted   Boolean                @default(false)
-  tutorialCompletedAt   DateTime?
-  tutorialProgress      Int                    @default(0)
-  tutorialSteps         Json?
-  subscriptionTier      SubscriptionTier       @default(FREE)
-  lastProcessedAt       DateTime?
-  lastCronProcessed     DateTime?
-  tierProcessingCount   Int                    @default(0)
-  lastTierUpgrade       DateTime?
+  id                  String           @id @default(uuid())
+  email               String           @unique
+  name                String?
+  authProvider        String
+  authProviderId      String
+  createdAt           DateTime         @default(now())
+  preferences         Json?
+  onboardingCompleted Boolean          @default(false)
+  tutorialCompletedAt DateTime?
+  tutorialProgress    Int              @default(0)
+  tutorialSteps       Json?
+  subscriptionTier    SubscriptionTier @default(FREE)
+  lastProcessedAt     DateTime?
+  lastCronProcessed   DateTime?
+  tierProcessingCount Int              @default(0)
+  lastTierUpgrade     DateTime?
 
   // Trial tracking fields
-  trialStartedAt        DateTime?
-  trialEndsAt           DateTime?
-  isTrialing            Boolean                @default(false)
-  signupIpAddress       String?
+  trialStartedAt  DateTime?
+  trialEndsAt     DateTime?
+  isTrialing      Boolean   @default(false)
+  signupIpAddress String?
 
   // Ticker confirmation tracking (Phase 2: Quarterly Earnings Email)
   tickersConfirmedAt          DateTime?
   lastConfirmationEmailSentAt DateTime?
-  tickersAtLastConfirmation   String[]          @default([])
+  tickersAtLastConfirmation   String[]  @default([])
 
   // Soft delete support
-  deletedAt            DateTime?
-  deleteScheduledFor   DateTime?
+  deletedAt          DateTime?
+  deleteScheduledFor DateTime?
 
   // Hours saved tracking (cached, incremented on new summary)
-  hoursSavedThisMonth  Int                    @default(0)
-  hoursSavedTotal      Int                    @default(0)
+  hoursSavedThisMonth Int @default(0)
+  hoursSavedTotal     Int @default(0)
 
-  auditLogs             AuditLog[]
-  emailFeedback         EmailFeedback[]
-  filingUsage           FilingUsage[]
-  jobs                  JobQueue[]
-  notificationsSent     NotificationSent[]
-  cacheAccesses         SummaryCacheAccess[]
-  emailDeliveries       SummaryEmailDelivery[]
-  tickers               Ticker[]
-  usagePeriods          UsagePeriod[]
-  userSubscription      UserSubscription?
+  // Onboarding first-email tracking — set once when the cached-summary
+  // delivery (or fallback notice) fires for this user. Guards against
+  // re-onboarding double-sends and keeps hero card + email aligned on
+  // the same chosen pick.
+  onboardingFirstEmailSentAt DateTime?
+  onboardingFirstSummaryId   String?
+
+  auditLogs         AuditLog[]
+  emailFeedback     EmailFeedback[]
+  filingUsage       FilingUsage[]
+  jobs              JobQueue[]
+  notificationsSent NotificationSent[]
+  cacheAccesses     SummaryCacheAccess[]
+  emailDeliveries   SummaryEmailDelivery[]
+  tickers           Ticker[]
+  usagePeriods      UsagePeriod[]
+  userSubscription  UserSubscription?
 
   @@index([isTrialing, trialEndsAt])
   @@index([signupIpAddress, createdAt])
@@ -72,18 +79,16 @@ model User {
 
 /**
  * PendingOnboarding - Stores onboarding selections before Clerk authentication
- *
  * Used for passwordless onboarding flow where users complete sector/ticker
  * selection BEFORE authentication. Data is merged with User after Clerk
  * email verification completes.
- *
  * Records auto-expire after 24 hours via the cleanup cron job.
  */
 model PendingOnboarding {
   id        String   @id @default(uuid())
   email     String   @unique
   sectors   String[]
-  tickers   Json     // Array of {symbol, companyName}
+  tickers   Json // Array of {symbol, companyName}
   createdAt DateTime @default(now())
   expiresAt DateTime // Auto-cleanup after 24 hours
 
@@ -98,7 +103,7 @@ model Ticker {
   companyName String
   userId      String
   addedAt     DateTime    @default(now())
-  preferences Json?       // Filing type preferences (tenK, tenQ, eightK, form4, etc.)
+  preferences Json? // Filing type preferences (tenK, tenQ, eightK, form4, etc.)
   secFilings  SecFiling[]
   summaries   Summary[]
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -108,19 +113,19 @@ model Ticker {
 }
 
 model Summary {
-  id                    String                 @id @default(uuid())
+  id                    String    @id @default(uuid())
   tickerId              String
   filingType            String
   filingDate            DateTime
   filingUrl             String
   summaryText           String
   summaryJSON           Json?
-  createdAt             DateTime               @default(now())
-  sentToUser            Boolean                @default(false)
+  createdAt             DateTime  @default(now())
+  sentToUser            Boolean   @default(false)
   url                   String?
-  attempts              Int?                   @default(0)
+  attempts              Int?      @default(0)
   cost                  Float?
-  isPartialResult       Boolean?               @default(false)
+  isPartialResult       Boolean?  @default(false)
   model                 String?
   processingCompletedAt DateTime?
   processingError       String?
@@ -130,39 +135,39 @@ model Summary {
   secFilingId           String?
   tokensUsed            Int?
   metadata              Json?
-  cacheUsageCount       Int                    @default(0)
+  cacheUsageCount       Int       @default(0)
   cacheVersion          String?
   inputCostPerToken     Float?
   inputTokens           Int?
-  isCacheHit            Boolean                @default(false)
+  isCacheHit            Boolean   @default(false)
   lastCacheUsed         DateTime?
   modelVersion          String?
   outputCostPerToken    Float?
   outputTokens          Int?
   promptVersion         String?
   totalCost             Float?
-  totalEmailsSent       Int                    @default(0)
-  uniqueUsersServed     Int                    @default(0)
+  totalEmailsSent       Int       @default(0)
+  uniqueUsersServed     Int       @default(0)
   confidenceLevel       Float?
-  extractionSuccess     Boolean                @default(true)
-  parsingErrors         Int                    @default(0)
+  extractionSuccess     Boolean   @default(true)
+  parsingErrors         Int       @default(0)
   qualityScore          Float?
-  edgarAcceptedAt       DateTime?              // SEC EDGAR acceptance timestamp (from Submissions API)
-  deliveryLatencyMs     Int?                   // E2E latency: edgarAcceptedAt → email sent (ms)
-  forceRefreshFlag      Boolean                @default(false)
+  edgarAcceptedAt       DateTime? // SEC EDGAR acceptance timestamp (from Submissions API)
+  deliveryLatencyMs     Int? // E2E latency: edgarAcceptedAt → email sent (ms)
+  forceRefreshFlag      Boolean   @default(false)
   invalidatedBy         String?
-  invalidationCount     Int                    @default(0)
+  invalidationCount     Int       @default(0)
   invalidationReason    String?
   lastInvalidatedAt     DateTime?
   // Pre-launch features: importance scoring and smart subjects
-  importance            String?                // critical, high, medium, low
-  smartSubject          String?                // AI-extracted email subject line
+  importance            String? // critical, high, medium, low
+  smartSubject          String? // AI-extracted email subject line
 
-  secFiling             SecFiling?             @relation(fields: [secFilingId], references: [id])
-  ticker                Ticker                 @relation(fields: [tickerId], references: [id], onDelete: Cascade)
-  cacheAccesses         SummaryCacheAccess[]
-  emailDeliveries       SummaryEmailDelivery[]
-  feedback              EmailFeedback[]
+  secFiling       SecFiling?             @relation(fields: [secFilingId], references: [id])
+  ticker          Ticker                 @relation(fields: [tickerId], references: [id], onDelete: Cascade)
+  cacheAccesses   SummaryCacheAccess[]
+  emailDeliveries SummaryEmailDelivery[]
+  feedback        EmailFeedback[]
 
   // Unique constraint to prevent duplicate summaries for the same filing
   // A filing is uniquely identified by tickerId + filingUrl
@@ -171,6 +176,13 @@ model Summary {
   @@index([filingUrl, filingType])
   @@index([tickerId, filingDate(sort: Desc)])
   @@index([importance, filingDate(sort: Desc)])
+  // Onboarding ranking query covers (status filter → ticker join → recent first).
+  // NOTE: this index was created in production via CREATE INDEX CONCURRENTLY
+  // (see prisma/migrations/20260505_add_onboarding_first_email_tracking.sql).
+  // Do not run `prisma migrate dev` against this without verifying the emitted
+  // SQL — Prisma's default CREATE INDEX takes a write lock on app.Summary which
+  // is unacceptable on a hot table.
+  @@index([processingStatus, tickerId, filingDate(sort: Desc)], map: "Summary_status_ticker_filingDate_idx")
   @@schema("app")
 }
 
@@ -217,22 +229,22 @@ model CikMapping {
 }
 
 model TickerMonitoring {
-  id                           String           @id @default(uuid())
-  cik                          String           @unique
-  symbol                       String
-  companyName                  String
-  isActive                     Boolean          @default(true)
-  rssUrl                       String
-  lastChecked                  DateTime?
-  lastAccessionSeen            String?
-  lastSeenAcceptanceDateTime   String?          // Submissions API watermark (acceptanceDateTime string)
-  lastEtag                     String?          // ETag for conditional requests (304 Not Modified)
-  lastPollTime                 DateTime?        // When fast-poll last checked this ticker
-  subscriberCount              Int              @default(0)
-  createdAt                    DateTime         @default(now())
-  updatedAt                    DateTime         @updatedAt
-  version                      Int              @default(0)
-  filingChecks                 RssFilingCheck[]
+  id                         String           @id @default(uuid())
+  cik                        String           @unique
+  symbol                     String
+  companyName                String
+  isActive                   Boolean          @default(true)
+  rssUrl                     String
+  lastChecked                DateTime?
+  lastAccessionSeen          String?
+  lastSeenAcceptanceDateTime String? // Submissions API watermark (acceptanceDateTime string)
+  lastEtag                   String? // ETag for conditional requests (304 Not Modified)
+  lastPollTime               DateTime? // When fast-poll last checked this ticker
+  subscriberCount            Int              @default(0)
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+  version                    Int              @default(0)
+  filingChecks               RssFilingCheck[]
 
   @@index([isActive, lastChecked])
   @@index([cik])
@@ -348,7 +360,7 @@ model JobQueue {
   tokenUsage     Json?
   // Database trigger auto-populates userId from payload->userId JSON field
   // When a user is deleted, trigger marks associated jobs as DEAD_LETTER
-  userId         String?       // Auto-populated by trigger, enables cascade handling
+  userId         String? // Auto-populated by trigger, enables cascade handling
   user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   progress       JobProgress[]
 
@@ -409,7 +421,7 @@ model FilingContentCache {
   content         String   @db.Text
   contentLength   Int
   contentHash     String
-  primaryDocUrl   String?  // Direct URL to the primary document (e.g., Form 4 XML, 10-K HTM)
+  primaryDocUrl   String? // Direct URL to the primary document (e.g., Form 4 XML, 10-K HTM)
   fetchedAt       DateTime @default(now())
   expiresAt       DateTime
   fetchDuration   Int
@@ -514,7 +526,7 @@ model CronJobMetrics {
   operationalCostTotal  Float            @default(0)
   costPerFiling         Float?
   costPerUser           Float?
-  summariesPerDollar    Float?           // Key metric: summaries generated per dollar spent
+  summariesPerDollar    Float? // Key metric: summaries generated per dollar spent
   avgMemoryUsageMb      Float?
   peakMemoryUsageMb     Float?
   dbQueryCount          Int?
@@ -714,7 +726,7 @@ model MonitoringThreshold {
 model DailyWaitlistCache {
   id                   String   @id @default(uuid())
   date                 DateTime @unique @db.Date
-  baseCount            Int      // 147 + total subscribers at EOD (the starting display value for this day)
+  baseCount            Int // 147 + total subscribers at EOD (the starting display value for this day)
   subscriberCountAtEOD Int      @default(0) // Total subscribers when this cache was created (for delta calculation)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -724,42 +736,42 @@ model DailyWaitlistCache {
 }
 
 model DailyPipelineVerification {
-  id                    String   @id @default(uuid())
-  verificationDate      DateTime @db.Date
-  runAt                 DateTime @default(now())
+  id               String   @id @default(uuid())
+  verificationDate DateTime @db.Date
+  runAt            DateTime @default(now())
 
   // Filing counts
-  filingsDiscovered     Int      @default(0)
-  filingsCompleted      Int      @default(0)
-  filingsPending        Int      @default(0)
-  filingsFailed         Int      @default(0)
+  filingsDiscovered Int @default(0)
+  filingsCompleted  Int @default(0)
+  filingsPending    Int @default(0)
+  filingsFailed     Int @default(0)
 
   // Phase breakdown
-  fetchSuccessCount     Int      @default(0)
-  fetchFailedCount      Int      @default(0)
-  summarizeSuccessCount Int      @default(0)
-  summarizeFailedCount  Int      @default(0)
-  emailsSentCount       Int      @default(0)
-  uniqueUsersNotified   Int      @default(0)
+  fetchSuccessCount     Int @default(0)
+  fetchFailedCount      Int @default(0)
+  summarizeSuccessCount Int @default(0)
+  summarizeFailedCount  Int @default(0)
+  emailsSentCount       Int @default(0)
+  uniqueUsersNotified   Int @default(0)
 
   // OpenRouter API costs (aggregated from summaries generated this day)
-  aiTotalCostUsd        Float    @default(0)
-  aiInputTokens         Int      @default(0)
-  aiOutputTokens        Int      @default(0)
-  aiTotalTokens         Int      @default(0)
-  aiModelBreakdown      Json?    // { "model-name": { cost, inputTokens, outputTokens } }
+  aiTotalCostUsd   Float @default(0)
+  aiInputTokens    Int   @default(0)
+  aiOutputTokens   Int   @default(0)
+  aiTotalTokens    Int   @default(0)
+  aiModelBreakdown Json? // { "model-name": { cost, inputTokens, outputTokens } }
 
   // Remediation stats
-  remediationAttempted  Int      @default(0)
-  remediationSucceeded  Int      @default(0)
-  remediationFailed     Int      @default(0)
+  remediationAttempted Int @default(0)
+  remediationSucceeded Int @default(0)
+  remediationFailed    Int @default(0)
 
   // Detailed results (JSON array of filing verification results)
-  filingDetails         Json?
+  filingDetails Json?
 
   // Execution metadata
-  durationMs            Int?
-  errors                String[]
+  durationMs Int?
+  errors     String[]
 
   @@unique([verificationDate])
   @@index([verificationDate])
@@ -793,7 +805,7 @@ model EmailFeedback {
   id        String   @id @default(uuid())
   userId    String
   summaryId String
-  vote      String   // "up" or "down"
+  vote      String // "up" or "down"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
