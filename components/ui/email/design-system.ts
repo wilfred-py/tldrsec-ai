@@ -423,6 +423,56 @@ export function formatPercent(value: number | string | undefined, options?: {
 }
 
 /**
+ * True when a financial-highlight row has rendering-quality label + value.
+ * Filters out the failure modes seen in the wild: AI-emitted "$NaN" / "N/A" /
+ * "Not disclosed" placeholders, missing fields, and character-indexed-object
+ * artifacts (when a string got `Object.assign`-merged into the array slot,
+ * producing `{"0":"R","1":"e",...}` instead of `{ label, value }`).
+ *
+ * Used by 10-K / 10-Q templates to skip rows rather than rendering
+ * "undefined undefined" or "$NaN" - those are worse than no row at all.
+ */
+export function isUsableMetricRow(row: { label?: unknown; value?: unknown; [key: string]: unknown } | null | undefined): boolean {
+  if (!row || typeof row !== 'object') return false;
+  const label = (row as { label?: unknown }).label;
+  const value = (row as { value?: unknown }).value;
+  if (typeof label !== 'string' || !label.trim()) return false;
+  if (value === undefined || value === null) return false;
+  const valueStr = String(value).trim();
+  if (!valueStr) return false;
+  if (/^(\$?NaN|N\/A|n\/a|null|undefined|not disclosed|not provided|not specified|tbd|n\/m)$/i.test(valueStr)) return false;
+  return true;
+}
+
+/**
+ * Strip AI-slop punctuation and inline directional arrows from body prose
+ * before it is rendered into a paragraph. Applied at the template boundary so
+ * cached pre-prompt-update summaries that still contain "--" or em-dashes are
+ * cleaned up too (the prompt now bans these but old summaries persist).
+ */
+export function sanitizeBodyProse(text: string | undefined | null): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/\s+--\s+/g, ' - ')
+    .replace(/--/g, '-')
+    .replace(/[—–]/g, '-')
+    .replace(/[↑↓→←]\s*/g, '')
+    .replace(/\s+(YoY|QoQ|yoy|qoq)\b/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * Strip the trailing "YoY"/"QoQ" suffix from a numeric delta value going
+ * into a table column whose header already says YoY or QoQ. Preserves
+ * "bps", "ppt", "%" since those are unit indicators, not period redundancy.
+ */
+export function stripPeriodSuffix(value: string | number | undefined): string {
+  if (value === undefined || value === null) return '';
+  return String(value).replace(/\s*(YoY|QoQ|yoy|qoq)\s*$/i, '').trim();
+}
+
+/**
  * Get change indicator styles based on value
  */
 export function getChangeStyle(change: number | string | undefined): { color: string; fontWeight: string } {
