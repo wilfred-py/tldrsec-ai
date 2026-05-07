@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.27.0] - 2026-05-08
+
+### Changed
+- **Landing hero pivot to the Form-4 / insider-buying wedge.** New variant H1 + subhead lead with the unique wedge most peers don't address: "Know when insiders buy. Understand every filing your portfolio companies publish." Subhead drops the 4-code filing-type list (10-K/10-Q/8-K/Form 4) — the product covers 30+ filing types and the old list was under-selling. Ships behind a PostHog server-side experiment flag (`landing-hero-copy-v2`) so we measure trial-start-rate impact against the existing "SEC filings, read in minutes" control before promoting.
+- **Landing universal copy realigned to the same frame** (both experiment arms see this): page title → "Insider Trades + SEC Filings From Your Portfolio | tldrSEC"; OG image headline → "Know when insiders buy."; CTA section heading → "Start tracking insiders in your portfolio."; structured-data description echoes the same wedge.
+- **Feature-card retitles for compliance-safe vocabulary + frame coherence.** "Filing-Type Analysis" → **"Insider-Trade Tracking"** (description rewritten around Form 4 — most competing tools don't summarize it). "Investment-Grade Quality" → **"Source-Cited Accuracy"** (the credit-rating term "investment-grade" is removed from marketing copy by design — see compliance-vocabulary guard below).
+- **`/waitlist` hero aligned with the same Form-4 wedge** so positioning is coherent across `/` and `/waitlist`. Form, counter, and submit flow unchanged.
+
+### Added
+- **Single source of truth for landing copy at `lib/landing/copy.ts`.** All marketing copy across 7 surfaces (homepage hero, waitlist hero, page metadata, OG image, structured data, features section, CTA section) is now imported from named exports. Future copy edits are one-file changes; tests assert against the same constants so a copy rewrite no longer churns 8 test files.
+- **Server-side PostHog hero variant resolution** (`lib/analytics/landing-flags.ts`). The flag is resolved in `app/page.tsx` (server component) and passed as a prop through `LandingPageV2 → GmailInboxHero`. Zero LCP regression — no client-side flag fetch before first paint, no flicker on hydration. Reads the existing PostHog browser cookie when present; falls back to a hashed (forwarded-IP, user-agent) anonymous distinctId. Returns `'control'` on every error path (missing PostHog config, network failure, malformed cookie, unrecognized flag value).
+- **Compliance-vocabulary regression guard at `__tests__/landing/compliance-vocabulary.test.tsx`.** Renders Hero / CTA / Features / Footer; regex-scans for forbidden tokens (`investment[-\s]grade`, `investment\s+analyst`, `professional[-\s]grade`, `\brecommend(ation|ed|s)?\b`, `\badvice\b`, `Wall\s+Street\s+analyst`). Allowlist captures intentional regulatory phrasing only (the footer disclaimer's "is not investment advice"). Mirrors the existing FAQ pricing-string guard pattern.
+- **Frame-sanity assertions** in CTA + features tests catch a future revert that would silently pass the "tests-pass-because-they-import-the-same-string" trap. CTA must contain `/insider/i`; features must NOT contain `/investment[-\s]grade/i`.
+- **Hero-frame ↔ demo-widget editorial coupling note in CLAUDE.md.** Documents the bidirectional invariant: change the hero frame → audit the weekly Gmail-fixture curation criteria; change curation criteria → audit the hero frame.
+
+### Repaired (pre-existing, surfaced by /ship)
+- **Three waitlist test files** (`tests/components/focused-investor-hero.test.tsx`, `tests/integration/landing-page-coverage.test.tsx`, `tests/integration/waitlist-form.test.tsx`) asserted on landing copy from 4+ versions ago (`Skip the 100-page SEC filings`, `Cut through the noise`, `economic moats`, `Get Business Insights`, `Value-focused`, `continue to receive updates`). All three were failing on `origin/main` before this branch — verified via `git stash`. Rewritten to assert against the current `WAITLIST_HERO` copy module exports + the current `WaitlistForm` UI ("Join the Waitlist", confirmation card body). 1517 lines of stale assertions cut down to 385 lines of focused current-state coverage; 46 stale tests → 34 green tests.
+
+### Internal
+- **Duplicate `gmail-inbox-hero.test.tsx` consolidated** — older `__tests__/components/gmail-inbox-hero.test.tsx` deleted, unique className test ported into the canonical `__tests__/components/landing/` copy.
+- **Four PostHog variant test cases** (T13–T16): `variant="control"` / `variant="variant"` / undefined prop / unrecognized string. Variant arm asserts on `HOMEPAGE_HERO_VARIANT` and explicitly NOT on the control H1, catching accidental re-aliasing.
+
 ## [0.0.26.5] - 2026-05-07
 
 ### Added
