@@ -24,6 +24,10 @@ import { FormS1MinimalistTemplate } from '../../components/ui/email/templates/s1
 import { FormS3MinimalistTemplate } from '../../components/ui/email/templates/s3-minimalist-template';
 import { GenericMinimalistTemplate } from '../../components/ui/email/templates/generic-minimalist-template';
 import Schedule13DEmailTemplate from '../../components/ui/email/templates/13d-template';
+import {
+  OnboardingFallbackNoticeTemplate,
+  type OnboardingFallbackNoticeData,
+} from '../../components/ui/email/templates/onboarding-fallback-notice-template';
 import * as React from 'react';
 
 /**
@@ -1006,6 +1010,18 @@ export async function getEmailTemplate(
         html,
         text: generatePlainTextEmail([filing], [])
       };
+    }
+    case EmailType.ONBOARDING_FALLBACK_NOTICE: {
+      const noticeData = data as unknown as OnboardingFallbackNoticeData;
+      const html = await renderAsync(
+        React.createElement(OnboardingFallbackNoticeTemplate, { data: noticeData })
+      );
+      const tickerListText =
+        noticeData.trackedTickers && noticeData.trackedTickers.length > 0
+          ? noticeData.trackedTickers.join(', ')
+          : 'your tracked tickers';
+      const text = `Hi ${noticeData.recipientName},\n\nThanks for adding ${tickerListText} to your watchlist. We're monitoring SEC EDGAR for these companies. The next time one of them files (10-K, 10-Q, 8-K, Form 4, or anything material), the summary lands in your inbox within minutes.\n\nFor active companies this happens daily; for less active ones, the first email may be a few days out.\n\nOpen your dashboard: ${noticeData.dashboardUrl}\n`;
+      return { html, text };
     }
     case EmailType.FILING_NOTIFICATION: {
       // Create filing object matching minimalist template expected format
