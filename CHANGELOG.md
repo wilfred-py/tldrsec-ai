@@ -35,6 +35,32 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **`lib/ai/summarize.ts` post-parse pipeline** now runs three validators in order between successful parse and DB persistence: `coerceWhyItMatters` → `validateTickerGroundingInPlace` → `validateNumericGrounding`. Each is independently gated. Redactions apply to both the persisted `summaryJSON` and the function's return value because mutations land before `summaryJSONWithSentiment` is composed.
 - **System prompt in `unified-prompts.ts` is now composed at runtime** by `buildSystemPrompt(formType)` instead of being a static `SYSTEM_PROMPT` constant. The base prompt is renamed to `BASE_SYSTEM_PROMPT` (module-internal — no conflict with the unrelated export from `lib/ai/prompts/prompt-templates.ts`).
+
+## [0.0.28.0] - 2026-05-08
+
+### Changed
+- **AI pipeline migrated to xAI Grok 4.3.** xAI is retiring every Grok variant the codebase used (`grok-4.1-fast`, `grok-4-fast`, `grok-4-fast-reasoning`, `grok-4-fast:free`, `grok-3`, `grok-2`, `grok-code-fast-1`, `grok-4`) on **2026-05-15 12pm PT**. Without this PR, every AI feature breaks on May 15. Single-target model: `x-ai/grok-4.3` (1M context, built-in reasoning configurable per request, no separate `:reasoning` SKU).
+- **Cost meter now matches reality across every dispatcher.** Previously four parallel pricing dispatchers (`config.ts.modelInfo`, `token-counter.prices`, `cost-tracker.DEFAULT_MODEL_PRICING`, `openrouter-client.createDynamicModelInfo`) could drift. `openrouter-client.ts` was hardcoding `$0.30/$0.50` per million for any `grok-4*` slug — that would have under-reported every grok-4.3 call by 4-5x. Pricing is now centralized in `costConfig` and read by all four code paths.
+- **Tiered pricing honored at the 200K-token boundary.** Calls ≤200K input bill at `$1.25/$2.50` per M; calls >200K bill at `$2.50/$5.00` per M (per xAI's Models page). `lib/ai/token-counter.calculateCost()` selects the tier from `inputTokens` and routes through `cost-tracker.estimateCost()` for grok-4.3 so budget alarms see the real number.
+- **Per-call cost cap actually enforced.** `MAX_COST_PER_REQUEST` env var was previously read into `costConfig.maxCostPerRequest` and never referenced anywhere else — the real caps were hardcoded `costLimit: 0.75` and `costLimit: 0.50` literals in `services/filing/enhancedSummaryGeneration.ts:146` and `services/filing/summaryGenerationService.ts:203`. Both call sites now read `costConfig.maxCostPerRequest` (default `$3.00`, raised from `$0.75` to fit the higher grok-4.3 per-call ceiling).
+- **Chunked-summary cost estimation no longer over-reports by 2x.** `services/filings/enhanced/contentChunker.estimateProcessingCost()` previously summed all chunks' tokens and ran one tier check, which sent any filing >200K total tokens into the high-pricing tier even though each individual chunk (≤50K) bills at the low tier. Now estimates per-chunk and multiplies.
+- **Stale Claude-era pricing removed from `contentChunker.calculateTokenCost`.** The function was hardcoding `$3/M input, $15/M output` (Claude Sonnet rates from before the OpenRouter migration). It's now a thin wrapper around `lib/ai/token-counter.calculateCost(...).totalCost`, preserving all 7 callers' single-number return shape.
+
+### Fixed
+- **`lib/ai/xai-direct-client.ts:22` was 404'ing every X-sentiment call in production.** `DEFAULT_MODEL` was the typo `'grok-4.20-reasoning'` (no such model in xAI's lineup, ever). `lib/ai/x-sentiment-provider.ts:230-246` calls `callXaiResponses()` without a `model` field, so this default WAS reached on every sentiment request. Fix: `'grok-4.3'` + a regression test (`__tests__/lib/ai/xai-direct-client-default-model.test.ts`) that exercises the no-model-arg call shape and asserts the slug isn't from the retirement list.
+- **`lib/ai/model-validator.ts` cache was silently dropping fields.** `validateModel()` did `{ ...cached.result, source: 'cached' }` but `getCachedValidation()` already returns the unwrapped `ModelValidationResult` — `cached.result` was always `undefined`, so cached returns lost `modelId`, `isValid`, `currentInputCost`, etc. Pre-existing latent bug surfaced by the migration's tightened tests.
+- **Validator regex no longer false-matches retired slugs.** `getEnvironmentPricing` previously used `/grok-4\.\d+/` which matched `grok-4.1-fast` (retiring 2026-05-15) and silently returned grok-4.3 prices for it. Tightened to `/grok-4\.3(?![0-9])/` so callers get `null` for unsupported slugs instead of wrong pricing.
+
+### Added
+- `XAI_GROK_INPUT_COST` / `XAI_GROK_OUTPUT_COST` env vars (defaults `1.25` / `2.50`) for the ≤200K input tier.
+- `XAI_GROK_INPUT_COST_HIGH` / `XAI_GROK_OUTPUT_COST_HIGH` env vars (defaults `2.50` / `5.00`) for the >200K input tier.
+- `lib/ai/__tests__/token-counter-tiered-pricing.test.ts` covers the boundary, env overrides, and unknown-model fallback.
+- `__tests__/lib/ai/xai-direct-client-default-model.test.ts` regression-covers the typo bug.
+
+### Removed
+- `XAI_GROK4_INPUT_COST` / `XAI_GROK4_OUTPUT_COST` / `XAI_GROK2_INPUT_COST` / `XAI_GROK2_OUTPUT_COST` env vars (renamed to `XAI_GROK_*`). Operators must update Vercel/dashboard env vars before merge.
+- `OPENROUTER_FALLBACK_MODEL` distinct from `DEFAULT_AI_MODEL` — fallback now aliases default since every other Grok is gone in 8 days.
+- `x-ai/grok-beta` and `x-ai/grok-4` entries from `cost-tracker.DEFAULT_MODEL_PRICING`.
 ## [0.0.27.1] - 2026-05-08
 
 ### Changed
