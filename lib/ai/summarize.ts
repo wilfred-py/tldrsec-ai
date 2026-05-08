@@ -29,6 +29,9 @@ import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
 import { prisma } from '../db/prisma';
 import { getSchemaForFormType, JSONSchema } from './prompts/unified-prompts';
+import { validateTickerGroundingInPlace } from './parsers/ticker-grounding';
+import { coerceWhyItMatters } from './parsers/why-it-matters';
+import { validateNumericGrounding } from './parsers/numeric-grounding';
 
 /**
  * Validates if a parsed response has all required fields for its filing type
@@ -937,6 +940,81 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         componentLogger.info(`Successfully parsed response for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}, filingType=${filingRecordFromDB.formType}`);
         monitoring.recordTiming('ai.parsing_duration', Date.now() - parsingStartTime);
         monitoring.incrementCounter('ai.summarization_parsing_success', 1);
+
+        // Post-parse grounding hooks (PR 1 wire-up). Mutate parsedResult.data
+        // in place BEFORE composing summaryJSONWithSentiment so the redactions
+        // flow into both the persisted record and the returned payload.
+        // Order matters: whyItMatters coercion can drop the field on
+        // restatement; ticker grounding then walks remaining prose and
+        // redacts foreign-ticker contamination (e.g., "TSLA" mentioned in a
+        // JPM filing). Both have env kill switches for fast rollback.
+        if (process.env.DISABLE_WHY_IT_MATTERS_GROUNDING !== '1') {
+          const beforeHasWhy = typeof (parsedResult.data as Record<string, unknown>).whyItMatters === 'string';
+          coerceWhyItMatters(parsedResult.data as Record<string, unknown>, tickerSymbol);
+          const afterHasWhy = typeof (parsedResult.data as Record<string, unknown>).whyItMatters === 'string';
+          if (beforeHasWhy && !afterHasWhy) {
+            componentLogger.warn(`whyItMatters dropped by coercion for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}`, {
+              formType: filingRecordFromDB.formType,
+              accessionNumber: filingRecordFromDB.accessionNumber,
+            });
+            monitoring.incrementCounter('ai.why_it_matters_violation', 1);
+          }
+        }
+
+        if (process.env.DISABLE_TICKER_GROUNDING !== '1') {
+          const tickerViolations = validateTickerGroundingInPlace(
+            parsedResult.data as Record<string, unknown>,
+            tickerSymbol,
+          );
+          for (const v of tickerViolations) {
+            componentLogger.warn(`ticker grounding violation: ${v.field} contained foreign tickers ${v.foreignTickers.join(',')} (expected ${tickerSymbol})`, {
+              formType: filingRecordFromDB.formType,
+              accessionNumber: filingRecordFromDB.accessionNumber,
+              field: v.field,
+              foreignTickers: v.foreignTickers,
+            });
+            monitoring.incrementCounter('ai.ticker_grounding_violation', 1, { field: v.field });
+          }
+        }
+
+        // Numeric grounding (PR 2). Substring-checks every emitted dollar /
+        // percent / share count against the SEC source doc; redacts to null
+        // when absent. Critical because strict json_schema can force the
+        // model to fill in fields it can't actually justify. Grounds against
+        // processedContent ONLY (not enrichedContent) — values backed only
+        // by web-search / historical-context enrichment WILL be redacted;
+        // enrichment is for color, not numeric truth.
+        const numericGrounding = validateNumericGrounding(
+          parsedResult.data as Record<string, unknown>,
+          processedContent,
+          {
+            formType: filingRecordFromDB.formType,
+            chunked: processedDoc.isChunked,
+          },
+        );
+        if (numericGrounding.rejectedFields.length > 0 || numericGrounding.unredactablePaths.length > 0) {
+          componentLogger.info(
+            `numeric_grounding: ${numericGrounding.rejectedFields.length} violations, ${numericGrounding.unredactablePaths.length} unredactable, durationMs=${numericGrounding.durationMs}, warnOnly=${numericGrounding.warnOnly}`,
+            {
+              formType: filingRecordFromDB.formType,
+              accessionNumber: filingRecordFromDB.accessionNumber,
+              paths: numericGrounding.rejectedFields.map((r) => r.path),
+              unredactablePaths: numericGrounding.unredactablePaths,
+              warnOnly: numericGrounding.warnOnly,
+            },
+          );
+          for (const rej of numericGrounding.rejectedFields) {
+            monitoring.incrementCounter('ai.numeric_grounding_violation', 1, {
+              path: rej.path.split(/[.[]/)[0],
+            });
+          }
+          for (const path of numericGrounding.unredactablePaths) {
+            monitoring.incrementCounter('ai.numeric_grounding_violation_unredactable', 1, {
+              path: path.split(/[.[]/)[0],
+            });
+          }
+        }
+        monitoring.recordTiming('ai.numeric_grounding_duration', numericGrounding.durationMs);
 
         const summaryJSONWithSentiment = capturedXSentiment
           ? { ...parsedResult.data, xSentiment: capturedXSentiment.sentiment }

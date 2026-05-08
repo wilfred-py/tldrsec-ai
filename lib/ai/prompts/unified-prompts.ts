@@ -68,6 +68,26 @@ export interface SchemaProperty {
 }
 
 // =============================================================================
+// Field-description grounding helper (PR 3 of the anti-hallucination plan)
+// =============================================================================
+
+/**
+ * Append the standard "leave null when not stated" anti-hallucination
+ * boilerplate to a schema field's description. Centralizing the language
+ * makes the pattern grep-able for audits and ensures every numeric field
+ * gets the same treatment without copy/paste drift.
+ *
+ * Used for fields asking for a number, dollar amount, share count,
+ * percentage, fiscal date, or transaction-specific code. The audit test
+ * (grounding-prompt-coverage.test.ts) walks every string-typed schema
+ * field whose description suggests a numeric value (contains $, %, shares,
+ * or dollars) and asserts it carries this language.
+ */
+function withGroundingNote(originalDesc: string): string {
+  return `${originalDesc} ONLY populate when the filing explicitly states this value. Leave null when not directly disclosed. Do not estimate or infer.`;
+}
+
+// =============================================================================
 // Base Schema - Shared by all filing types
 // =============================================================================
 
@@ -127,8 +147,8 @@ const FINANCIAL_HIGHLIGHT_ITEM: SchemaProperty = {
   description: 'Financial metric with value and change',
   properties: {
     label: { type: 'string', description: 'Metric name (e.g., "Revenue", "Net Income")', maxLength: 50 },
-    value: { type: 'string', description: 'Value with units (e.g., "$50.5B")', maxLength: 30 },
-    change: { type: 'string', description: 'YoY change (e.g., "+15%", "-3%")', maxLength: 20 }
+    value: { type: 'string', description: withGroundingNote('Value with units (e.g., "$50.5B"). Some 10-Q filings omit certain margins; do NOT compute from other figures or import from prior periods.'), maxLength: 30 },
+    change: { type: 'string', description: withGroundingNote('YoY change as stated in the filing or trivially computable from two stated period values (e.g., "+15%", "-3%"). Leave null when only one period\'s value is given.'), maxLength: 20 }
   },
   required: ['label', 'value']
 };
@@ -142,8 +162,8 @@ const SEGMENT_ITEM: SchemaProperty = {
   description: 'Business segment with revenue and growth',
   properties: {
     name: { type: 'string', description: 'Segment name', maxLength: 50 },
-    revenue: { type: 'string', description: 'Segment revenue', maxLength: 30 },
-    growth: { type: 'string', description: 'Growth rate', maxLength: 20 }
+    revenue: { type: 'string', description: withGroundingNote('Segment revenue with units exactly as stated in the filing.'), maxLength: 30 },
+    growth: { type: 'string', description: withGroundingNote('Segment growth rate as stated in the filing or trivially computable. Leave null when only one period\'s segment revenue is given.'), maxLength: 20 }
   },
   required: ['name', 'revenue']
 };
@@ -360,7 +380,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       financialImpact: {
         type: 'string',
-        description: 'Specific financial impact with dollar amounts and percentages (e.g., "Revenue of $12.5B, up 15% YoY")',
+        description: withGroundingNote('Specific financial impact with dollar amounts and percentages (e.g., "Revenue of $12.5B, up 15% YoY")'),
         maxLength: 250
       },
       managementCommentary: {
@@ -415,11 +435,11 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
           properties: {
             code: { type: 'string', description: 'REQUIRED: Raw SEC transaction code letter from Column 3 (e.g., P, S, A, D, G, M, F, J, K, X, C, W). Single uppercase letter exactly as shown in the filing.' },
             type: { type: 'string', description: 'Human-readable transaction type: Purchase, Sale, Award/Grant, Gift, Exercise, Disposition, Transfer. Use the full word, not the letter code.' },
-            shares: { type: 'string', description: 'REQUIRED: Number of shares with commas (from column 5). Never leave blank - extract from table or calculate from value/price.' },
-            pricePerShare: { type: 'string', description: 'REQUIRED: Price per share with $ from column 4 - if $0, check if this is a gift/grant. Never leave blank.' },
+            shares: { type: 'string', description: withGroundingNote('REQUIRED: Number of shares with commas (from column 5). Extract from table or calculate from value/price as stated.') },
+            pricePerShare: { type: 'string', description: withGroundingNote('REQUIRED: Price per share with $ from column 4 - if $0, check if this is a gift/grant.') },
             date: { type: 'string', description: 'Transaction date from column 2 (YYYY-MM-DD)' },
             acquisitionDisposition: { type: 'string', description: 'A for acquired, D for disposed' },
-            sharesOwnedFollowing: { type: 'string', description: 'Amount of Securities Beneficially Owned Following Reported Transaction. For Table I use Column 5 (shares of common stock). For Table II use Column 11 (derivative securities remaining, e.g., stock options). Total shares/securities held after this transaction.' },
+            sharesOwnedFollowing: { type: 'string', description: withGroundingNote('Amount of Securities Beneficially Owned Following Reported Transaction. For Table I use Column 5 (shares of common stock). For Table II use Column 11 (derivative securities remaining, e.g., stock options). Total shares/securities held after this transaction.') },
             securityType: { type: 'string', description: 'Security type exactly from filing table header: "Common Stock", "Stock Option (Right to Buy)", "Restricted Stock Unit", "Performance Stock Unit". Copy verbatim from the Title of Security column.' },
             ownershipForm: { type: 'string', description: 'D for Direct, I for Indirect ownership. From Column 7 of Table I or Table II.' },
             ownershipNature: { type: 'string', description: 'Nature of indirect ownership (e.g., "By Family Trust", "By LLC", "By Spouse"). From Column 8. Only populate for indirect ownership.' }
@@ -429,7 +449,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       totalValue: {
         type: 'string',
-        description: 'Calculate: sum of (shares × price) for each transaction. Format as "$X,XXX,XXX"',
+        description: withGroundingNote('Sum of (shares × price) for each transaction, computed only when both shares and price are explicitly stated. Format as "$X,XXX,XXX".'),
         maxLength: 50
       },
       signalStrength: {
@@ -476,17 +496,17 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       shares: {
         type: 'string',
-        description: 'Number of shares to be sold with commas (e.g., "40,000")',
+        description: withGroundingNote('Number of shares to be sold with commas (e.g., "40,000")'),
         maxLength: 50
       },
       estimatedValue: {
         type: 'string',
-        description: 'Estimated sale value with $ (e.g., "$9.9M" or "$9,916,000")',
+        description: withGroundingNote('Estimated sale value with $ (e.g., "$9.9M" or "$9,916,000")'),
         maxLength: 50
       },
       pricePerShare: {
         type: 'string',
-        description: 'Approximate price per share with $ (e.g., "$248")',
+        description: withGroundingNote('Approximate price per share with $ (e.g., "$248")'),
         maxLength: 30
       },
       percentOfHoldings: {
@@ -511,7 +531,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       remainingHoldings: {
         type: 'string',
-        description: 'Amount of Securities Beneficially Owned Following Reported Transaction(s) - total shares still held after sale (e.g., "1,500,000")',
+        description: withGroundingNote('Amount of Securities Beneficially Owned Following Reported Transaction(s) - total shares still held after sale (e.g., "1,500,000")'),
         maxLength: 50
       },
       signalStrength: {
@@ -526,7 +546,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       sharesOutstanding: {
         type: 'string',
-        description: 'REQUIRED: "Number of Shares or Other Units of the Class Outstanding" - total shares outstanding for the security class (e.g., "3,700,000,000"). Extract from the securitiesInformation section.',
+        description: withGroundingNote('REQUIRED: "Number of Shares or Other Units of the Class Outstanding" - total shares outstanding for the security class (e.g., "3,700,000,000"). Extract from the securitiesInformation section.'),
         maxLength: 50
       }
     }
@@ -554,7 +574,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       sharesOwned: {
         type: 'string',
-        description: 'Number of shares beneficially owned (e.g., "500,000")',
+        description: withGroundingNote('Number of shares beneficially owned (e.g., "500,000")'),
         maxLength: 50
       },
       securitiesHeld: {
@@ -565,7 +585,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
           type: 'object',
           properties: {
             securityType: { type: 'string', description: 'Type of security (e.g., "Common Stock", "Stock Option")' },
-            shares: { type: 'string', description: 'Number of shares or units' },
+            shares: { type: 'string', description: withGroundingNote('Number of shares or units') },
             ownershipForm: { type: 'string', description: 'D for Direct, I for Indirect' }
           }
         }
@@ -590,7 +610,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       sharesOwned: {
         type: 'string',
-        description: 'Number of shares owned (e.g., "15,000,000")',
+        description: withGroundingNote('Number of shares owned (e.g., "15,000,000")'),
         maxLength: 50
       },
       filingPurpose: {
@@ -618,7 +638,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       sharesOwned: {
         type: 'string',
-        description: 'Number of shares owned',
+        description: withGroundingNote('Number of shares owned'),
         maxLength: 50
       },
       purpose: {
@@ -641,7 +661,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       offeringAmount: {
         type: 'string',
-        description: 'Total offering amount with $ (e.g., "$500,000,000")',
+        description: withGroundingNote('Total offering amount with $ (e.g., "$500,000,000")'),
         maxLength: 50
       },
       maturityDate: {
@@ -674,7 +694,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       ...BASE_SCHEMA_PROPERTIES,
       offeringSize: {
         type: 'string',
-        description: 'Total offering size with $ (e.g., "$500M", "$1.2B")',
+        description: withGroundingNote('Total offering size with $ (e.g., "$500M", "$1.2B")'),
         maxLength: 30
       },
       priceRange: {
@@ -684,7 +704,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       sharesOffered: {
         type: 'string',
-        description: 'Number of shares being offered (e.g., "25,000,000")',
+        description: withGroundingNote('Number of shares being offered (e.g., "25,000,000")'),
         maxLength: 30
       },
       useOfProceeds: {
@@ -723,7 +743,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       exchangeListing: {
         type: 'string',
-        description: 'Exchange where shares will be listed (e.g., "NYSE", "NASDAQ")',
+        description: 'Exchange where shares will be listed (e.g., "NYSE", "NASDAQ"). Leave null when not disclosed in the filing.',
         maxLength: 30
       },
       whyItMatters: WHY_IT_MATTERS_PROPERTY
@@ -747,17 +767,17 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       offeringAmount: {
         type: 'string',
-        description: 'Total offering amount with $ (e.g., "$500M")',
+        description: withGroundingNote('Total offering amount with $ (e.g., "$500M"). For shelf S-3s authorizing "any combination of securities" up to a single cap, use that cap; do not split across security types when not allocated.'),
         maxLength: 50
       },
       sharesOffered: {
         type: 'string',
-        description: 'Number of shares being registered (e.g., "10,000,000")',
+        description: withGroundingNote('Number of shares being registered (e.g., "10,000,000")'),
         maxLength: 30
       },
       dilutionImpact: {
         type: 'string',
-        description: 'Estimated dilution impact on existing shareholders (e.g., "5% dilution")',
+        description: withGroundingNote('Estimated dilution impact on existing shareholders (e.g., "5% dilution")'),
         maxLength: 50
       },
       sellingShareholders: {
@@ -768,7 +788,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
           type: 'object',
           properties: {
             name: { type: 'string', description: 'Shareholder name', maxLength: 100 },
-            shares: { type: 'string', description: 'Shares being sold', maxLength: 30 }
+            shares: { type: 'string', description: withGroundingNote('Shares being sold'), maxLength: 30 }
           },
           required: ['name', 'shares']
         }
@@ -777,8 +797,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         type: 'object',
         description: 'Shelf registration details if applicable',
         properties: {
-          totalAuthorized: { type: 'string', description: 'Total amount authorized', maxLength: 50 },
-          remainingCapacity: { type: 'string', description: 'Remaining capacity', maxLength: 50 },
+          totalAuthorized: { type: 'string', description: withGroundingNote('Total amount authorized'), maxLength: 50 },
+          remainingCapacity: { type: 'string', description: withGroundingNote('Remaining capacity'), maxLength: 50 },
           expirationDate: { type: 'string', description: 'Shelf expiration date', maxLength: 20 }
         }
       },
@@ -790,7 +810,7 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       },
       pricePerShare: {
         type: 'string',
-        description: 'Price per share if fixed (e.g., "$45.00")',
+        description: withGroundingNote('Price per share if fixed (e.g., "$45.00")'),
         maxLength: 30
       },
       whyItMatters: WHY_IT_MATTERS_PROPERTY
@@ -1078,7 +1098,52 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
 /**
  * System prompt that enforces strict JSON output with no markdown or explanation
  */
-const SYSTEM_PROMPT = `CRITICAL: You must respond with ONLY valid JSON. No other text.
+/**
+ * Universal grounding block (PR 3 of the anti-hallucination plan).
+ *
+ * Strict json_schema mode (Phase F) forces the model to emit values for
+ * every required property. The strict-schema converter makes optional
+ * fields `type: ['X', 'null']`, which means null IS a valid emission - but
+ * the model needs to be reminded that null is the *preferred* emission for
+ * unknowns. Without this universal block, anti-hallucination pressure
+ * exists only in fields whose individual descriptions explicitly forbid
+ * inference. The other ~25 numeric fields across all 12 schemas have no
+ * such pressure.
+ *
+ * Gated on process.env.GROUNDING_PROMPT_ENABLED !== '0' so SREs can flip
+ * the env without redeploy if the block makes the model emit nulls
+ * everywhere (empty-field rate spike).
+ */
+const GROUNDING_BLOCK = `=== GROUNDING RULES (apply to every field) ===
+
+1. NULL IS PREFERRED OVER INVENTED. For any optional or nullable field, emit null when the filing does not explicitly state the value. Inventing a "reasonable" number, date, percentage, or share count is a serious failure - the email pipeline ships your output to shareholders who will treat numbers as facts.
+
+2. ONLY WHAT THE FILING LITERALLY STATES. Every dollar amount, share count, percentage, fiscal date, person's name, transaction code, and ticker symbol you emit must appear in the source document - either verbatim or as a trivially derived figure (e.g., "$5,000,000,000" -> "$5B" formatting is fine; computing "$5B from 1B shares times $5/share" when shares aren't stated is NOT fine).
+
+3. NO EXTRAPOLATION. Do not "fill in" plausible numbers based on context, prior filings, industry benchmarks, or what a similar company did. If the document doesn't state the figure, the field is null.
+
+4. WHEN UNSURE, ABSTAIN. If a field's value requires inference from context you don't have, emit null. The downstream renderer hides empty fields gracefully; it cannot detect a fabrication.
+
+5. PROSE FIELDS (whyItMatters, summary, headline) MUST NOT INVENT FACTS. They synthesize what the filing literally says. Substituting a different company's name or ticker (e.g., "Tesla" or "$NVDA" in a JPMorgan filing) is a critical failure - the post-validator will reject the entire field.
+`;
+
+/**
+ * S-3-specific grounding addendum. Most shelf S-3s authorize a single
+ * combined cap across "any combination of securities" without breaking
+ * down debt vs equity vs warrants. List the categories without amounts
+ * when the filing doesn't allocate.
+ *
+ * Kept out of the universal block because the per-bucket rule is editorial
+ * bias for one form type (the other 11 schemas don't have shelf-bucket
+ * structure).
+ */
+const S3_GROUNDING_ADDENDUM = `
+=== S-3 SHELF-SPECIFIC RULE ===
+
+NO PER-BUCKET ALLOCATIONS THAT AREN'T DISCLOSED. Most shelf S-3s authorize a single combined cap across "any combination of securities" without breaking down debt vs equity vs warrants. List the categories without amounts when the filing doesn't allocate.
+`;
+
+const BASE_SYSTEM_PROMPT = `CRITICAL: You must respond with ONLY valid JSON. No other text.
 
 RULES:
 1. Output raw JSON only - no markdown code blocks (\`\`\`), no explanation
@@ -1145,6 +1210,21 @@ GOOD: "The $1.2B acquisition creates $200M in projected annual synergies"
 
 BAD: "Let's dive into the company's robust revenue growth going forward"
 GOOD: "Revenue grew 25% to $12.5B. Management expects 15-20% growth next quarter."`;
+
+/**
+ * Compose the runtime system prompt: optional grounding block prepended to
+ * the base prompt. Gated on GROUNDING_PROMPT_ENABLED env so SREs can flip
+ * without redeploy.
+ */
+function buildSystemPrompt(formType?: string): string {
+  if (process.env.GROUNDING_PROMPT_ENABLED === '0') {
+    return BASE_SYSTEM_PROMPT;
+  }
+  const blocks: string[] = [GROUNDING_BLOCK];
+  if (formType === 'S-3') blocks.push(S3_GROUNDING_ADDENDUM);
+  blocks.push(BASE_SYSTEM_PROMPT);
+  return blocks.join('\n');
+}
 
 
 // =============================================================================
@@ -1646,7 +1726,7 @@ Respond with ONLY a JSON object matching the schema above.`;
   }
 
   return {
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: buildSystemPrompt(canonicalType),
     userPrompt,
     schema
   };

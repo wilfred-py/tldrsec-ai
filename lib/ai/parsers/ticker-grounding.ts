@@ -149,3 +149,40 @@ export function validateTickerGrounding(
   if (foreign.length === 0) return { value: raw, rejected: false };
   return { value: '', rejected: true, foreignTickers: foreign };
 }
+
+/**
+ * Prose fields the validator walks. Numeric / structured fields are out of
+ * scope (the upcoming numeric grounding validator covers those); ticker
+ * grounding only catches name/ticker contamination in narrative copy.
+ */
+const PROSE_FIELDS = ['whyItMatters', 'headline', 'summary', 'emailSubject'] as const;
+
+export interface TickerGroundingViolation {
+  field: string;
+  foreignTickers: string[];
+}
+
+/**
+ * Walk a parsed summary's prose fields and redact any whose text mentions a
+ * foreign ticker or company alias. Mutates `data` in place: rejected fields
+ * are deleted (templates handle absence gracefully — Phase E.4).
+ *
+ * Returns the list of violations so the caller can record telemetry.
+ * Skips silently when `expectedTicker` is missing or 'UNKNOWN' (we can't
+ * ground against an unknown ticker without false-positive risk).
+ */
+export function validateTickerGroundingInPlace(
+  data: Record<string, unknown>,
+  expectedTicker: string | undefined | null,
+): TickerGroundingViolation[] {
+  if (!expectedTicker || expectedTicker === 'UNKNOWN') return [];
+  const violations: TickerGroundingViolation[] = [];
+  for (const field of PROSE_FIELDS) {
+    const result = validateTickerGrounding(data[field], expectedTicker);
+    if (result.rejected) {
+      violations.push({ field, foreignTickers: result.foreignTickers || [] });
+      delete data[field];
+    }
+  }
+  return violations;
+}
