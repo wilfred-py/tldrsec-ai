@@ -14,43 +14,17 @@ import {
   staggerItem,
   viewportOnce,
 } from '@/lib/animations/landing-animations';
+import { FEATURES_SECTION } from '@/lib/landing/copy';
 
 /**
- * Feature list with icons and descriptions
- * Highlights core value propositions
+ * Feature list with icons and descriptions.
+ * Copy lives in lib/landing/copy.ts; icons stay here (component-level concern).
  */
-const features = [
-  {
-    icon: Clock,
-    title: '300+ Pages → 2 Minutes',
-    description: 'Our AI distills lengthy SEC filings into clear, actionable summaries you can read in minutes.',
-  },
-  {
-    icon: Bell,
-    title: 'Real-Time Monitoring',
-    description: 'Get notified the moment a company you track files with the SEC. Never miss critical updates.',
-  },
-  {
-    icon: Zap,
-    title: 'Smart Notifications',
-    description: 'Customize alerts by filing type, company, or keywords. Only get what matters to you.',
-  },
-  {
-    icon: FileSearch,
-    title: 'Filing-Type Analysis',
-    description: 'Specialized parsing for 10-K, 10-Q, 8-K, Form 4, and more. Each format handled with precision.',
-  },
-  {
-    icon: Shield,
-    title: 'Investment-Grade Quality',
-    description: 'Summaries reviewed for accuracy with source citations. Trust the insights you receive.',
-  },
-  {
-    icon: Timer,
-    title: 'Save 10+ Hours Weekly',
-    description: 'Stop spending weekends reading filings. Get back your time for actual analysis.',
-  },
-];
+const featureIcons = [Clock, Bell, Zap, FileSearch, Shield, Timer];
+const features = FEATURES_SECTION.cards.map((card, i) => ({
+  ...card,
+  icon: featureIcons[i],
+}));
 
 /**
  * Features Section V2 Component
@@ -74,10 +48,10 @@ export function FeaturesSectionV2() {
           className="text-center mb-16"
         >
           <h2 className="brand-heading mb-4">
-            Built for Modern Investors
+            {FEATURES_SECTION.heading}
           </h2>
           <p className="brand-body max-w-2xl mx-auto">
-            Everything you need to stay informed about the companies you care about.
+            {FEATURES_SECTION.subhead}
           </p>
         </motion.div>
 

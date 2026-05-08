@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { LandingPageV2 } from '@/components/landing/landing-page-v2';
+import { HOMEPAGE_HERO, FEATURES_SECTION, CTA_SECTION } from '@/lib/landing/copy';
 
 jest.mock('@clerk/nextjs', () => ({
   useUser: () => ({ isSignedIn: false, isLoaded: true, user: null }),
@@ -69,19 +70,19 @@ describe('LandingPageV2', () => {
     render(<LandingPageV2 />);
 
     // Hero - verify key marketing copy renders. The H1 splits across text nodes
-    // (gradient span wraps the "in minutes instead of hours" phrase), so use the
-    // heading element's accessible text content rather than matching fragments.
+    // (gradient span wraps select words), so use the heading element's accessible
+    // text content rather than matching fragments.
     const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1).toHaveTextContent(/SEC filings, read in minutes instead of hours/i);
+    expect(h1).toHaveTextContent(HOMEPAGE_HERO.h1.text);
 
     // Features
-    expect(screen.getByText(/Built for Modern Investors/i)).toBeInTheDocument();
+    expect(screen.getByText(FEATURES_SECTION.heading)).toBeInTheDocument();
 
     // Pricing
     expect(screen.getByText(/Simple, Transparent Pricing/i)).toBeInTheDocument();
 
     // CTA
-    expect(screen.getByText(/Start Monitoring/i)).toBeInTheDocument();
+    expect(screen.getByText(CTA_SECTION.heading)).toBeInTheDocument();
 
     // Footer - use getAllByText since tldrsec appears multiple times
     const brandElements = screen.getAllByText(/tldrsec/i);

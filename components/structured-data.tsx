@@ -1,6 +1,7 @@
 'use client';
 
 import { faqItems } from '@/components/landing/sections-v2/faq-section-v2';
+import { STRUCTURED_DATA } from '@/lib/landing/copy';
 
 export function JsonLd() {
   const graph = {
@@ -10,15 +11,14 @@ export function JsonLd() {
         '@type': 'WebSite',
         name: 'tldrSEC',
         url: 'https://tldrsec.app',
-        description:
-          'AI-powered SEC filing summaries. Get instant insights from 10-K, 10-Q, 8-K, and Form 4 filings.',
+        description: STRUCTURED_DATA.websiteDescription,
       },
       {
         '@type': 'Organization',
         name: 'tldrSEC',
         url: 'https://tldrsec.app',
         logo: 'https://tldrsec.app/opengraph-image',
-        description: 'AI-powered SEC filing analysis for smarter investment decisions.',
+        description: STRUCTURED_DATA.organizationDescription,
       },
       {
         '@type': 'SoftwareApplication',

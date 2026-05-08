@@ -295,14 +295,17 @@ describe('SEO Metadata Validation', () => {
       expect(content).not.toContain('force-dynamic');
     });
 
-    it('should include high-intent SEC filing keywords', () => {
-      const filePath = path.join(projectRoot, 'app/page.tsx');
-      const content = fs.readFileSync(filePath, 'utf-8');
+    it('should include high-intent SEC filing keywords', async () => {
+      // Marketing copy (including keywords) lives in lib/landing/copy.ts —
+      // app/page.tsx imports PAGE_METADATA.keywords. Assert against the
+      // actual metadata source rather than grepping the page file.
+      const { PAGE_METADATA } = await import('../../lib/landing/copy');
+      const allKeywords = PAGE_METADATA.keywords.join(' ');
 
-      expect(content).toContain('10-K');
-      expect(content).toContain('10-Q');
-      expect(content).toContain('8-K');
-      expect(content).toContain('Form 4');
+      expect(allKeywords).toContain('10-K');
+      expect(allKeywords).toContain('10-Q');
+      expect(allKeywords).toContain('8-K');
+      expect(allKeywords).toContain('Form 4');
     });
   });
 
