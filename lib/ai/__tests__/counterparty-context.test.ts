@@ -101,7 +101,7 @@ describe('searchCounterpartyContext', () => {
 
   beforeEach(() => {
     process.env.OPENROUTER_API_KEY = 'test-api-key';
-    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.1-fast';
+    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
   });
 
   afterEach(() => {
@@ -283,7 +283,7 @@ describe('getCounterpartyContext', () => {
 
   beforeEach(() => {
     process.env.OPENROUTER_API_KEY = 'test-api-key';
-    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.1-fast';
+    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
   });
 
   afterEach(() => {

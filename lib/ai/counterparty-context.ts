@@ -93,7 +93,7 @@ export async function searchCounterpartyContext(
     return null;
   }
 
-  const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.1-fast';
+  const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.3';
 
   const prompt = `This 8-K filing excerpt describes an acquisition or merger by ${acquirerName} (${ticker}).
 

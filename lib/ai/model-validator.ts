@@ -57,14 +57,14 @@ export class ModelValidatorService {
    */
   static async validateModel(modelId: string): Promise<ModelValidationResult> {
     try {
-      // Check cache first
+      // Check cache first. Note: getCachedValidation returns the unwrapped
+      // ModelValidationResult directly (not the wrapper). Previously this code
+      // dereferenced `cached.result`/`cached.cachedAt` which were undefined,
+      // silently dropping all fields except `source` on cached returns.
       const cached = this.getCachedValidation(modelId);
       if (cached) {
-        validatorLogger.debug('Using cached validation result', {
-          model: modelId,
-          cachedAt: cached.cachedAt
-        });
-        return { ...cached.result, source: 'cached' };
+        validatorLogger.debug('Using cached validation result', { model: modelId });
+        return { ...cached, source: 'cached' };
       }
 
       // Try Context7 validation first
@@ -134,23 +134,20 @@ export class ModelValidatorService {
       let deprecationWarning: string | undefined;
 
       // In a real implementation, you would call Context7 MCP tools here
-      // For now, we'll simulate the check based on known model patterns
+      // For now, simulate the check based on known model patterns. Single-model
+      // configuration: grok-4.3 is the only non-deprecated Grok variant after
+      // 2026-05-15. Anything else gets a deprecation warning.
       if (modelId.includes('grok') || modelId.includes('x-ai')) {
         modelExists = true;
         pricingFound = true;
 
-        // Extract potential pricing from model name patterns
-        if (modelId.includes('grok-4.1-fast') || modelId.includes('grok-4-fast')) {
-          suggestedInputCost = 0.30; // $0.30/M tokens
-          suggestedOutputCost = 0.50; // $0.50/M tokens
-        } else if (modelId.includes('grok-3') || modelId.includes('grok-code-fast-1')) {
-          suggestedInputCost = 0.15; // $0.15/M tokens
-          suggestedOutputCost = 0.25; // $0.25/M tokens
-        }
-
-        // Check for deprecation patterns
-        if (modelId.includes('grok-3') || modelId.includes('grok-2')) {
-          deprecationWarning = `Model ${modelId} may be deprecated. Consider upgrading to newer Grok models.`;
+        if (/grok-4\.3/.test(modelId)) {
+          suggestedInputCost = 1.25; // $1.25/M tokens (≤200K input tier)
+          suggestedOutputCost = 2.50; // $2.50/M tokens (≤200K input tier)
+        } else {
+          // Any non-grok-4.3 Grok slug is on xAI's retirement list.
+          deprecationWarning = `Model ${modelId} is retiring on 2026-05-15. Migrate to x-ai/grok-4.3.`;
+          // Don't suggest costs for retiring models — we want callers to migrate.
         }
       }
 
@@ -208,21 +205,22 @@ export class ModelValidatorService {
   }
 
   /**
-   * Get pricing from environment variables for a model
+   * Get pricing from environment variables for a model.
+   *
+   * Single-tier values (≤200K input tokens). For >200K-tier billing or
+   * tier-aware cost reporting, callers should use calculateCost() in
+   * token-counter.ts which handles the boundary.
    */
   private static getEnvironmentPricing(modelId: string): { inputCost: number; outputCost: number } | null {
-    // xAI Grok 4 series models
-    if (modelId.includes('grok-4.1-fast') || modelId.includes('grok-4-fast') || modelId.includes('grok-4')) {
+    // Match grok-4.3 explicitly. The old `/grok-4\.\d+/` regex matched
+    // grok-4.1-fast (retiring 2026-05-15) and silently returned grok-4.3
+    // pricing for it — wrong by ~4x. Tightened to require `.3` followed by
+    // either end-of-string, hyphen, or colon (OpenRouter `:free` suffix
+    // convention). Forward-compat for grok-4.3.X point releases.
+    if (/grok-4\.3(?![0-9])/.test(modelId)) {
       return {
-        inputCost: parseFloat(process.env.XAI_GROK4_INPUT_COST || '0.30'),
-        outputCost: parseFloat(process.env.XAI_GROK4_OUTPUT_COST || '0.50')
-      };
-    }
-    // xAI Grok 3 series models
-    if (modelId.includes('grok-3') || modelId.includes('grok-code-fast-1')) {
-      return {
-        inputCost: parseFloat(process.env.XAI_GROK2_INPUT_COST || '0.15'),
-        outputCost: parseFloat(process.env.XAI_GROK2_OUTPUT_COST || '0.25')
+        inputCost: parseFloat(process.env.XAI_GROK_INPUT_COST || '1.25'),
+        outputCost: parseFloat(process.env.XAI_GROK_OUTPUT_COST || '2.50')
       };
     }
     return null;

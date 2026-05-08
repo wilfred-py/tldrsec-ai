@@ -82,7 +82,7 @@ describe('AI Summarization Pipeline Integration', () => {
     
     // Set environment variables for OpenRouter
     process.env.TLDRSEC_AI_SUMMARIZER = 'test-api-key';
-    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast:free';
+    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
   });
 
   afterEach(() => {
@@ -112,7 +112,7 @@ describe('AI Summarization Pipeline Integration', () => {
           keyTakeaway: 'Tesla continues to demonstrate strong execution with record performance across key metrics.',
           investorImpact: 'Positive outlook for continued growth'
         }),
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         usage: {
           inputTokens: 2500,
           outputTokens: 800
@@ -208,14 +208,14 @@ describe('AI Summarization Pipeline Integration', () => {
       expect(summaryResult.inputTokens).toBe(2500);
       expect(summaryResult.outputTokens).toBe(800);
       expect(summaryResult.cost).toBeCloseTo(0.0975, 4);
-      expect(summaryResult.model).toBe('x-ai/grok-4-fast:free');
+      expect(summaryResult.model).toBe('x-ai/grok-4.3');
       expect(summaryResult.error).toBeUndefined();
 
       // Verify OpenRouter was called with proper prompt structure
       expect(mockSendMessage).toHaveBeenCalledWith(
         [{ role: 'user', content: expect.stringContaining('You are an expert financial analyst specializing in SEC filings') }],
         expect.objectContaining({
-          model: 'x-ai/grok-4-fast:free',
+          model: 'x-ai/grok-4.3',
           maxTokens: 4000,
           temperature: 0.1,
           system: expect.stringContaining('You are a financial expert specializing in SEC filing analysis'),
@@ -238,7 +238,7 @@ describe('AI Summarization Pipeline Integration', () => {
       mockSendMessage.mockResolvedValue({
         id: 'test-response-2',
         content: '{"summary": "Test summary"}',
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         usage: { inputTokens: 100, outputTokens: 50 },
         cost: { inputCost: 0.0015, outputCost: 0.0075, totalCost: 0.009 },
         inputTokens: 100,
@@ -282,7 +282,7 @@ describe('AI Summarization Pipeline Integration', () => {
         .mockResolvedValue({
           id: 'test-response-3',
           content: '{"summary": "Success after retries"}',
-          model: 'x-ai/grok-4-fast:free',
+          model: 'x-ai/grok-4.3',
           usage: { inputTokens: 200, outputTokens: 100 },
           cost: { inputCost: 0.003, outputCost: 0.015, totalCost: 0.018 },
           inputTokens: 200,
@@ -348,7 +348,7 @@ describe('AI Summarization Pipeline Integration', () => {
       mockSendMessage.mockResolvedValue({
         id: 'test-response-4',
         content: '{"summary": "Test summary"}',
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         usage: { inputTokens: 300, outputTokens: 150 },
         cost: { inputCost: 0.0045, outputCost: 0.0225, totalCost: 0.027 },
         inputTokens: 300,
@@ -396,7 +396,7 @@ describe('AI Summarization Pipeline Integration', () => {
       mockSendMessage.mockResolvedValue({
         id: 'test-response-5',
         content: 'Invalid JSON response from xAI {incomplete',
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         usage: { inputTokens: 100, outputTokens: 50 },
         cost: { inputCost: 0.0015, outputCost: 0.0075, totalCost: 0.009 },
         inputTokens: 100,
@@ -440,7 +440,7 @@ describe('AI Summarization Pipeline Integration', () => {
       mockSendMessage.mockResolvedValue({
         id: 'test-response-6',
         content: '{"summary": "Summary of truncated content"}',
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         usage: { inputTokens: 1500, outputTokens: 200 },
         cost: { inputCost: 0.0225, outputCost: 0.03, totalCost: 0.0525 },
         inputTokens: 1500,
@@ -484,7 +484,7 @@ describe('AI Summarization Pipeline Integration', () => {
         mockSendMessage.mockResolvedValue({
           id: 'test-cost-response',
           content: '{"summary": "Test summary for cost calculation"}',
-          model: 'x-ai/grok-4-fast:free',
+          model: 'x-ai/grok-4.3',
           usage: {
             inputTokens: testCase.inputTokens,
             outputTokens: testCase.outputTokens

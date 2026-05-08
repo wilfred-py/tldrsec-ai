@@ -29,7 +29,7 @@ function getEnv(key: string, defaultValue?: string): string {
   if (process.env.NODE_ENV === 'test' && key === 'OPENROUTER_API_KEY') {
     return 'test-api-key-for-testing-only';
   }
-  
+
   // During build time, provide safe defaults to prevent build failures
   if (isBuildTime()) {
     if (key === 'OPENROUTER_API_KEY') {
@@ -37,7 +37,7 @@ function getEnv(key: string, defaultValue?: string): string {
     }
     return defaultValue || 'build-time-placeholder';
   }
-  
+
   const value = process.env[key];
   if (value === undefined) {
     if (defaultValue === undefined) {
@@ -64,13 +64,30 @@ export const apiConfig = {
 };
 
 /**
+ * Tiered-pricing threshold for Grok 4.3 (in input tokens).
+ * Per xAI docs: requests exceeding 200K total tokens are billed at the higher tier
+ * (input doubles to $2.50/M, output doubles to $5.00/M). Boundary is "exceeding",
+ * so an exactly-200K call stays in the cheap tier.
+ */
+export const TIERED_PRICING_THRESHOLD = 200_000;
+
+/**
  * Model configuration - centralized model selection
+ *
+ * Single-model configuration: every retiring Grok variant (grok-4.1-fast,
+ * grok-4-fast, grok-3, grok-code-fast-1, grok-2) is being retired by xAI on
+ * 2026-05-15 12pm PT. grok-4.3 is the only non-deprecated production-grade Grok
+ * available via OpenRouter.
+ *
+ * fallbackModel intentionally aliases defaultModel so the OpenRouterClient's
+ * outer model-fallback retry loop still gets a second attempt on transient 5xx.
+ * This preserves resilience without introducing a separate fallback model that
+ * would also need migration.
  */
 export const modelConfig = {
-  // Use DEFAULT_AI_MODEL as the primary environment variable
-  defaultModel: getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4.1-fast'),
-  fallbackModel: getEnv('OPENROUTER_FALLBACK_MODEL', getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-2')),
-  maxInputTokens: parseInt(getEnv('OPENROUTER_MAX_INPUT_TOKENS', '1280000'), 10), // xAI 2M context
+  defaultModel: getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4.3'),
+  fallbackModel: getEnv('OPENROUTER_FALLBACK_MODEL', getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4.3')),
+  maxInputTokens: parseInt(getEnv('OPENROUTER_MAX_INPUT_TOKENS', '1000000'), 10), // grok-4.3 1M context
   maxOutputTokens: parseInt(getEnv('OPENROUTER_MAX_OUTPUT_TOKENS', '8000'), 10),
   temperature: parseFloat(getEnv('OPENROUTER_TEMPERATURE', '0.2')),
   topP: parseFloat(getEnv('OPENROUTER_TOP_P', '0.9')),
@@ -79,15 +96,22 @@ export const modelConfig = {
 
 /**
  * Cost tracking configuration - OpenRouter/xAI pricing
+ *
+ * Grok 4.3 pricing (per https://openrouter.ai/x-ai/grok-4.3):
+ *   ≤200K input tokens: $1.25/M input, $2.50/M output
+ *   >200K input tokens: $2.50/M input, $5.00/M output
  */
 export const costConfig = {
-  // Cost per million tokens for xAI models via OpenRouter
-  xaiGrok4InputCost: parseFloat(getEnv('XAI_GROK4_INPUT_COST', '0.30')), // $0.30/M input
-  xaiGrok4OutputCost: parseFloat(getEnv('XAI_GROK4_OUTPUT_COST', '0.50')), // $0.50/M output
-  xaiGrok2InputCost: parseFloat(getEnv('XAI_GROK2_INPUT_COST', '0.15')), // $0.15/M input fallback
-  xaiGrok2OutputCost: parseFloat(getEnv('XAI_GROK2_OUTPUT_COST', '0.25')), // $0.25/M output fallback
-  openRouterSurcharge: parseFloat(getEnv('OPENROUTER_SURCHARGE', '0.10')), // 10% OpenRouter fee
-  maxCostPerRequest: parseFloat(getEnv('MAX_COST_PER_REQUEST', '0.75')) // Max $0.75 per enhanced summary
+  xaiGrokInputCost: parseFloat(getEnv('XAI_GROK_INPUT_COST', '1.25')),
+  xaiGrokOutputCost: parseFloat(getEnv('XAI_GROK_OUTPUT_COST', '2.50')),
+  xaiGrokInputCostHigh: parseFloat(getEnv('XAI_GROK_INPUT_COST_HIGH', '2.50')),
+  xaiGrokOutputCostHigh: parseFloat(getEnv('XAI_GROK_OUTPUT_COST_HIGH', '5.00')),
+  openRouterSurcharge: parseFloat(getEnv('OPENROUTER_SURCHARGE', '0.10')),
+  // Per-call cost cap. Bumped from $0.75 (grok-4.1-fast era) because grok-4.3
+  // input/output costs are 4-5x higher; same per-call token budget would otherwise
+  // hit the cap. This value IS now wired through to per-call costLimit args
+  // (see services/filing/{enhancedSummaryGeneration,summaryGenerationService}).
+  maxCostPerRequest: parseFloat(getEnv('MAX_COST_PER_REQUEST', '3.00'))
 };
 
 /**
@@ -95,20 +119,20 @@ export const costConfig = {
  * This is the centralized function all code should use to get the model
  */
 export function getDefaultModel(): string {
-  return getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4.1-fast');
+  return getEnv('DEFAULT_AI_MODEL', 'x-ai/grok-4.3');
 }
 
 /**
- * Get fallback model for error handling
+ * Get fallback model for error handling. Aliases defaultModel by design — see
+ * modelConfig comment above for rationale.
  */
 export function getFallbackModel(): string {
   return getEnv('OPENROUTER_FALLBACK_MODEL', getDefaultModel());
 }
 
 /**
- * Alias for getDefaultModel to maintain backward compatibility
- * @deprecated Use getDefaultModel() instead. This alias exists for backward compatibility
- * with code written before the OpenRouter migration. New code should use getDefaultModel().
+ * @deprecated Use getDefaultModel() instead. Backward-compat alias from the
+ * pre-OpenRouter Claude era.
  */
 export function getClaudeModel(): string {
   return getDefaultModel();
@@ -117,7 +141,7 @@ export function getClaudeModel(): string {
 // Runtime validation for production environment
 function validateRuntimeConfig(): void {
   if (typeof window === 'undefined' && // Server-side only
-      process.env.NODE_ENV === 'production' && 
+      process.env.NODE_ENV === 'production' &&
       process.env.VERCEL && // Vercel production
       !isBuildTime() &&
       !process.env.OPENROUTER_API_KEY) {
@@ -130,68 +154,44 @@ if (typeof window === 'undefined') {
 }
 
 export const OpenRouterConfig = {
-  // API key should be set in the .env file, with build-time safety
   apiKey: isBuildTime() ? 'build-time-placeholder-key' : (process.env.OPENROUTER_API_KEY || ''),
-  
-  // Model selection - use centralized function
+
   model: getDefaultModel(),
-  
-  // Request parameters
+
   maxTokens: parseInt(process.env.OPENROUTER_MAX_TOKENS || '8000', 10),
   temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE || '0.2'),
-  
-  // Rate limiting configuration
+
   rateLimit: {
-    maxRequests: 60,  // Higher for OpenRouter
-    maxTokensPerMinute: 1000000,  // Token rate limit
+    maxRequests: 60,
+    maxTokensPerMinute: 1000000,
     concurrentRequests: 5,
   },
-  
-  // Retry configuration
+
   retry: {
     maxRetries: 3,
     initialDelayMs: 1000,
     maxDelayMs: 10000,
     backoffFactor: 2,
   },
-  
-  // Timeout configuration (in milliseconds)
-  timeout: 180000,  // 3 minutes for enhanced analysis
-  
-  // Available models (xAI via OpenRouter)
+
+  timeout: 180000,
+
+  // Available models (xAI via OpenRouter). Single entry; legacy Grok variants
+  // retire 2026-05-15.
   availableModels: [
-    'x-ai/grok-4.1-fast',
-    'x-ai/grok-4-fast',
-    'x-ai/grok-3',
-    'meta-llama/llama-3.1-405b-instruct:free',
-    'google/gemini-pro-1.5:free',
+    'x-ai/grok-4.3',
   ],
 
-  // Model capabilities and constraints (xAI focused)
+  // Model capabilities and constraints. costPerInputToken/costPerOutputToken
+  // reflect the ≤200K-token tier; >200K-token requests are billed at
+  // (xaiGrokInputCostHigh / xaiGrokOutputCostHigh). Use calculateCost() in
+  // token-counter.ts for tier-aware cost reporting.
   modelInfo: {
-    'x-ai/grok-4.1-fast': {
-      contextWindow: 2000000, // 2M tokens
-      costPerInputToken: 0.0000003,  // $0.30 per million
-      costPerOutputToken: 0.0000005, // $0.50 per million
-      strengths: 'Best agentic tool calling model with 2M context window, optimized for financial analysis',
-    },
-    'x-ai/grok-4-fast': {
-      contextWindow: 2000000, // 2M tokens
-      costPerInputToken: 0.00000020,  // $0.20 per million
-      costPerOutputToken: 0.00000150, // $1.50 per million
-      strengths: 'SOTA cost-efficiency with 2M context window',
-    },
-    'x-ai/grok-2': {
-      contextWindow: 128000,
-      costPerInputToken: 0.00000015,
-      costPerOutputToken: 0.00000025,
-      strengths: 'Reliable fallback model for SEC filing analysis',
-    },
-    'meta-llama/llama-3.1-405b-instruct:free': {
-      contextWindow: 128000,
-      costPerInputToken: 0.000000, // Free tier
-      costPerOutputToken: 0.000000,
-      strengths: 'Free fallback for basic summarization',
+    'x-ai/grok-4.3': {
+      contextWindow: 1_000_000,
+      costPerInputToken: costConfig.xaiGrokInputCost / 1_000_000,
+      costPerOutputToken: costConfig.xaiGrokOutputCost / 1_000_000,
+      strengths: 'xAI Grok 4.3 — 1M context, built-in reasoning (effort configurable per request), best for SEC-filing analysis and agentic tool calls',
     },
   }
 };

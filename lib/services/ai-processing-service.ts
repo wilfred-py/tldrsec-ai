@@ -204,7 +204,7 @@ export class AIProcessingService {
     const aiResponse = await openRouterClient.sendMessage(
       [{ role: 'user', content: prompt }],
       {
-        model: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free',
+        model: process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.3',
         maxTokens: 4000,
         temperature: 0.1,
         timeout: context.timeout,

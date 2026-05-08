@@ -421,7 +421,7 @@ export async function handleSummarizeCached(
             filingUrl: filing.filingUrl,
             summaryText: sharedSummary.summaryText,
             summaryJSON: normalizedJSON || null,
-            modelVersion: sharedSummary.modelVersion || 'x-ai/grok-4-fast:free',
+            modelVersion: sharedSummary.modelVersion || 'x-ai/grok-4.3',
             promptVersion: 'v1',
             totalCost: 0,  // No additional AI cost for shared summary
             inputTokens: 0,
@@ -656,7 +656,7 @@ export async function handleSummarizeCached(
         summaryJSON: summaryResult.summaryJSON || null,  // Preserve structured AI response for email templates
         importance,
         smartSubject,
-        modelVersion: summaryResult.modelUsed || 'x-ai/grok-4-fast:free',
+        modelVersion: summaryResult.modelUsed || 'x-ai/grok-4.3',
         promptVersion: 'v1',
         totalCost: summaryResult.cost || 0,
         inputTokens: summaryResult.inputTokens || 0,

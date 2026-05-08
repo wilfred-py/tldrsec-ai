@@ -6,6 +6,7 @@
  */
 
 import { openRouterClient, OpenRouterClient } from '../../lib/ai/openrouter-client';
+import { costConfig } from '../../lib/ai/config';
 import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { normalizeFormType } from './formTypeService';
@@ -30,8 +31,10 @@ const openRouterCircuitBreaker = circuitBreakerRegistry.getCircuitBreaker(CIRCUI
 // Global error handler instance
 const errorHandler = GlobalErrorHandler.getInstance();
 
-// Default AI model to use (configurable via environment variable)
-const DEFAULT_MODEL = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast-reasoning';
+// Default AI model to use (configurable via environment variable).
+// Hardcoded fallback aligns with .env DEFAULT_AI_MODEL — if the env var is
+// missing in any environment, this matches what config.ts also defaults to.
+const DEFAULT_MODEL = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.3';
 
 /**
  * Generates an optimized prompt for xAI models to analyze SEC filings
@@ -143,7 +146,7 @@ export async function generateEnhancedAISummary(
               requestType: 'premium', // Enhanced summaries are premium
               timeout: 600000, // 10 minutes for enhanced analysis (increased for complex filings)
               requiredCapabilities: ['reasoning'],
-              costLimit: 0.75 // $0.75 maximum per enhanced summary for cost control
+              costLimit: costConfig.maxCostPerRequest // Per-call cap from MAX_COST_PER_REQUEST env var (default $3.00 for grok-4.3)
             }
           );
           

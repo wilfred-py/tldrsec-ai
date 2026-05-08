@@ -48,7 +48,7 @@ describe('OpenRouter xAI Integration', () => {
     
     // Set OpenRouter environment variables
     process.env.TLDRSEC_AI_SUMMARIZER = 'test-api-key';
-    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast:free';
+    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
   });
 
   afterEach(() => {
@@ -122,7 +122,7 @@ describe('OpenRouter xAI Integration', () => {
     expect(result.summary).toBe('Apple Inc. filed a quarterly 10-Q report showing strong financial performance.');
     expect(result.keyPoints).toContain('Revenue: $94.9B (+2%) - Steady revenue growth');
     expect(result.keyPoints).toContain('Key Takeaway: Apple continues to demonstrate resilience despite market challenges.');
-    expect(result.model).toBe('x-ai/grok-4-fast:free');
+    expect(result.model).toBe('x-ai/grok-4.3');
     expect(result.cost).toBe(0); // Free model
     expect(result.inputTokens).toBe(5000);
     expect(result.outputTokens).toBe(1000);
@@ -139,13 +139,13 @@ describe('OpenRouter xAI Integration', () => {
           'HTTP-Referer': 'https://tldrsec.app',
           'X-Title': 'TLDRSEC.AI'
         }),
-        body: expect.stringContaining('x-ai/grok-4-fast:free')
+        body: expect.stringContaining('x-ai/grok-4.3')
       })
     );
 
     // Verify the request included the right prompt structure
     const requestBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
-    expect(requestBody.model).toBe('x-ai/grok-4-fast:free');
+    expect(requestBody.model).toBe('x-ai/grok-4.3');
     expect(requestBody.max_tokens).toBe(4000);
     expect(requestBody.temperature).toBe(0.1);
     expect(requestBody.messages).toHaveLength(2); // system + user message
