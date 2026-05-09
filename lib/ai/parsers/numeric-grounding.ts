@@ -59,7 +59,6 @@ export interface NumericGroundingOptions {
 
 const MIN_SOURCE_LEN = 1000;
 const MIN_VALUE_LEN = 2;
-const APPROXIMATION_WINDOW = 80;
 
 /**
  * Prose fields are excluded — ticker grounding handles them. Listed at
