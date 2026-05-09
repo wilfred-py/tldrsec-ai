@@ -201,6 +201,101 @@ describe('resolveSecPrimaryDocumentUrl', () => {
     });
   });
 
+  describe('XML primary doc fallback (Form 3/4/5/144/13G/13D)', () => {
+    // Reality check: EDGAR's index.json returns `type: "text.gif"` for every
+    // item in production (verified against live API). Tests below mirror that
+    // truth — we cannot rely on the `type` field for matching.
+
+    it('picks form4.xml as primary for a Form 4 filing (real EDGAR shape)', async () => {
+      mockFetch({
+        directory: {
+          item: [
+            { name: '0001140361-26-020298-index-headers.html', type: 'text.gif', size: '' },
+            { name: '0001140361-26-020298-index.html', type: 'text.gif', size: '' },
+            { name: '0001140361-26-020298.txt', type: 'text.gif', size: '' },
+            { name: 'form4.xml', type: 'text.gif', size: '7230' },
+          ],
+        },
+      });
+      const result = await resolveSecPrimaryDocumentUrl(
+        'https://www.sec.gov/Archives/edgar/data/320193/000114036126020298/0001140361-26-020298-index.htm',
+        '4',
+      );
+      expect(result).toBe(
+        'https://www.sec.gov/Archives/edgar/data/320193/000114036126020298/form4.xml',
+      );
+    });
+
+    it('picks the largest non-metadata .xml when multiple xml files exist (Form 4 with WF-prefix)', async () => {
+      mockFetch({
+        directory: {
+          item: [
+            { name: 'wf-form4_172505.xml', type: 'text.gif', size: '8765' },
+            { name: 'primary_doc.xsd', type: 'text.gif', size: '500' },
+          ],
+        },
+      });
+      const result = await resolveSecPrimaryDocumentUrl(
+        'https://www.sec.gov/Archives/edgar/data/320193/000114036126020298/0001140361-26-020298-index.htm',
+        '4',
+      );
+      expect(result).toContain('wf-form4_172505.xml');
+    });
+
+    it('resolves primary_doc.xml for Form 144', async () => {
+      mockFetch({
+        directory: {
+          item: [{ name: 'primary_doc.xml', type: 'text.gif', size: '1234' }],
+        },
+      });
+      const result = await resolveSecPrimaryDocumentUrl(
+        'https://www.sec.gov/Archives/edgar/data/320193/000114036126099999/0001140361-26-099999-index.htm',
+        '144',
+      );
+      expect(result).toContain('primary_doc.xml');
+    });
+
+    it('does NOT fall back to XML for HTM-primary forms (10-Q) — leaves input unchanged', async () => {
+      // 10-K/10-Q don't have a stylesheet directory in getXsltStylesheetDir,
+      // so the XML fallback is gated off — we never accidentally pick up an
+      // XBRL R-file, FilingSummary.xml, or linkbase as the primary doc.
+      const inputUrl =
+        'https://www.sec.gov/Archives/edgar/data/12345/000012345025000001/0000123450-25-000001-index.htm';
+      mockFetch({
+        directory: {
+          item: [
+            { name: 'data.xml', type: 'text.gif', size: '5000' },
+            { name: 'FilingSummary.xml', type: 'text.gif', size: '1000' },
+            { name: 'R1.xml', type: 'text.gif', size: '500' },
+          ],
+        },
+      });
+      const result = await resolveSecPrimaryDocumentUrl(inputUrl, '10-Q');
+      expect(result).toBe(inputUrl);
+    });
+
+    it('skips XBRL linkbase and summary files even for XML-primary forms', async () => {
+      // For Form 4 with junk XBRL fragments mixed in (theoretical edge case),
+      // the resolver should still pick form4.xml over the linkbases.
+      mockFetch({
+        directory: {
+          item: [
+            { name: 'aapl_lab.xml', type: 'text.gif', size: '999999' },
+            { name: 'aapl_pre.xml', type: 'text.gif', size: '888888' },
+            { name: 'FilingSummary.xml', type: 'text.gif', size: '777777' },
+            { name: 'R1.xml', type: 'text.gif', size: '666666' },
+            { name: 'form4.xml', type: 'text.gif', size: '5000' },
+          ],
+        },
+      });
+      const result = await resolveSecPrimaryDocumentUrl(
+        'https://www.sec.gov/Archives/edgar/data/320193/000114036126020298/0001140361-26-020298-index.htm',
+        '4',
+      );
+      expect(result).toContain('form4.xml');
+    });
+  });
+
   describe('Failure paths — never break the email link', () => {
     it('returns the input URL when fetch throws (network error)', async () => {
       const inputUrl =
