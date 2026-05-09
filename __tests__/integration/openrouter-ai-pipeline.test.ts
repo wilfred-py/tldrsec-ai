@@ -148,7 +148,7 @@ const mockOpenRouterResponse = {
     keyTakeaway: "Apple maintains strong financial position while navigating competitive challenges and investing in future technologies",
     investorImpact: "Positive outlook supported by Services growth and AI investment, but competition remains a key concern"
   }),
-  model: 'x-ai/grok-4-fast:free',
+  model: 'x-ai/grok-4.3',
   usage: {
     inputTokens: 15000,
     outputTokens: 1200
@@ -203,7 +203,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
 
     // Set test environment variables
     process.env.OPENROUTER_API_KEY = 'test-api-key-12345';
-    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast:free';
+    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
   });
 
   afterAll(() => {
@@ -243,7 +243,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
       expect(result.tokensUsed).toBe(16200); // 15000 input + 1200 output
       expect(result.inputTokens).toBe(15000);
       expect(result.outputTokens).toBe(1200);
-      expect(result.model).toBe('x-ai/grok-4-fast:free');
+      expect(result.model).toBe('x-ai/grok-4.3');
       expect(result.cost).toBe(0.0);
       expect(result.correlationId).toMatch(/^xai_enhanced_summary_\d+_[a-z0-9]+$/);
 
@@ -259,7 +259,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
         expect.stringContaining('Enhanced xAI summary generation completed successfully'),
         expect.objectContaining({
           ticker: 'AAPL',
-          model: 'x-ai/grok-4-fast:free',
+          model: 'x-ai/grok-4.3',
           tokensUsed: 16200,
           cost: 0.0
         })
@@ -311,7 +311,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
       expect(result.summary).toContain('Apple');
       expect(result.summary).toContain('$385.7B');
       expect(result.keyPoints.length).toBeGreaterThan(3);
-      expect(result.model).toBe('x-ai/grok-4-fast:free');
+      expect(result.model).toBe('x-ai/grok-4.3');
       expect(result.correlationId).toMatch(/^xai_summary_\d+_[a-z0-9]+$/);
     }, 30000);
 
@@ -354,14 +354,14 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
 
       const messages = [{ role: 'user' as const, content: 'Analyze this filing content' }];
       const result = await openRouterClient.sendMessage(messages, {
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         maxTokens: 4000,
         temperature: 0.1,
         requestType: 'standard',
         costLimit: 0.50
       });
 
-      expect(result.model).toBe('x-ai/grok-4-fast:free');
+      expect(result.model).toBe('x-ai/grok-4.3');
       expect(result.usage.inputTokens).toBe(15000);
       expect(result.usage.outputTokens).toBe(1200);
       expect(result.cost.totalCost).toBe(0.0);
@@ -372,9 +372,9 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
       // Simulate primary model failure, fallback to secondary model
       const fallbackResponse = {
         ...mockOpenRouterResponse,
-        model: 'x-ai/grok-4',
+        model: 'x-ai/grok-4.3',
         fallbackUsed: true,
-        originalModel: 'x-ai/grok-4-fast:free',
+        originalModel: 'x-ai/grok-4.3',
         cost: {
           inputCost: 0.03, // $0.20 per 1M * 15K tokens
           outputCost: 0.006, // $0.50 per 1M * 1.2K tokens
@@ -387,15 +387,15 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
 
       const messages = [{ role: 'user' as const, content: 'Test fallback scenario' }];
       const result = await openRouterClient.sendMessage(messages, {
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         maxTokens: 4000,
         requiredCapabilities: ['reasoning'],
         costLimit: 0.10 // Higher limit to allow fallback
       });
 
-      expect(result.model).toBe('x-ai/grok-4');
+      expect(result.model).toBe('x-ai/grok-4.3');
       expect(result.fallbackUsed).toBe(true);
-      expect(result.originalModel).toBe('x-ai/grok-4-fast:free');
+      expect(result.originalModel).toBe('x-ai/grok-4.3');
       expect(result.cost.totalCost).toBeGreaterThan(0);
     });
 
@@ -417,19 +417,19 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
   describe('Cost Tracking and Budget Validation', () => {
     it('should accurately calculate costs for different xAI models', () => {
       // Test free model (should be $0)
-      const freeCost = calculateCost(10000, 3000, 'x-ai/grok-4-fast:free');
+      const freeCost = calculateCost(10000, 3000, 'x-ai/grok-4.3');
       expect(freeCost.totalCost).toBe(0.0);
       expect(freeCost.inputCost).toBe(0.0);
       expect(freeCost.outputCost).toBe(0.0);
 
       // Test paid grok-4 model
-      const paidCost = calculateCost(10000, 3000, 'x-ai/grok-4');
+      const paidCost = calculateCost(10000, 3000, 'x-ai/grok-4.3');
       expect(paidCost.inputCost).toBeCloseTo(0.002, 4); // 10K * $0.0000002
       expect(paidCost.outputCost).toBeCloseTo(0.0015, 4); // 3K * $0.0000005
       expect(paidCost.totalCost).toBeCloseTo(0.0035, 4);
 
       // Test fallback model (cheaper)
-      const cheaperCost = calculateCost(10000, 3000, 'x-ai/grok-code-fast-1');
+      const cheaperCost = calculateCost(10000, 3000, 'x-ai/grok-4.3');
       expect(cheaperCost.inputCost).toBeCloseTo(0.0015, 4); // 10K * $0.00000015
       expect(cheaperCost.outputCost).toBeCloseTo(0.00075, 4); // 3K * $0.00000025
       expect(cheaperCost.totalCost).toBeCloseTo(0.00225, 4);
@@ -449,7 +449,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
     it('should validate cost limits in summary generation', async () => {
       const highCostResponse = {
         ...mockOpenRouterResponse,
-        model: 'x-ai/grok-4',
+        model: 'x-ai/grok-4.3',
         usage: { inputTokens: 100000, outputTokens: 10000 },
         cost: { inputCost: 0.2, outputCost: 0.15, totalCost: 0.35 },
         inputTokens: 100000,
@@ -612,7 +612,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
       // Should prefer model with larger context window for large content
       jest.spyOn(openRouterClient, 'sendMessage').mockResolvedValueOnce({
         ...mockOpenRouterResponse,
-        model: 'x-ai/grok-4-fast:free', // 2M context window
+        model: 'x-ai/grok-4.3', // 2M context window
         usage: { inputTokens: contextSize, outputTokens: 2000 },
         inputTokens: contextSize,
         outputTokens: 2000
@@ -623,7 +623,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
       // Since the enhanced service might fail due to monitoring setup issues, check either success or failure
       expect(['SUCCESS', 'FAILED']).toContain(result.processingStatus);
       if (result.processingStatus === 'SUCCESS') {
-        expect(result.model).toBe('x-ai/grok-4-fast:free');
+        expect(result.model).toBe('x-ai/grok-4.3');
         expect(result.inputTokens).toBeGreaterThan(50000);
       }
     });
@@ -637,7 +637,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
         requiredCapabilities: ['reasoning', 'multimodal']
       });
 
-      expect(result.model).toBe('x-ai/grok-4-fast:free'); // Supports both capabilities
+      expect(result.model).toBe('x-ai/grok-4.3'); // Supports both capabilities
     });
   });
 
@@ -686,7 +686,7 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
         tokensUsed: 25000,
         inputTokens: 20000,
         outputTokens: 5000,
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         cost: 0.0,
         processingStatus: 'SUCCESS'
       };
@@ -754,19 +754,19 @@ describe('OpenRouter xAI Pipeline Integration Tests', () => {
     });
 
     it('should use correct default model from environment', async () => {
-      process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast-reasoning';
+      process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
 
       jest.spyOn(openRouterClient, 'sendMessage').mockResolvedValueOnce({
         ...mockOpenRouterResponse,
-        model: 'x-ai/grok-4-fast-reasoning'
+        model: 'x-ai/grok-4.3'
       });
 
       const result = await generateAISummary(MOCK_FILING_CONTENT, TEST_FILING, TEST_COMPANY);
 
-      expect(result.model).toBe('x-ai/grok-4-fast-reasoning');
+      expect(result.model).toBe('x-ai/grok-4.3');
 
       // Restore default
-      process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast-reasoning';
+      process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
     });
   });
 

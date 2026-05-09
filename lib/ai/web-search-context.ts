@@ -362,7 +362,7 @@ export async function runEnrichment(
     return [];
   }
 
-  const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.1-fast';
+  const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.3';
 
   const applicable = providers.filter(p => p.detect(content, formType));
   if (applicable.length === 0) {

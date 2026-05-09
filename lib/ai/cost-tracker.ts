@@ -9,6 +9,7 @@ import { prisma } from '../db/connection';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { alertService } from '../monitoring/alert-service';
+import { calculateCost } from './token-counter';
 
 /**
  * Cost tracking types
@@ -67,9 +68,21 @@ export interface ModelPricing {
 }
 
 /**
- * Default model pricing (can be overridden via environment variables)
+ * Default model pricing (can be overridden via environment variables).
+ *
+ * Single live entry: x-ai/grok-4.3 at the ≤200K-input tier ($1.25/$2.50/M).
+ * Calls exceeding 200K tokens are billed at the higher tier ($2.50/$5.00/M);
+ * use calculateCost() in token-counter.ts for tier-aware reporting.
+ *
+ * Legacy Claude entries are NOT used (the codebase fully migrated to xAI Grok)
+ * but are kept here for backward-compat with stored cost-tracking rows that
+ * may reference these slugs from the pre-migration era.
  */
 const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
+  'x-ai/grok-4.3': {
+    inputCostPerToken: 0.00000125, // $1.25/M
+    outputCostPerToken: 0.0000025  // $2.50/M
+  },
   'claude-sonnet-4': {
     inputCostPerToken: 0.000003,
     outputCostPerToken: 0.000015
@@ -77,14 +90,6 @@ const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-haiku-3.5': {
     inputCostPerToken: 0.00000025,
     outputCostPerToken: 0.00000125
-  },
-  'x-ai/grok-beta': {
-    inputCostPerToken: 0.00000015,
-    outputCostPerToken: 0.00000025
-  },
-  'x-ai/grok-4': {
-    inputCostPerToken: 0.0000003,
-    outputCostPerToken: 0.0000005
   }
 };
 
@@ -133,13 +138,27 @@ export class AICostTracker {
   }
 
   /**
-   * Estimate cost for an AI operation before execution
+   * Estimate cost for an AI operation before execution.
+   *
+   * For grok-4.3 (and any future grok-4.X.Y variant), routes through
+   * token-counter.calculateCost() so tier-aware pricing is honored: requests
+   * with >200K input tokens are billed at the high tier ($2.50/$5.00 per M)
+   * instead of the low tier ($1.25/$2.50). Without this, large-filing chunked
+   * summaries would under-report cost by 2x and silently skew the budget
+   * alarms (AI_DAILY_BUDGET / AI_MONTHLY_BUDGET) — the exact failure mode
+   * this migration is supposed to eliminate.
+   *
+   * Legacy/non-Grok models still use the flat per-token rate from modelPricing.
    */
   estimateCost(
     model: string,
     inputTokens: number,
     outputTokens: number = 0
   ): number {
+    if (/grok-4\.3/.test(model)) {
+      return calculateCost(inputTokens, outputTokens, model).totalCost;
+    }
+
     const pricing = this.modelPricing[model];
     if (!pricing) {
       logger.warn('No pricing information for model, using default', {

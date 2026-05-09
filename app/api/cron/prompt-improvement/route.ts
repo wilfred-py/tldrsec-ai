@@ -77,7 +77,7 @@ export async function GET(request: Request) {
 
     for (const [filingType, samples] of significantClusters) {
       try {
-        const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free';
+        const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.3';
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {

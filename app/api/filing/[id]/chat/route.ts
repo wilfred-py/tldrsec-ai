@@ -12,7 +12,7 @@ const chatLogger = logger.child('filing-chat');
 const rateLimitMap = new Map<string, number>();
 const RATE_LIMIT = 10;
 
-const MODEL = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free';
+const MODEL = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.3';
 
 const SYSTEM_PROMPT = `You are an SEC filing analyst. Answer questions only about the specific SEC filing provided below. Be concise, accurate, and cite specific numbers or sections from the filing when possible.
 

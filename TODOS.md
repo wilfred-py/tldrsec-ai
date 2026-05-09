@@ -97,3 +97,42 @@ initial ship but worth doing later.
 - **Add formula tooltip explaining 250 WPM assumption** — the initial
   `(est.)` suffix is shallow; deeper disclosure of the
   `(input - output) * 0.75 / 250` derivation lives behind a "?" affordance.
+
+## P2 — Grok 4.3 migration follow-ups (deferred from /autoplan #wilfred-py/grok-4-3-upgrade)
+
+Deferred during /autoplan adversarial review of the Grok 4.3 migration. These
+came from the CEO/Eng phases and are out of scope for the deadline-driven ship
+(xAI retired all prior Grok models 2026-05-15) but worth doing soon.
+
+- **Vendor abstraction layer (`lib/ai/provider.ts`).** The migration entrenched
+  single-vendor lock-in. Wrap all AI calls behind a `ModelProvider` interface
+  so the next forced migration (or a vendor-diversification spike) becomes a
+  config flip, not a 25-file rewrite. CEO Phase 1 flagged this as a critical
+  strategic risk.
+- **Spike one alternate-vendor benchmark on a 50-filing eval.** OpenAI
+  gpt-4o-mini ($0.15/$0.60 per M) and Anthropic Haiku 4.5 ($1/$5) are 8× and
+  comparable to grok-4.3 on input cost respectively. We never benchmarked them
+  before committing to a 4-5× cost increase. Half-day of work; potential
+  $thousands/month savings if Grok 4.3 isn't materially better on SEC summary
+  quality.
+- **Multi-vendor fallback chain via OpenRouter.** OpenRouter already abstracts
+  Anthropic/OpenAI behind the same client. With current single-element chain,
+  one Grok 4.3 outage during a 13D filing storm = 4-hour pipeline outage. ~2
+  hours to wire a secondary vendor as the chain's second link.
+- **50-filing pre/post quality eval.** This PR shipped on a 5-call dev smoke
+  test; we don't actually know if grok-4.3 regresses on Form 4 transaction
+  codes, 10-K narrative compression, or sentiment scoring. Build a golden-set
+  diff harness (sample 50 recently-emailed summaries, regenerate on grok-4.3,
+  human-rate on a 5-point rubric).
+- **`lib/error-handling/model-fallback.ts` mislabel cleanup.** Line 54 labels
+  `claude-sonnet-4-20250514` as "Claude 3 Opus" with $15/$75 (Opus) prices.
+  Either correct the label/prices or delete the entire `ClaudeModels` map (we
+  don't use it; everything runs on xAI Grok now). Used by
+  `__tests__/error-handling/model-fallback.test.ts` so requires test update.
+- **Cost-impact dashboard.** The Grok 4.3 migration is a 4.17× input / 5.0×
+  output cost increase. Pull last 30 days of `lib/ai/cost-tracker.ts` data,
+  project new monthly burn, and post the delta to PostHog/Slack so the next
+  unit-economics review has a number, not a vibe.
+- **xAI deadline-extension request.** When xAI next does a hard kill date,
+  email enterprise support requesting a 30-day extension before assuming the
+  deadline is fixed. Free option, ~1 minute. Track as a runbook item.

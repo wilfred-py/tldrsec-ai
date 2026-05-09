@@ -117,7 +117,7 @@ ${context}`;
       { role: 'user', content: message },
     ];
 
-    const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free';
+    const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.3';
     const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
