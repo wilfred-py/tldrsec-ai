@@ -10,6 +10,7 @@
 import {
   findForeignTickers,
   validateTickerGrounding,
+  validateTickerGroundingInPlace,
 } from '../../../lib/ai/parsers/ticker-grounding';
 
 describe('findForeignTickers', () => {
@@ -102,5 +103,72 @@ describe('validateTickerGrounding', () => {
     const result = validateTickerGrounding('   ', 'JPM');
     expect(result.rejected).toBe(false);
     expect(result.value).toBe('   ');
+  });
+});
+
+describe('validateTickerGroundingInPlace', () => {
+  it('redacts whyItMatters and headline when foreign ticker contaminates either', () => {
+    const data: Record<string, unknown> = {
+      headline: 'JPM files $80B shelf registration',
+      whyItMatters: 'This shelf provides TSLA flexible, low-cost capital access.',
+      summary: 'JPMorgan Chase registered up to $80,000,000,000 of securities.',
+    };
+    const violations = validateTickerGroundingInPlace(data, 'JPM');
+    expect(violations.map(v => v.field).sort()).toEqual(['whyItMatters']);
+    expect(violations[0].foreignTickers).toEqual(['TSLA']);
+    expect(data.whyItMatters).toBeUndefined();
+    expect(data.headline).toBe('JPM files $80B shelf registration');
+    expect(data.summary).toBe('JPMorgan Chase registered up to $80,000,000,000 of securities.');
+  });
+
+  it('redacts multiple prose fields independently', () => {
+    const data: Record<string, unknown> = {
+      headline: 'AAPL repurchased $14B against MSFT cloud growth.',
+      whyItMatters: 'Apple management remains optimistic. Tesla is irrelevant to this story.',
+      summary: 'Buyback authorization noted in board minutes.',
+      emailSubject: 'AAPL buyback update',
+    };
+    const violations = validateTickerGroundingInPlace(data, 'AAPL');
+    const fieldNames = violations.map(v => v.field).sort();
+    expect(fieldNames).toEqual(['headline', 'whyItMatters']);
+    expect(data.headline).toBeUndefined();
+    expect(data.whyItMatters).toBeUndefined();
+    expect(data.summary).toBeDefined();
+    expect(data.emailSubject).toBe('AAPL buyback update');
+  });
+
+  it('returns empty violations when expected ticker is missing', () => {
+    const data: Record<string, unknown> = {
+      whyItMatters: 'This $5B shelf provides TSLA capital.',
+    };
+    expect(validateTickerGroundingInPlace(data, undefined)).toEqual([]);
+    expect(validateTickerGroundingInPlace(data, '')).toEqual([]);
+    expect(validateTickerGroundingInPlace(data, 'UNKNOWN')).toEqual([]);
+    // Field is preserved when we can't ground.
+    expect(data.whyItMatters).toBe('This $5B shelf provides TSLA capital.');
+  });
+
+  it('leaves grounded data untouched and reports no violations', () => {
+    const data: Record<string, unknown> = {
+      headline: 'JPM CEO Dimon discusses Q1 EPS guidance',
+      whyItMatters: 'Capital ratios held above regulatory minimums for the third straight quarter.',
+      summary: 'JPMorgan reported Q1 results.',
+    };
+    const snapshot = { ...data };
+    expect(validateTickerGroundingInPlace(data, 'JPM')).toEqual([]);
+    expect(data).toEqual(snapshot);
+  });
+
+  it('skips non-string fields without crashing', () => {
+    const data: Record<string, unknown> = {
+      whyItMatters: 42,
+      headline: null,
+      summary: { wrong: 'shape' },
+      emailSubject: ['array'],
+    };
+    expect(validateTickerGroundingInPlace(data, 'JPM')).toEqual([]);
+    // Non-string fields are left alone (only redaction happens on rejection).
+    expect(data.whyItMatters).toBe(42);
+    expect(data.headline).toBeNull();
   });
 });

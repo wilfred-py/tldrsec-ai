@@ -15,6 +15,9 @@ import { getServerPostHog } from '../analytics/posthog-server';
  */
 const POSTHOG_METRIC_PREFIX_ALLOWLIST: readonly string[] = [
   'ai.x_sentiment_',
+  'ai.ticker_grounding_',
+  'ai.why_it_matters_',
+  'ai.numeric_grounding_',
 ];
 
 /** Stable distinctId for operational metrics — they are not user-attributable. */

@@ -20,8 +20,11 @@ describe('Unified Filing Prompts', () => {
 
       const { systemPrompt, userPrompt } = generateFilingPrompt(config);
 
-      // Prompt must start with JSON requirements
-      expect(systemPrompt).toMatch(/^CRITICAL: You must respond with ONLY valid JSON/);
+      // Prompt must include the JSON-only directive. The grounding block
+      // (PR added in v0.0.27.2) prepends anti-hallucination rules before
+      // the JSON-formatting rules, so this is a contains-check rather than
+      // a starts-with anchor.
+      expect(systemPrompt).toContain('CRITICAL: You must respond with ONLY valid JSON');
 
       // Prompt must include schema before content (when content is provided)
       expect(userPrompt.indexOf('JSON Schema:')).toBeLessThan(userPrompt.indexOf('Filing Content:'));
