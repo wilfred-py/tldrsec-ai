@@ -92,17 +92,17 @@ describe('Campaign CTA href contract (AC12)', () => {
       expect(hrefs.some(h => h.includes('/sign-up'))).toBe(false);
     });
 
-    it('embeds an EDGAR source link so the summary is auditable', async () => {
-      // The source link goes through `getSecFilingViewerUrl()` — same path
-      // production filing emails use. The fallback fixture leaves
-      // `filingUrl` empty (hardcoded accession-based URLs rotted to 404s
-      // in QA), so the helper resolves to EDGAR's companysearch landing
-      // page — a real, working entry point. DB-driven sends with a real
-      // `Summary.filingUrl` get the proper `/Archives/edgar/data/...-index`
-      // pass-through.
+    it('omits the EDGAR source link entirely when the fallback fixture has no real filingUrl', async () => {
+      // The fallback fixture sets `filingUrl: ''` (curated narrative not tied
+      // to a real accession). Pre-fix, this produced an EDGAR companysearch
+      // link that users read as a broken redirect. Post-fix, `email1()`
+      // collapses to "Filed: <date>" with no anchor when `filingUrl` is
+      // empty. DB-driven sends carry a real URL and continue to render the
+      // link (covered by the regression suite at
+      // __tests__/email/campaign-edgar-link.test.ts).
       const { html } = await getCampaignEmailContent(1, baseOptions);
       const hrefs = ctaHrefs(html);
-      expect(hrefs.some(h => h.startsWith('https://www.sec.gov/'))).toBe(true);
+      expect(hrefs.some(h => h.startsWith('https://www.sec.gov/'))).toBe(false);
     });
   });
 });

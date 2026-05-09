@@ -294,7 +294,17 @@ async function storeSummaryForTicker(
             }
           } : {})
         },
-        update: summaryData
+        update: {
+          ...summaryData,
+          // Re-summarization paths (cache refresh, retry, model change) must
+          // refresh the primary doc URL too. Pre-fix the update branch only
+          // wrote summaryData, so a row first ingested before primaryDocUrl
+          // was tracked stayed at url=null forever — which broke the email
+          // link path that prefers `Summary.url` over `Summary.filingUrl`.
+          // Only overwrite when the caller actually has a primaryDocUrl;
+          // a missing one shouldn't clobber a previously-good value.
+          ...(metadata.primaryDocUrl ? { url: metadata.primaryDocUrl } : {}),
+        },
       });
     });
   } catch (error) {

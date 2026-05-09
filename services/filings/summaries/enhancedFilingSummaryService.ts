@@ -200,6 +200,7 @@ export async function getEnhancedFilingSummary(
           keyPoints,
           {
             accessionNumber: filing.accessionNumber,
+            primaryDocUrl: filing.primaryDocUrl,
             model: 'fallback',
             failureReason: 'Document content could not be retrieved',
             fetchMethod
@@ -280,6 +281,7 @@ export async function getEnhancedFilingSummary(
             keyPoints,
             {
               accessionNumber: filing.accessionNumber,
+            primaryDocUrl: filing.primaryDocUrl,
               model: 'fallback',
               failureReason: 'AI summarization failed',
               fetchMethod
@@ -326,6 +328,7 @@ export async function getEnhancedFilingSummary(
         summaryJSON.keyPoints || [],
         {
           accessionNumber: filing.accessionNumber,
+          primaryDocUrl: filing.primaryDocUrl,
           content: content.substring(0, 5000),
           tokensUsed: summaryJSON.tokensUsed,
           inputTokens: summaryJSON.inputTokens,

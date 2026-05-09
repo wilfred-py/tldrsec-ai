@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.27.2] - 2026-05-09
+
+### Fixed
+- **Campaign + production summary emails now redirect to the actual filing.** SEC links from email templates were landing recipients on EDGAR's company-search page (when the source URL was empty) or the filing's `-index.htm` documents-list page (the most common shape) instead of the actual filing document. Diagnostic against prod found 100% of recent `Summary` rows had `url` null and `filingUrl` in `-index.htm` shape, so the simple "prefer Summary.url" fix would have been a no-op. Resolver wire-in via `resolveSecPrimaryDocumentUrl` now upgrades index URLs to primary docs (cache-keyed by accession, ≤3 EDGAR fetches per campaign batch regardless of recipient count) inside `fetchCampaignFilings()` and a new `safeResolveFilingUrl` helper inside `summary-service.ts` (digest + per-filing notification paths). Validated end-to-end: AAPL Form 4 `-index.htm` → `form4.xml` (XSLT-rendered), AMZN 8-K `-index.htm` → `amzn-20260331xex991.htm`.
+- **Resolver gap for ownership forms.** `resolveSecPrimaryDocumentUrl` only matched `.htm` primary docs — ownership forms (3/4/5/144/13G/13D) are pure XML with no HTM, and the resolver returned the input URL unchanged for ~60% of typical campaign rows. Extended with a form-type-gated XML fallback using `getXsltStylesheetDir`. Discovered EDGAR's `index.json` returns `type: "text.gif"` for every item in production (the API's type field is unreliable), so the fallback uses name-pattern filtering for XBRL noise and form-type gating instead of type-matching. Downstream `getSecFilingViewerUrl` injects the XSLT stylesheet path so recipients see a rendered filing, not raw XML.
+- **Ingestion gap left `Summary.url` 100% null.** `filingSummaryService.ts` (the active production path) had 5 `storeSummary` call sites and `enhancedFilingSummaryService.ts` had 3 — none passed `primaryDocUrl` in the metadata block. `directFilingSummaryService.ts` was the only correct path but isn't the one used. Fixed at all 8 call sites. Net: future ingestions populate `Summary.url`, the renderer-layer resolver becomes a backstop instead of being load-bearing.
+- **`filingDatabase` upsert update branch didn't refresh `url` on re-summarization.** Cache refresh, retry, and model change paths froze `url` at first-ingest value. Added guarded write (only overwrites when caller has a value, never clobbers a previously-good URL with null).
+- **Campaign fallback fixture's empty URL produced a misleading "Source: SEC EDGAR" link to companysearch.** The hero anchor is now omitted entirely when no real per-filing URL is present — line collapses to `Filed: <month>` rather than routing recipients to a search page.
+- **`fetchScoredSummariesLast30Days` threw on orphan rows.** Prisma's required-relation contract throws on the entire findMany batch when even one Summary row has a deleted Ticker. Added `ticker: { is: {} }` filter so orphaned rows are skipped instead of failing the whole campaign send.
+
+### Added
+- **Render-layer regression suite** at `__tests__/email/campaign-edgar-link.test.ts` (16 tests). Covers `toCampaignFiling` field preference + `email1()` rendered href across all three observed input shapes (primary doc, `-index.htm`, empty), with explicit anti-regression assertions for the companysearch URL.
+- **5 new XML-fallback regression tests** in `url-utils-primary-doc.test.ts`: real EDGAR shape (form4.xml only), form-type gating (no fallback for 10-Q with junk XBRL), XBRL linkbase / FilingSummary / R-file exclusion.
+
 ## [0.0.27.1] - 2026-05-08
 
 ### Changed

@@ -358,6 +358,7 @@ export async function getFilingSummary(
           keyPoints,
           {
             accessionNumber: filing.accessionNumber,
+            primaryDocUrl: filing.primaryDocUrl,
             model: 'fallback',
             failureReason: 'Document content could not be retrieved',
             filingDetails: filingDetails
@@ -402,6 +403,7 @@ export async function getFilingSummary(
           keyPoints,
           {
             accessionNumber: filing.accessionNumber,
+            primaryDocUrl: filing.primaryDocUrl,
             model: 'fallback',
             failureReason: `Content validation failed: ${validation.reason}`,
             contentLength: validation.contentLength,
@@ -469,6 +471,7 @@ export async function getFilingSummary(
           keyPoints,
           {
             accessionNumber: filing.accessionNumber,
+            primaryDocUrl: filing.primaryDocUrl,
             model: 'fallback',
             failureReason: 'AI summarization failed',
             filingDetails: filingDetails
@@ -513,6 +516,7 @@ export async function getFilingSummary(
           keyPoints,
           {
             accessionNumber: filing.accessionNumber,
+            primaryDocUrl: filing.primaryDocUrl,
             model: 'fallback',
             failureReason: `AI summary validation failed: ${summaryValidation.reason}`,
             filingDetails: filingDetails
@@ -538,6 +542,7 @@ export async function getFilingSummary(
         summaryJSON.keyPoints || [],
         {
           accessionNumber: filing.accessionNumber,
+          primaryDocUrl: filing.primaryDocUrl,
           content: content.substring(0, 5000),
           documentType: mainDocument?.type || 'unknown',
           documentDescription: mainDocument?.description || 'unknown',

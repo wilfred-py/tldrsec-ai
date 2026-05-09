@@ -72,10 +72,12 @@ export const CAMPAIGN_FALLBACK_HERO: CampaignFallbackHero = {
   filedDateLabel: 'March 2026',
   // Empty by design: the curated fallback narrative doesn't correspond to a
   // single real filing, and hardcoded accession numbers rotted to 404s in
-  // QA. `getSecFilingViewerUrl('')` returns EDGAR's companysearch landing
-  // page — a real, working entry point where users can audit the source by
-  // searching the ticker themselves. DB-driven sends still get real URLs
-  // through `toCampaignFiling` → `Summary.filingUrl`.
+  // QA. When `filingUrl` is empty, `email1()` omits the "Source: SEC EDGAR"
+  // anchor entirely — the line collapses to "Filed: <date>". This avoids
+  // routing recipients to EDGAR's companysearch page (a behavior users
+  // perceived as a broken redirect). DB-driven sends still get real URLs
+  // through `toCampaignFiling` → `Summary.url ?? Summary.filingUrl` and
+  // continue to render the link.
   filingUrl: '',
   variantASubject: 'NVDA: 3 customers each booked over 13% last quarter',
   variantBSubject: 'The 10-Q every NVDA holder needs to see',
