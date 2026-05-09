@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.27.3] - 2026-05-09
+
+### Added
+- **Architecture deepening process docs (groundwork for nightly autonomous reviews).** Seeds the vocabulary, process, and ADR scaffolding consumed by a scheduled `/improve-codebase-architecture` routine. New files: `LANGUAGE.md` (shared vocabulary — module / interface / seam / adapter / depth / leverage / locality, with the deletion test and "interface is the test surface" principle), `process/improve-codebase-architecture.md` (the review process, including an autonomous-mode branch that bypasses interactive prompts), `process/Deepening/deepening.md` (dependency categories: in-process, local-substitutable, remote-but-owned via ports & adapters, true-external; seam discipline; replace-don't-layer testing strategy), `process/Deepening/interface-design.md` ("Design It Twice" parallel sub-agent pattern), `CONTEXT.md` (domain glossary seeded with Filing / Summary / Subscription / Onboarding — populated lazily as future deepenings name new modules), and `docs/adr/README.md` (ADR format + numbering rules for decisions the routine should not re-litigate).
+- **Nightly remote routine paired with these docs.** A claude.ai cloud routine (`trig_01QLWeP3wFp2UiKwpeAaXHVa`, fires daily at 14:00 UTC) reads the process docs, scans for shallow modules, and opens up to 3 PRs per night (one deepening per PR) plus up to 5 `architecture-gap` issues. Manage at https://claude.ai/code/routines/trig_01QLWeP3wFp2UiKwpeAaXHVa.
+
 ## [0.0.27.2] - 2026-05-09
 
 ### Fixed
@@ -16,11 +22,6 @@ All notable changes to this project will be documented in this file.
 - **Render-layer regression suite** at `__tests__/email/campaign-edgar-link.test.ts` (16 tests). Covers `toCampaignFiling` field preference + `email1()` rendered href across all three observed input shapes (primary doc, `-index.htm`, empty), with explicit anti-regression assertions for the companysearch URL.
 - **5 new XML-fallback regression tests** in `url-utils-primary-doc.test.ts`: real EDGAR shape (form4.xml only), form-type gating (no fallback for 10-Q with junk XBRL), XBRL linkbase / FilingSummary / R-file exclusion.
 
-## [0.0.27.3] - 2026-05-09
-
-### Added
-- **Architecture deepening process docs (groundwork for nightly autonomous reviews).** Seeds the vocabulary, process, and ADR scaffolding consumed by a scheduled `/improve-codebase-architecture` routine. New files: `LANGUAGE.md` (shared vocabulary — module / interface / seam / adapter / depth / leverage / locality, with the deletion test and "interface is the test surface" principle), `process/improve-codebase-architecture.md` (the review process, including an autonomous-mode branch that bypasses interactive prompts), `process/Deepening/deepening.md` (dependency categories: in-process, local-substitutable, remote-but-owned via ports & adapters, true-external; seam discipline; replace-don't-layer testing strategy), `process/Deepening/interface-design.md` ("Design It Twice" parallel sub-agent pattern), `CONTEXT.md` (domain glossary seeded with Filing / Summary / Subscription / Onboarding — populated lazily as future deepenings name new modules), and `docs/adr/README.md` (ADR format + numbering rules for decisions the routine should not re-litigate).
-- **Nightly remote routine paired with these docs.** A claude.ai cloud routine (`trig_01QLWeP3wFp2UiKwpeAaXHVa`, fires daily at 14:00 UTC) reads the process docs, scans for shallow modules, and opens up to 3 PRs per night (one deepening per PR) plus up to 5 `architecture-gap` issues. Manage at https://claude.ai/code/routines/trig_01QLWeP3wFp2UiKwpeAaXHVa.
 ## [0.0.27.1] - 2026-05-08
 
 ### Changed
