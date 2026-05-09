@@ -6,9 +6,15 @@
  * Usage:
  *   npx tsx scripts/send-campaign.ts --cohort 1 --email 1 [--variant A|B] [--dry-run]
  *   npx tsx scripts/send-campaign.ts --warmup [--dry-run]
+ *   npx tsx scripts/send-campaign.ts --test-email you@example.com
  *
- * Requires: .env.local with RESEND_API_KEY, NEXT_PUBLIC_SUPABASE_URL,
- *           SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL, CRON_SECRET
+ * The --test-email mode sends warmup + email 1 (variants A and B) + email 2 to
+ * a single address. Subjects are prefixed with [TEST]. No waitlist fetch, no
+ * dedup, no log writes. Use this to preview rendered emails before a cohort blast.
+ *
+ * Requires: .env.local with RESEND_API_KEY (test-email mode only needs this).
+ *           Cohort/warmup modes also need NEXT_PUBLIC_SUPABASE_URL,
+ *           SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL, CRON_SECRET.
  */
 
 import { config } from 'dotenv';
@@ -220,17 +226,88 @@ async function renderCampaignEmail(
 
 // --- Main ---
 
+async function sendTestEmails(testAddress: string): Promise<void> {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testAddress)) {
+    console.error(`Invalid email address: ${testAddress}`);
+    process.exit(1);
+  }
+  if (!process.env.RESEND_API_KEY) {
+    console.error('RESEND_API_KEY missing from .env.local');
+    process.exit(1);
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  console.log(`\n📧 Test send → ${testAddress}\n`);
+
+  // Sequence: warmup, email 1 (A), email 1 (B), email 2.
+  // Email 2 has identical A/B subjects today so we only send one copy.
+  const sequence: Array<{ label: string; emailNum: number; variant: string }> = [
+    { label: 'warmup', emailNum: 0, variant: 'A' },
+    { label: 'email 1 — variant A', emailNum: 1, variant: 'A' },
+    { label: 'email 1 — variant B', emailNum: 1, variant: 'B' },
+    { label: 'email 2 — invite', emailNum: 2, variant: 'A' },
+  ];
+
+  for (const step of sequence) {
+    const isWarmup = step.emailNum === 0;
+    const subjectKey = isWarmup ? 'warmup' : String(step.emailNum);
+    const baseSubject = SUBJECT_LINES[subjectKey]?.[step.variant]
+      || SUBJECT_LINES[subjectKey]?.A
+      || 'tldrSEC';
+    const subject = `[TEST] ${baseSubject}`;
+
+    let content: { html: string; text: string };
+    if (isWarmup) {
+      content = await renderWarmupEmail(testAddress);
+    } else {
+      content = await renderCampaignEmail(step.emailNum, testAddress);
+    }
+
+    try {
+      const result = await resend.emails.send({
+        from: FROM_ADDRESS,
+        to: testAddress,
+        subject,
+        ...(isWarmup ? { text: content.text } : { html: content.html }),
+        tags: [
+          { name: 'campaign', value: 'test' },
+          { name: 'mode', value: 'test' },
+          { name: 'email_number', value: String(step.emailNum) },
+          { name: 'variant', value: step.variant },
+        ],
+      });
+      console.log(`  SENT ${step.label.padEnd(22)} resend=${result.data?.id}`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`  FAILED ${step.label}: ${errMsg}`);
+    }
+
+    await sleep(SEND_DELAY_MS);
+  }
+
+  console.log(`\nDone. Check ${testAddress}.\n`);
+}
+
 async function main() {
   const args = parseArgs();
+  const testEmail = typeof args['test-email'] === 'string' && args['test-email'] !== 'true'
+    ? args['test-email']
+    : null;
   const isWarmup = args.warmup === 'true';
   const isDryRun = args['dry-run'] === 'true';
   const cohortNum = parseInt(args.cohort || '0', 10);
   const emailNum = parseInt(args.email || '0', 10);
   const variant = (args.variant || 'A').toUpperCase();
 
+  if (testEmail) {
+    await sendTestEmails(testEmail);
+    process.exit(0);
+  }
+
   if (!isWarmup && (!cohortNum || !emailNum)) {
     console.error('Usage: npx tsx scripts/send-campaign.ts --cohort 1 --email 1 [--variant A|B] [--dry-run]');
     console.error('       npx tsx scripts/send-campaign.ts --warmup [--dry-run]');
+    console.error('       npx tsx scripts/send-campaign.ts --test-email you@example.com');
     process.exit(1);
   }
 
