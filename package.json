@@ -1,7 +1,6 @@
 {
   "name": "tldrsec-ai",
-  "version": "0.0.28.0",
-
+  "version": "0.0.28.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +14,7 @@
     "worktrees:cleanup": "bash hack/cleanup_worktree.sh",
     "worktrees:stripe": "bash scripts/open-worktrees.sh stripe-integration",
     "test": "NODE_OPTIONS='--no-deprecation' jest --config=jest.config.mjs",
+    "eval:x-sentiment": "NODE_OPTIONS='--no-deprecation' jest --config=jest.config.mjs __tests__/ai/integration/x-sentiment-eval.test.ts",
     "test:esm": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs",
     "test:ts": "jest --config jest.config.js",
     "test:build": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=tests/build/jest.config.mjs",

@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.28.1] - 2026-05-10
+
+### Added
+- **Inline `[N]` citation links in X (Twitter) sentiment sections across all 9 minimalist email templates.** Synthesis paragraphs and fact-claim bullets now carry numbered superscript-baseline anchors hyperlinked to the matching x.com source (e.g., `"Bulls cited beat[1] while bears flagged guidance[2]"`). Renders end-to-end against real Grok output: TSLA 10-K/10-Q/8-K verified with 25 inline anchors total in production preview.
+- **Coverage expansion to Form 4, Form 144, DEF 14A, S-1, S-3, and generic minimalist templates.** Previously only 10-K/10-Q/8-K rendered the X sentiment block. The eligibility gate accepts 14 form types but only 3 had a render path, so ~$0.05/filing was being spent on `x_search` calls that never reached customer inboxes. Wired via a new `<XSentimentBlock>` wrapper component (server-only) that encapsulates the cast, guard, and bounded-cardinality monitoring counter.
+- **Inline citation marker parser.** `splitTextOnMarkers` and `remapMarkersInText` in `lib/ai/parsers/x-sentiment-validator.ts` parse `[N]` and `[N, M, ...]` forms with strict regex (no decimals, no unclosed brackets, no non-numeric). The validator's `sanitizeCitations` now returns an `indexMap` so F3-stripped citations leave behind correctly-renumbered markers (or drop the marker silently when its target was stripped).
+- **G2 eval gate npm alias.** `npm run eval:x-sentiment` runs the existing 5-fixture pump-and-dump / cashtag-collision / legitimate-shift / null-signal eval suite against the new prompt. All 8 bucket assertions pass.
+
+### Fixed
+- **xSentiment payload silently dropped before DB persistence (P0, regression since v0.0.25.0).** `storeSummary` constructed the persisted `summaryJSON` column from a fixed scalar field set and never threaded the F3-validated xSentiment object. End result: real $0.05 `x_search` calls succeeded, the provider logged `x_sentiment enrichment ready`, but the email render path always saw `summaryData.xSentiment === undefined` and silently fell back to no-section. Fix threads `summaryJSON.summaryJSON.xSentiment` via metadata at every `storeSummary` call site (3 in `filingSummaryService.ts`, 2 in `enhancedFilingSummaryService.ts`) and conditionally includes it in the constructed summaryJSON. Verified end-to-end against TSLA 10-K/10-Q/8-K: persisted column now has 16 keys including `xSentiment` with inline `[N]` markers in factClaims and synthesis.
+- **Validator vs renderer URL trust mismatch (silent attribution corruption).** The validator allowed `http:` and `mobile.twitter.com`; the renderer required `https:` and excluded `mobile.twitter.com`. When a URL passed validator but failed the renderer's stricter check, the renderer's filtered citation array shifted indices, silently misattributing inline `[N]` anchors to the wrong tweet. Validator now requires `https:` only and matches the renderer's host allowlist exactly.
+- **`remapMarkersInText` whitespace-collapse broke G3 IAA bit-exact preservation invariant.** The function unconditionally collapsed runs of 2+ spaces, silently rewriting legitimate content-bearing whitespace (e.g., `"Q3 revenue:  $4.2B"` from copied filing text) even when no markers were dropped. Now only collapses when at least one marker was actually dropped.
+- **Renderer cap mismatch with validator (markers `[6]`-`[10]` silently dropped).** `XSentimentSection` sliced citations to 5 but the validator allows up to 10 and remaps marker indices into 1-based positions over the full kept array. Customer email would show "missing anchor" gaps in synthesis text. Slice removed; validator's `MAX_CITATIONS=10` is now the single source of truth.
+- **Section guard for empty `factClaims`.** `shouldRenderXSentiment` now rejects when `factClaims.length === 0` regardless of confidence (previously rejected only on low confidence). Empty bullet block is visually broken; if F3 stripped everything to opinion-only, suppress the whole section. Synthesis-with-markers + empty `citationUrls` also rejected (markers without targets are dead links).
+- **Shared `g`-flag regex state leak.** `splitTextOnMarkers` previously used the module-scope `MARKER_REGEX` with `.exec()` and manual `lastIndex = 0` reset. Switched to `text.matchAll(MARKER_REGEX)` to eliminate cursor-state coupling.
+
+### Changed
+- **Validator named-step pipeline.** `validateXSentiment` refactored from a single ~80-line pass into 8 named steps (`parseEnums`, `sanitizeCitations`, `sanitizeClaims`, `sanitizeSynthesis`, `clampWindowHours`, `applyConfidenceFloor`, `degradeIfAllStripped`, plus the new `remapMarkersInText` step). Pure refactor — all 26 prior tests pass unchanged.
+- **Existing 10-K/10-Q/8-K templates refactored to use `<XSentimentBlock>`.** Each template's ~12-line conditional render block collapsed to a single JSX line. Removes ~80 LOC of duplication.
+- **`x-sentiment-provider.ts` prompt updated** to instruct Grok to emit `[N]` markers within `factClaims` text and `discussionSynthesis`. Schema unchanged on the wire — markers live inside existing string fields, so legacy payloads (no markers) round-trip unchanged.
+
 ## [0.0.27.2] - 2026-05-09
 
 ### Fixed
