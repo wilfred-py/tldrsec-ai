@@ -164,15 +164,6 @@ export class TemplateRegistry {
   }
 
   /**
-   * Check if the registry uses Map-based O(1) lookup
-   *
-   * @returns True (always uses Map for O(1) lookup)
-   */
-  static isMapBased(): boolean {
-    return true;
-  }
-
-  /**
    * Register a custom template for a filing type
    *
    * @param filingType - The filing type to register
