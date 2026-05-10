@@ -26,7 +26,7 @@ type FaqItem = {
   answerPlain: string;
 };
 
-const PRO_VS_MAX = `Pro is built for focused investors tracking a specific watchlist — up to ${PRO.tickerLimit} companies on a priority queue. Max is built for analysts and research teams covering large universes — unlimited companies with first-priority processing ahead of every other tier.`;
+const PRO_VS_MAX = `Pro is built for focused investors tracking a specific watchlist — up to ${PRO.tickerLimit} companies with standard AI summaries on a priority queue. Max is built for analysts and research teams who need every edge — unlimited companies, first-priority processing ahead of every other tier, and summaries enriched with live web context (recent news, market reaction, analyst takes) that Pro and Free don't get.`;
 
 const TRIAL_ANSWER =
   'Every paid plan starts with a 7-day trial at $0. You get full access to every Max-tier feature during the trial — unlimited company tracking, first-priority filing processing, and every filing type we support.';

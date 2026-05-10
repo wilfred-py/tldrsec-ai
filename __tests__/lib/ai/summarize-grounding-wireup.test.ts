@@ -120,6 +120,10 @@ describe('summarizeFiling — post-parse grounding wire-up', () => {
     await summarizeFiling(filingContent, {
       summaryId,
       metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: '8-K' },
+      // MAX tier prevents the producer-gate (Phase 4 of x-search-max-only)
+      // from stripping whyItMatters before the grounding assertions run.
+      userTier: 'MAX',
+      isTrialing: false,
     });
 
     const stored = await prisma.summary.findUnique({ where: { id: summaryId } });
@@ -152,6 +156,10 @@ describe('summarizeFiling — post-parse grounding wire-up', () => {
     await summarizeFiling(filingContent, {
       summaryId,
       metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: '8-K' },
+      // MAX tier prevents the producer-gate (Phase 4 of x-search-max-only)
+      // from stripping whyItMatters before the grounding assertions run.
+      userTier: 'MAX',
+      isTrialing: false,
     });
 
     const stored = await prisma.summary.findUnique({ where: { id: summaryId } });
@@ -177,6 +185,10 @@ describe('summarizeFiling — post-parse grounding wire-up', () => {
     await summarizeFiling(filingContent, {
       summaryId,
       metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: '8-K' },
+      // MAX tier prevents the producer-gate (Phase 4 of x-search-max-only)
+      // from stripping whyItMatters before the grounding assertions run.
+      userTier: 'MAX',
+      isTrialing: false,
     });
 
     const stored = await prisma.summary.findUnique({ where: { id: summaryId } });
@@ -208,6 +220,10 @@ describe('summarizeFiling — post-parse grounding wire-up', () => {
     await summarizeFiling(filingContent, {
       summaryId,
       metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: '8-K' },
+      // MAX tier prevents the producer-gate (Phase 4 of x-search-max-only)
+      // from stripping whyItMatters before the grounding assertions run.
+      userTier: 'MAX',
+      isTrialing: false,
     });
 
     const stored = await prisma.summary.findUnique({ where: { id: summaryId } });
@@ -244,6 +260,10 @@ describe('summarizeFiling — post-parse grounding wire-up', () => {
     await summarizeFiling(filingContent, {
       summaryId,
       metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: '8-K' },
+      // MAX tier prevents the producer-gate (Phase 4 of x-search-max-only)
+      // from stripping whyItMatters before the grounding assertions run.
+      userTier: 'MAX',
+      isTrialing: false,
     });
 
     const stored = await prisma.summary.findUnique({ where: { id: summaryId } });

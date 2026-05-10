@@ -144,7 +144,7 @@ export async function sendTrialExpirationEmail(
           Your 7-day trial ended on ${trialExpiredAt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
         </p>
         <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
-          You can still access the dashboard and view your existing summaries, but you won't receive new filing notifications until you upgrade.
+          You can still access the dashboard and view your existing summaries, but you won't receive new filing notifications until you upgrade. Max keeps your summaries enriched with live web context — recent news, market reaction, analyst takes — that Pro and Free don't get.
         </p>
         <div style="text-align: center; margin: 30px 0;">
           <a href="${APP_URL}/dashboard/billing" style="background-color: #0079F2; background: linear-gradient(135deg, #0079F2 0%, #8B5CF6 100%); color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 14px 0 rgba(0, 121, 242, 0.39);">
@@ -252,7 +252,7 @@ export async function sendTrialDay4Email(
         </div>
 
         <p style="color: #4a4a5a; font-size: 16px; line-height: 1.6;">
-          That's what tldrSEC has done for you since you signed up. After ${trialEndsAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}, you'll stop receiving filing summaries unless you upgrade.
+          That's what tldrSEC has done for you since you signed up — including web-context enrichment on every summary (Max-tier). After ${trialEndsAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}, you'll stop receiving filing summaries unless you upgrade. Stay on Max to keep summaries enriched with live news, market reaction, and analyst takes; Pro returns to standard summaries.
         </p>
         <div style="text-align: center; margin: 30px 0;">
           <a href="${APP_URL}/subscribe" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">

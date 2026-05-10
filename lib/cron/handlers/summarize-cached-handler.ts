@@ -20,6 +20,7 @@ import { shouldProcessFiling } from '../../filing/filing-type-preferences-mapper
 import { TrialService } from '../../auth/trial-service';
 import { parseResponse } from '../../ai/parsers/response-parser';
 import { CURRENT_FORM4_SCHEMA_VERSION } from '../../email/form4-field-normalizer';
+import { isMaxEligible } from '../../auth/tier-eligibility';
 import type { SECFilingType } from '../../ai/prompts/prompt-types';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
@@ -64,7 +65,7 @@ export async function handleSummarizeCached(
   payload: SummarizeJobPayload
 ): Promise<SummarizeResult> {
   const startTime = Date.now();
-  const { userId, userEmail, userTier: _userTier, ticker, filing, cacheId, executionContext } = payload;
+  const { userId, userEmail, userTier, ticker, filing, cacheId, executionContext } = payload;
   const executionId = executionContext?.executionId ?? `legacy-${Date.now()}`;
 
   // Defense-in-depth: fail fast if payload is missing required nested objects
@@ -87,15 +88,35 @@ export async function handleSummarizeCached(
     const { getPrismaClient } = await import('../../db/prisma');
     const prisma = getPrismaClient();
 
-    // Check if user account is soft-deleted — skip processing entirely
+    // Check if user account is soft-deleted — skip processing entirely.
+    // Also pull trial fields here so we can pass MAX-eligibility context into
+    // summarizeFilingWithValidation (Phase 4 of tasks/x-search-max-only.md):
+    // enrichment is gated at the writer, and the writer needs to know whether
+    // the requesting user qualifies as MAX (paid OR active trial).
     const dbUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { deletedAt: true },
+      select: {
+        deletedAt: true,
+        isTrialing: true,
+        trialEndsAt: true,
+      },
     });
     if (dbUser?.deletedAt) {
       summarizeLogger.info(`[${executionId}] Skipping deleted user`, { userId });
       return { success: true, emailSent: false };
     }
+
+    // Tier-aware shared cache (Phase 5 / review item 1A): a paid Pro user must
+    // never read a Max-cached enriched summary, and vice versa, or the producer
+    // gate is silently bypassed at the cache layer (failure mode F1). The cache
+    // dimension is `enrichmentApplied`, derived from MAX-eligibility of the
+    // requesting user (paid MAX OR active trial — same predicate the writer
+    // uses to decide whether to enrich in the first place).
+    const requesterIsMaxEligible = isMaxEligible({
+      tier: userTier ?? null,
+      isTrialing: dbUser?.isTrialing ?? false,
+      trialEndsAt: dbUser?.trialEndsAt ?? null,
+    });
 
     // Email delivery gate: check if user's trial is still active
     // Expired trial users don't receive emails (soft block)
@@ -342,11 +363,18 @@ export async function handleSummarizeCached(
     }
 
     // Check if any other user already has a summary for this same filing (shared summary cache)
-    // This allows us to reuse AI-generated summaries across users, reducing API costs
+    // This allows us to reuse AI-generated summaries across users, reducing API costs.
+    //
+    // Tier-aware (review item 1A): Filter by `enrichmentApplied` matching the
+    // requester's MAX-eligibility. A paid Pro user must NEVER reuse a Max-tier
+    // enriched summary or the producer-gate at `lib/ai/summarize.ts` is leaked
+    // here (silent-leak failure mode F1). The 3-col index
+    // `(filingUrl, filingType, enrichmentApplied)` keeps this an index-only scan.
     const sharedSummary = await prisma.summary.findFirst({
       where: {
         filingUrl: filing.filingUrl,
         filingType: filing.formType,
+        enrichmentApplied: requesterIsMaxEligible,
         // Ensure we have a valid summary (not a failed one)
         summaryText: { not: '' }
       },
@@ -358,7 +386,8 @@ export async function handleSummarizeCached(
         inputTokens: true,
         outputTokens: true,
         totalCost: true,
-        createdAt: true
+        createdAt: true,
+        enrichmentApplied: true
       },
       orderBy: {
         createdAt: 'desc'  // Get the most recent one
@@ -427,6 +456,10 @@ export async function handleSummarizeCached(
             inputTokens: 0,
             outputTokens: 0,
             isCacheHit: true,  // Mark as cache hit
+            // Carry tier dimension forward so future cache lookups keep matching:
+            // sharedSummary was already filtered by `enrichmentApplied = requesterIsMaxEligible`,
+            // so this row is correctly classified for either tier of subsequent reader.
+            enrichmentApplied: sharedSummary.enrichmentApplied,
             processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
             processingTimeMs: 0,  // Cached summary - no AI processing time
             metadata: {
@@ -586,7 +619,11 @@ export async function handleSummarizeCached(
       formType: filing.formType
     });
 
-    // Call summarizeFilingWithValidation for AI summary + extractor enrichment
+    // Call summarizeFilingWithValidation for AI summary + extractor enrichment.
+    // Pass tier context so the writer can gate web-search enrichment to MAX
+    // (Phase 4 of tasks/x-search-max-only.md). userTier comes from the job
+    // payload (snapshot at enqueue time); isTrialing/trialEndsAt are read
+    // fresh from the DB above to honor any trial-state changes since enqueue.
     const summaryResult = await summarizeFilingWithValidation(
       cachedContent.content,
       {
@@ -598,7 +635,10 @@ export async function handleSummarizeCached(
           filingDate: typeof filing.filingDate === 'string' ? filing.filingDate : filing.filingDate.toISOString(),
           accessionNumber: filing.accessionNumber,
           cik: ticker.cik || undefined
-        }
+        },
+        userTier,
+        isTrialing: dbUser?.isTrialing ?? false,
+        trialEndsAt: dbUser?.trialEndsAt ?? null,
       }
     );
 
@@ -646,6 +686,13 @@ export async function handleSummarizeCached(
 
     // Save summary to database
     // Note: Summary model uses tickerId, filingType, filingUrl, summaryText (not userId, formType, summary)
+    //
+    // `enrichmentApplied` mirrors the requester's MAX-eligibility — the same
+    // predicate the writer (`lib/ai/summarize.ts`) used to decide whether to
+    // run web-search enrichment. Persisting it here is what makes the next
+    // user's tier-aware cache lookup correct (review item 1A). The writer's
+    // own `summary.update` block does not fire on this path because we don't
+    // pass a summaryId; the row is created here for the first time.
     const summary = await prisma.summary.create({
       data: {
         tickerId: userTicker.id,
@@ -662,6 +709,7 @@ export async function handleSummarizeCached(
         inputTokens: summaryResult.inputTokens || 0,
         outputTokens: summaryResult.outputTokens || 0,
         isCacheHit: executionContext?.cacheHit || false,
+        enrichmentApplied: requesterIsMaxEligible,
         processingCompletedAt: new Date(), // Fix: Add missing completion timestamp
         processingTimeMs: summarizeDuration,  // AI processing duration in ms
         metadata: {

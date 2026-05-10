@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.28.3] - 2026-05-10
+
+### Added
+- **Producer-gate: web-search enrichment writes only for MAX-eligible users.** Phase 4 of the X-search-MAX-only plan (`tasks/x-search-max-only.md`). `summarizeFiling` (`lib/ai/summarize.ts`) computes `isMaxEligible({tier, isTrialing, trialEndsAt})` once at function entry; both enrichment branches (whyItMatters + xSentiment) now check the result FIRST — before PostHog flag eval or provider eligibility — so non-Max users never burn PostHog evaluations or enrichment budget for output they can't see. The boolean is persisted to `Summary.enrichmentApplied` (column shipped in v0.0.28.1) for the tier-aware cache lookup. `summarize-cached-handler` reads `isTrialing`/`trialEndsAt` from the existing user-row select for the soft-delete check (no extra query); default when tier context is missing is non-Max (safer for legacy/admin callers). Defense-in-depth: `whyItMatters` is stripped from `parsedResult.data` post-parse for non-Max requests even if a model hallucinates it.
+- **Tier-aware shared cache lookup** — Pro/Free users continue to read from the shared cache, Max users only hit cache rows where `enrichmentApplied = true`. Stops Max users from being served stale non-enriched summaries when a Pro/Free user happened to summarize the same filing first. Powered by the 3-col `[filingUrl, filingType, enrichmentApplied]` index from v0.0.28.1.
+- **Pricing copy: Pro vs Max differentiation.** Subscription page (`app/subscribe/page.tsx`), 3-tier pricing component (`components/landing/pricing-section-3-tier.tsx`, `components/landing/sections-v2/pricing-section-v2.tsx`), FAQ section (`components/landing/sections-v2/faq-section-v2.tsx`), sidebar upgrade card (`components/layout/sidebar.tsx`), trial emails (`lib/email/trial-emails.ts`), campaign emails (`lib/email/campaign-templates.ts`), and Stripe plan metadata (`lib/stripe/plans.ts`) now describe Pro as "standard summaries" ($199/month, 25 companies) and Max as "summaries enriched with live web context — recent news, market reaction, analyst takes" ($349/month, unlimited companies). Closes the loop where the product tier difference was real but invisible to prospects.
+- **Test coverage:** producer-gate behaviour (`__tests__/ai/summarize-enrichment-gate.test.ts`), cached-handler tier propagation (`__tests__/cron/handlers/summarize-cached-handler-tier-context.test.ts`), tier-aware cache concurrency + cross-tier truth table (`__tests__/cron/handlers/cache-concurrency.test.ts`, `cache-cross-tier-truth-table.test.ts`), and FAQ pricing copy regression (`__tests__/landing/faq-section-v2.test.tsx`).
+
+### Notes
+- Concludes the X-search-MAX-only gating program (Phases 1–6). Schema groundwork landed v0.0.28.1; backfill landed v0.0.28.2; this release wires the writer, reader, and pricing copy.
+
 ## [0.0.28.2] - 2026-05-10
 
 ### Added
