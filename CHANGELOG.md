@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.29.0] - 2026-05-11
+
+### Fixed
+- **Coinbase 10-Q (and any 10-K/10-Q) email no longer ships a "$NaN" earnings scorecard when the AI couldn't extract financials.** Reproduced from prod: COIN's freshly-filed Q1 2026 10-Q reached Grok with only XBRL header metadata (no income statement in the prompt window). The unified prompt instructed Grok to emit literal `"N/A"` for unavailable values; downstream `normalizeCurrency()` ran `parseFloat("N/A")` → `NaN` → `"$NaN"`, and the email rendered six rows of `$NaN` for Revenue / Gross Margin / Operating Margin / FCF Margin / Net Income / EPS. Three independent layers now block this end-to-end:
+  - **Pre-LLM content gate** at `lib/ai/parsers/financial-content-gate.ts:hasFinancialStatementSignal()`. For 10-K, 10-Q, 20-F, 6-K (and `/A` amendments) the prepared excerpt must clear at least 3 of 5 signals before the LLM call: period header (`Three Months Ended` / `Six Months Ended` / `Year Ended`), statement title (`Consolidated Statements of Operations` / `Balance Sheets` / etc.), ≥2 distinct income-statement line items, ≥10 dollar-figure tokens, ≥3000 chars. The COIN XBRL-only excerpt scores 0/5 and is rejected. Wired into `lib/ai/summarize.ts` immediately after the `PROCESSING` status update — saves the LLM call entirely.
+  - **Post-LLM scorecard gate** at `hasUsableFinancialHighlights()`. Belt-and-suspenders: even if the excerpt passed pre-gate, the AI response must contain at least one row that passes `isUsableMetricRow` (rejects `$NaN` / `N/A` / `null` / `undefined` / `Not disclosed` / `TBD` / `n/m`). Catches AI quality failures the input gate can't predict.
+  - **Template filter** wired into `components/ui/email/templates/10q-minimalist-template.tsx` and `10k-minimalist-template.tsx`. Final defensive layer — `isUsableMetricRow` (added in v0.0.26.5 but never wired into a consumer) now filters `financialHighlights` at render so a single bad row in an otherwise-good scorecard is dropped quietly, and an all-bad scorecard is suppressed entirely (the existing empty-state fallback handles the void).
+- **`INSUFFICIENT_CONTENT` processing status with automatic retry-with-backoff.** Pre-LLM gate failures now throw a typed `SummarizationError(code=AI_INSUFFICIENT_CONTENT, isRetriable=true)`. Existing worker infrastructure at `lib/job-queue/index.ts:457` (`updateJobStatus(FAILED)`) auto-converts to `RETRYING` with exponential backoff (1 → 2 → 4 → 8 → 16 minutes via `Math.pow(2, retryCount)`) on the theory that EDGAR may finish processing the document body shortly after acceptance. After `maxRetries`, the job stays `FAILED` and no email is sent. `INSUFFICIENT_CONTENT` is included in `PARTIAL_RESULT_STATUSES` so `isSuppressedFromEmail()` returns true defensively even if a writer forgets the `isPartialResult` flag.
+- **`analysis-depth.ts` financialHighlights bonus was dead code.** The 20-point structural-fidelity bonus checked `j.financials` but `response-parser.ts` aliases `financials` → `financialHighlights` and **deletes** the legacy key, so the predicate was always false. Renamed the schema field and `BONUSES` key to match the canonical name. The `pickBestSummaryForUser` ranking formula now correctly credits 10-K/10-Q summaries with extracted financials, which was the original intent introduced in v0.0.27.0.
+- **Defensive cache-layer cast.** `lib/ai/cache/summary-cache.ts` string-literal status unions extended to include `INSUFFICIENT_CONTENT`. The cache-eligibility filter (`status IN ('COMPLETED', 'COMPLETED_WITH_WARNINGS')`) already excludes the new status, but the type cast would have silently lied if someone later broadened the filter.
+
+### Notes
+- Reproduces zero `$NaN` rows in the live regression fixture (the verbatim 6-row COIN payload from `Summary 4217037e-0e18-4ce4-b56c-993fae7120f0`).
+- 175 new + updated tests across 6 suites — including 8-case sentinel parameterization (`$NaN`, `NaN`, `null`, `Null`, `undefined`, `Not disclosed`, `TBD`, `n/m`), the verbatim COIN XBRL excerpt as a pre-gate fixture, and end-to-end template render assertions.
+- New monitoring counters: `ai.content_gate_pre_llm_failed`, `ai.content_gate_post_llm_failed`. Errors observable via `Summary.processingError` field.
+
 ## [0.0.28.3] - 2026-05-10
 
 ### Added

@@ -33,6 +33,12 @@ import { getSchemaForFormType, JSONSchema } from './prompts/unified-prompts';
 import { validateTickerGroundingInPlace } from './parsers/ticker-grounding';
 import { coerceWhyItMatters } from './parsers/why-it-matters';
 import { validateNumericGrounding } from './parsers/numeric-grounding';
+import {
+  hasFinancialStatementSignal,
+  hasUsableFinancialHighlights,
+  requiresFinancialContent,
+} from './parsers/financial-content-gate';
+import { ProcessingStatus } from './processing-status';
 
 /**
  * Validates if a parsed response has all required fields for its filing type
@@ -920,7 +926,56 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         }
       });
     }
-    
+
+    // Pre-LLM content gate (10-Q / 10-K / 20-F / 6-K).
+    //
+    // Refuse to invoke the LLM when the prepared excerpt lacks
+    // financial-statement signal (no period header, no statement title,
+    // no line items, no dollar density). The unified prompt instructs
+    // the AI to emit literal "N/A" for unavailable values; downstream
+    // normalizeCurrency turns those into "$NaN" and ships a misleading
+    // scorecard.
+    //
+    // Throws a retriable SummarizationError so the worker's
+    // exponential-backoff retry mechanism (1, 2, 4, 8, 16 minutes — see
+    // JobQueueService.updateJobStatus at lib/job-queue/index.ts:457)
+    // re-attempts on the theory that EDGAR may finish processing the
+    // document body shortly after acceptance. After maxRetries the job
+    // is marked FAILED and the email is never sent.
+    //
+    // Reproduces COIN 2026-05-07 regression: parser fed Grok only XBRL
+    // namespace headers; Grok returned 6 rows of `value: "$NaN"`.
+    if (requiresFinancialContent(filingRecordFromDB.formType)) {
+      const preGate = hasFinancialStatementSignal(enrichedContent);
+      if (!preGate.ok) {
+        componentLogger.warn(
+          `Pre-LLM content gate failed for ${filingRecordFromDB.formType} (summaryId=${summaryId || 'direct'}): ${preGate.reasons.join('; ')}`,
+          { signals: preGate.signals }
+        );
+        monitoring.incrementCounter('ai.content_gate_pre_llm_failed', 1);
+        if (summaryId) {
+          await prisma.summary.update({
+            where: { id: summaryId },
+            data: {
+              processingStatus: ProcessingStatus.INSUFFICIENT_CONTENT,
+              processingCompletedAt: new Date(),
+              isPartialResult: true,
+              processingError: `Pre-LLM gate failed: ${preGate.reasons.join('; ')}`,
+              processingTimeMs: Date.now() - startTime,
+            },
+          });
+        }
+        throw new SummarizationError(
+          `Pre-LLM content gate failed for ${filingRecordFromDB.formType}: ${preGate.reasons.join('; ')}`,
+          summaryId || 'unknown',
+          filingRecordFromDB.formType,
+          ErrorCode.AI_INSUFFICIENT_CONTENT,
+          true, // retriable — EDGAR may finish processing shortly after acceptance
+          'insufficient_content'
+        );
+      }
+    }
+
     // Configure the OpenRouter request
     // Phase 4: Include system prompt for bulletproof JSON enforcement
     const model = optionsModel || getDefaultModel();
@@ -1067,6 +1122,64 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         const summaryJSONWithSentiment = capturedXSentiment
           ? { ...parsedResult.data, xSentiment: capturedXSentiment.sentiment }
           : parsedResult.data;
+
+        // Post-LLM content gate (10-Q / 10-K / 20-F / 6-K).
+        //
+        // The LLM may return structurally valid JSON (passes parser
+        // validation) where every financialHighlights row has a sentinel
+        // value like "$NaN" / "N/A". Belt-and-suspenders with the pre-LLM
+        // gate — catches cases where the excerpt LOOKED financial enough
+        // to pass pre-gate but the AI couldn't extract usable numbers.
+        // Marks as COMPLETED_WITH_WARNINGS so isSuppressedFromEmail() skips
+        // the send.
+        if (requiresFinancialContent(filingRecordFromDB.formType)) {
+          const postGate = hasUsableFinancialHighlights(parsedResult.data);
+          if (!postGate.ok) {
+            componentLogger.warn(
+              `Post-LLM content gate failed for ${filingRecordFromDB.formType} (summaryId=${summaryId || 'direct'}): ${postGate.reasons.join('; ')}`,
+              { signals: postGate.signals }
+            );
+            monitoring.incrementCounter('ai.content_gate_post_llm_failed', 1);
+            if (summaryId) {
+              await prisma.summary.update({
+                where: { id: summaryId },
+                data: {
+                  summaryText: parsedResult.data.summary,
+                  summaryJSON: summaryJSONWithSentiment,
+                  processingStatus: 'COMPLETED_WITH_WARNINGS',
+                  processingCompletedAt: new Date(),
+                  isPartialResult: true,
+                  processingError: `Post-LLM gate failed: ${postGate.reasons.join('; ')}`,
+                  processingTimeMs: Date.now() - startTime,
+                  tokensUsed: inputTokens + outputTokens,
+                  model: response.model || getDefaultModel(),
+                  modelVersion: response.model || getDefaultModel(),
+                  promptVersion: 'v1.0',
+                  cost,
+                  attempts: 1,
+                },
+              });
+            }
+            return {
+              summaryId: summaryId || undefined,
+              summary: parsedResult.data.summary as string,
+              summaryText: parsedResult.data.summary as string,
+              summaryJSON: summaryJSONWithSentiment as Record<string, unknown>,
+              keyPoints: (parsedResult.data.keyPoints || []) as string[],
+              isPartial: true,
+              parsingErrors: postGate.reasons,
+              duration: Date.now() - startTime,
+              modelUsed: response.model || getDefaultModel(),
+              model: response.model || getDefaultModel(),
+              inputTokens,
+              outputTokens,
+              tokensUsed: inputTokens + outputTokens,
+              cost,
+              processingTimeMs: Date.now() - startTime,
+              attempts: 1,
+            };
+          }
+        }
 
         // Update the summary record if summaryId exists
         if (summaryId) {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, getChangeStyle, getChangeArrow, isUsableMetricRow, markdownToHtml } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
@@ -43,12 +43,17 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
   // Extract structured data if available (from AI summaryJSON)
   const rawData = summaryData as Record<string, unknown> | undefined;
 
-  // Try to extract financial data from various possible structures
-  const financialHighlights = rawData?.financialHighlights as Array<{
+  // Try to extract financial data from various possible structures.
+  // Filter sentinel placeholder rows ("N/A" / "Null" / "$NaN") before any
+  // downstream consumer sees them — the prompt instructs the AI to emit
+  // these for unavailable values, and without filtering the scorecard
+  // renders all-"$NaN" rows.
+  const rawFinancialHighlights = rawData?.financialHighlights as Array<{
     label: string;
     value: string | number;
     change?: string | number;
   }> | undefined;
+  const financialHighlights = rawFinancialHighlights?.filter(isUsableMetricRow);
 
   const keyPoints = rawData?.keyPoints as string[] | undefined;
   const riskFactors = rawData?.riskFactors as string[] | undefined;
