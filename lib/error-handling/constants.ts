@@ -163,6 +163,7 @@ export const isRetriableError: Record<ErrorCode, boolean> = {
   [ErrorCode.AI_UNAVAILABLE]: true,
   [ErrorCode.AI_MODEL_ERROR]: true,
   [ErrorCode.AI_PARSING_ERROR]: false,
+  [ErrorCode.AI_INSUFFICIENT_CONTENT]: true,  // Retriable — EDGAR may finish processing the document body shortly after acceptance
   [ErrorCode.NETWORK_UNAVAILABLE]: true,
   [ErrorCode.CONNECTION_RESET]: true,
   [ErrorCode.RETRY_EXHAUSTED]: false,
