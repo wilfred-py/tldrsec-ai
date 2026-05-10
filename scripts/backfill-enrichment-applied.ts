@@ -32,6 +32,8 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 const DEFAULT_BATCH_SIZE = 5000;
 const DEFAULT_SLEEP_MS = 100;
@@ -177,7 +179,21 @@ async function main(): Promise<void> {
   }
 }
 
-if (require.main === module) {
+// Project is "type": "module" — `require.main === module` throws ReferenceError
+// when this file is executed directly via `tsx`. Match the ESM-safe pattern
+// already used by `scripts/verify-daily-pipeline.ts`: derive the absolute path
+// of THIS file from `import.meta.url`, compare against `process.argv[1]`, and
+// only call main() when they match. Jest's transform also handles this — the
+// regression test in `__tests__/migrations/enrichment-applied-backfill.test.ts`
+// imports `runBackfill` and the comparison evaluates to false there, so main()
+// stays dormant.
+const __filename = fileURLToPath(import.meta.url);
+const isMainModule = process.argv[1] && (
+  path.resolve(process.argv[1]) === __filename ||
+  path.resolve(process.argv[1]) === path.resolve(__filename)
+);
+
+if (isMainModule) {
   main().catch((err) => {
     log(`FATAL: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);

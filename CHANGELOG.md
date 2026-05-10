@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.29.1] - 2026-05-11
+
+### Added
+- **`prisma migrate deploy` is now wired into Vercel production builds.** New `scripts/vercel-build.sh` is invoked via the `vercel-build` package.json script (Vercel's convention for overriding `build` on its build runner). The hook runs `prisma migrate deploy` only when `VERCEL_ENV=production` — preview deploys from feature branches do not migrate. Both environments share a single Supabase database, so without this gate every preview build would race migrations against prod. New migrations now apply automatically on the first production deploy after a PR merges. Override knob: setting `SKIP_PRISMA_MIGRATE=1` on a single deploy bypasses the step (used for rolling back a bad migration without removing the file from the tree).
+
+### Fixed
+- **`scripts/backfill-enrichment-applied.ts` was unrunnable as documented.** The header advertised `npx tsx scripts/backfill-enrichment-applied.ts --dry-run` but the trailing `if (require.main === module)` guard threw `ReferenceError: require is not defined` because the project is `"type": "module"` (ESM). The jest regression test never caught it — jest's transform exposes `require`, so the import path was the only one exercised. Replaced with the same `import.meta.url` + `fileURLToPath` + `process.argv[1]` comparison used by `scripts/verify-daily-pipeline.ts` (which has identical dual-use shape: importable + directly runnable).
+
+### Operations note
+- The production `_prisma_migrations` tracking table did not exist before this PR — the schema had been built up via `prisma db push` and out-of-band SQL files, so `prisma migrate status` reported all 19 on-disk migrations as pending while their tables already existed. Resolved on 2026-05-10 by running `prisma migrate resolve --applied <name>` for each of the 19 migrations against `DIRECT_URL`. After baselining, `prisma migrate deploy` reports "No pending migrations to apply." This was a one-time fix; future migrations will track normally because the build hook above keeps the table in sync.
+
 ## [0.0.29.0] - 2026-05-11
 
 ### Fixed
