@@ -160,8 +160,13 @@ model Summary {
   invalidationReason    String?
   lastInvalidatedAt     DateTime?
   // Pre-launch features: importance scoring and smart subjects
-  importance            String? // critical, high, medium, low
-  smartSubject          String? // AI-extracted email subject line
+  importance            String?                // critical, high, medium, low
+  smartSubject          String?                // AI-extracted email subject line
+  // Web-search enrichment ("Why it matters") was applied to this summary's content.
+  // Models the data, not the consumer — set true only when the writer ran enrichment.
+  // Used by the tier-aware shared cache: Max readers want enrichmentApplied=true,
+  // Pro/Free readers want enrichmentApplied=false. See `tasks/x-search-max-only.md`.
+  enrichmentApplied     Boolean                @default(false)
 
   secFiling       SecFiling?             @relation(fields: [secFilingId], references: [id])
   ticker          Ticker                 @relation(fields: [tickerId], references: [id], onDelete: Cascade)
@@ -173,7 +178,11 @@ model Summary {
   // A filing is uniquely identified by tickerId + filingUrl
   @@unique([tickerId, filingUrl])
   @@index([filingUrl])
-  @@index([filingUrl, filingType])
+  // Cache lookup index: matches `findFirst({ filingUrl, filingType, enrichmentApplied })`.
+  // Replaces legacy `[filingUrl, filingType]` 2-col index. The actual swap is performed
+  // post-deploy by `prisma/migrations/add_enrichment_applied_index.sql` using
+  // `CREATE INDEX CONCURRENTLY` to avoid a write lock on a multi-million-row table.
+  @@index([filingUrl, filingType, enrichmentApplied])
   @@index([tickerId, filingDate(sort: Desc)])
   @@index([importance, filingDate(sort: Desc)])
   // Onboarding ranking query covers (status filter → ticker join → recent first).

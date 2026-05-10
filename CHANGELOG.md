@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.28.1] - 2026-05-10
+## [0.0.28.3] - 2026-05-10
 
 ### Added
 - **Inline `[N]` citation links in X (Twitter) sentiment sections across all 9 minimalist email templates.** Synthesis paragraphs and fact-claim bullets now carry numbered superscript-baseline anchors hyperlinked to the matching x.com source (e.g., `"Bulls cited beat[1] while bears flagged guidance[2]"`). Renders end-to-end against real Grok output: TSLA 10-K/10-Q/8-K verified with 25 inline anchors total in production preview.
@@ -22,6 +22,24 @@ All notable changes to this project will be documented in this file.
 - **Validator named-step pipeline.** `validateXSentiment` refactored from a single ~80-line pass into 8 named steps (`parseEnums`, `sanitizeCitations`, `sanitizeClaims`, `sanitizeSynthesis`, `clampWindowHours`, `applyConfidenceFloor`, `degradeIfAllStripped`, plus the new `remapMarkersInText` step). Pure refactor — all 26 prior tests pass unchanged.
 - **Existing 10-K/10-Q/8-K templates refactored to use `<XSentimentBlock>`.** Each template's ~12-line conditional render block collapsed to a single JSX line. Removes ~80 LOC of duplication.
 - **`x-sentiment-provider.ts` prompt updated** to instruct Grok to emit `[N]` markers within `factClaims` text and `discussionSynthesis`. Schema unchanged on the wire — markers live inside existing string fields, so legacy payloads (no markers) round-trip unchanged.
+## [0.0.28.2] - 2026-05-10
+
+### Added
+- **Backfill script for `Summary.enrichmentApplied`** at `scripts/backfill-enrichment-applied.ts`. Phase 3 of the X-search-MAX-only gating plan (`tasks/x-search-max-only.md`) — flips `enrichmentApplied = true` on legacy `Summary` rows whose `summaryJSON` already contains a `whyItMatters` field, so they remain in the Max-tier cache after the producer-gate (#491) starts writing only fresh Max summaries with the flag set. Self-paginating UPDATE-RETURNING-LIMIT loop (UUID PK rules out `id BETWEEN` ranges) — each batch shrinks the working set since flipped rows no longer match the `WHERE enrichmentApplied = false AND summaryJSON ? 'whyItMatters'` predicate, so the loop terminates on the first short batch. Default 1000-row batches, 100ms inter-batch sleep to keep replication lag bounded; both tunable via `--batch-size` and `--sleep-ms`. Dry-run mode (`--dry-run`) reports counts without writing. Idempotent — safe to re-run.
+- **Backfill regression test** at `__tests__/migrations/enrichment-applied-backfill.test.ts` covers the predicate, batching, dry-run, and idempotency contracts.
+- **Allowlisted in `.gitignore`** alongside `send-campaign.ts` and `refresh-landing-fixtures.ts` — the `scripts/*` blanket ignore otherwise hides operator scripts.
+
+### Notes
+- This is a one-shot data-fix script, not a recurring job. Run post-deploy after #491 lands and the producer-gate starts writing.
+
+## [0.0.28.1] - 2026-05-10
+
+### Added
+- **`Summary.enrichmentApplied` column + 3-col cache index.** Schema groundwork for the X-search-MAX-only gating plan (`tasks/x-search-max-only.md`). Adds `enrichmentApplied: Boolean @default(false)` to `Summary` (`prisma/schema.prisma`) so the tier-aware shared cache can distinguish enriched (Max) from non-enriched (Pro/Free) summaries on the same filing. Prisma migration uses `ADD COLUMN IF NOT EXISTS ... NOT NULL DEFAULT false` (fast in PG 11+ — constant default, no row rewrite). Post-deploy SQL `prisma/migrations/add_enrichment_applied_index.sql` swaps the legacy 2-col cache index `[filingUrl, filingType]` for the 3-col `[filingUrl, filingType, enrichmentApplied]` via `CREATE INDEX CONCURRENTLY` (online, no read-path stall) followed by `DROP INDEX CONCURRENTLY` of the old one. Lives outside the Prisma migration runner because Prisma wraps each migration in a transaction and `CONCURRENTLY` can't run inside one — same pattern as `add_monitoring_optimization_indices.sql`.
+- **Schema regression test** at `__tests__/migrations/summary-enrichment-applied-schema.test.ts` confirms the column shape and default. Ships alongside the migration so `bun test` would catch a future revert.
+
+### Notes
+- No readers or writers of the new column ship in this release. Producer gating lands in PR #491; backfill of historical rows lands in PR #490.
 
 ## [0.0.27.2] - 2026-05-09
 
