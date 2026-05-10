@@ -12,7 +12,6 @@ import { FilingType } from '../sec-edgar/types';
 import { SECErrorCode, SECEdgarError } from '../sec-edgar/types';
 import axios from 'axios';
 import { generateSecureOperationId } from '../security/secure-random';
-import { FilingExtractorFactory } from './filing-extractor-factory';
 import {
   cleanHtmlContent as cleanHtml,
   cleanHtmlContentAsync as cleanHtmlAsync,
@@ -29,93 +28,6 @@ import {
 
 // Component logger
 const componentLogger = logger.child('filing-extractor');
-
-/**
- * Form-specific content extraction strategies
- */
-const formExtractors: Record<string, (content: string, $: cheerio.CheerioAPI) => string> = {
-  // Form 424B2 - Prospectus
-  '424B2': (content, $) => {
-    // For 424B2, focus on the main content and remove navigation/headers
-    const mainContent = $('.main-content, .body, #main-content, .filing-content').first();
-    if (mainContent.length) {
-      return cleanHtml(mainContent.html() || '');
-    }
-    // Fallback to standard HTML cleaning if specific elements not found
-    return cleanHtml(content);
-  },
-  
-  // Form 11-K - Employee Stock Purchase Plans
-  '11-K': (content, $) => {
-    // For 11-K, prioritize tables and financial data
-    const tables = $('table');
-    if (tables.length) {
-      let tableContent = '';
-      tables.each((_, table) => {
-        tableContent += $(table).text() + '\n\n';
-      });
-      if (tableContent.length > 500) { // Only use tables if substantial content found
-        return tableContent;
-      }
-    }
-    // Fallback to standard HTML cleaning
-    return cleanHtml(content);
-  },
-  
-  // Form 4 - Insider Trading
-  '4': (content, $) => {
-    // For Form 4, check if it's XML format
-    if (PATTERNS.FORM4_XML.test(content)) {
-      return extractXml(content, 'ownershipDocument');
-    }
-    // Otherwise treat as HTML
-    return cleanHtml(content);
-  },
-  
-  // Form 144 - Notice of Proposed Sale
-  '144': (content, $) => {
-    // For Form 144, check if it's XML format
-    if (PATTERNS.FORM144_XML.test(content)) {
-      return extractXml(content, 'intentToSell');
-    }
-    // Otherwise treat as HTML
-    return cleanHtml(content);
-  },
-  
-  // CORRESP - Correspondence
-  'CORRESP': (content, $) => {
-    // For correspondence, preserve formatting but clean HTML
-    return cleanHtml(content, { preserveFormatting: true });
-  },
-  
-  // UPLOAD - Uploaded documents
-  'UPLOAD': (content, $) => {
-    // For uploaded documents, preserve formatting but clean HTML
-    return cleanHtml(content, { preserveFormatting: true });
-  },
-  
-  // PX14A6G - Notice of exempt solicitation
-  'PX14A6G': (content, $) => {
-    // For PX14A6G, focus on the main content
-    const mainContent = $('.main-content, .body, #main-content').first();
-    if (mainContent.length) {
-      return cleanHtml(mainContent.html() || '');
-    }
-    // Fallback to standard HTML cleaning
-    return cleanHtml(content);
-  },
-  
-  // Default extractor for all other forms
-  'default': (content, $) => {
-    return cleanHtml(content);
-  }
-};
-
-// Use imported extractXml function instead of local implementation
-
-// Use imported isDirListing function instead of local implementation
-
-// Use imported extractDocLinks function instead of local implementation
 
 /**
  * Fetch content from URL
