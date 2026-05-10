@@ -40,6 +40,14 @@ export enum ErrorCode {
   AI_UNAVAILABLE = 'AI_UNAVAILABLE',
   AI_MODEL_ERROR = 'AI_MODEL_ERROR',
   AI_PARSING_ERROR = 'AI_PARSING_ERROR',
+  /**
+   * Pre-LLM content gate rejected the prepared excerpt — the input lacks
+   * the financial-statement signal required for 10-Q / 10-K / 20-F / 6-K.
+   * Retriable: EDGAR may finish processing the document body shortly
+   * after acceptance. Worker's exponential-backoff retry handles this
+   * (JobQueueService.updateJobStatus at lib/job-queue/index.ts:457).
+   */
+  AI_INSUFFICIENT_CONTENT = 'AI_INSUFFICIENT_CONTENT',
   
   // Network errors
   NETWORK_UNAVAILABLE = 'NETWORK_UNAVAILABLE',
@@ -77,6 +85,7 @@ export const errorStatusCodes: Record<ErrorCode, number> = {
   [ErrorCode.AI_UNAVAILABLE]: 503,
   [ErrorCode.AI_MODEL_ERROR]: 500,
   [ErrorCode.AI_PARSING_ERROR]: 422,
+  [ErrorCode.AI_INSUFFICIENT_CONTENT]: 422,
   [ErrorCode.NETWORK_UNAVAILABLE]: 503,
   [ErrorCode.CONNECTION_RESET]: 503,
   [ErrorCode.RETRY_EXHAUSTED]: 429,
@@ -102,6 +111,7 @@ export const errorCategories: Record<ErrorCode, ErrorCategory> = {
   [ErrorCode.AI_UNAVAILABLE]: ErrorCategory.AI_ERROR,
   [ErrorCode.AI_MODEL_ERROR]: ErrorCategory.AI_ERROR,
   [ErrorCode.AI_PARSING_ERROR]: ErrorCategory.AI_ERROR,
+  [ErrorCode.AI_INSUFFICIENT_CONTENT]: ErrorCategory.VALIDATION_ERROR,
   [ErrorCode.NETWORK_UNAVAILABLE]: ErrorCategory.NETWORK_ERROR,
   [ErrorCode.CONNECTION_RESET]: ErrorCategory.NETWORK_ERROR,
   [ErrorCode.RETRY_EXHAUSTED]: ErrorCategory.SERVER_ERROR,
@@ -127,6 +137,7 @@ export const errorSeverityLevels: Record<ErrorCode, ErrorSeverity> = {
   [ErrorCode.AI_UNAVAILABLE]: ErrorSeverity.HIGH,
   [ErrorCode.AI_MODEL_ERROR]: ErrorSeverity.HIGH,
   [ErrorCode.AI_PARSING_ERROR]: ErrorSeverity.MEDIUM,
+  [ErrorCode.AI_INSUFFICIENT_CONTENT]: ErrorSeverity.MEDIUM,
   [ErrorCode.NETWORK_UNAVAILABLE]: ErrorSeverity.HIGH,
   [ErrorCode.CONNECTION_RESET]: ErrorSeverity.MEDIUM,
   [ErrorCode.RETRY_EXHAUSTED]: ErrorSeverity.HIGH,

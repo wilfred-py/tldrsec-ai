@@ -31,6 +31,7 @@ describe('isSuppressedFromEmail', () => {
       [ProcessingStatus.COMPLETED, false],
       [ProcessingStatus.COMPLETED_WITH_WARNINGS, true],
       [ProcessingStatus.OUTPUT_TRUNCATED, true],
+      [ProcessingStatus.INSUFFICIENT_CONTENT, true],
       [ProcessingStatus.FAILED, false],
       [null, false],
       [undefined, false],
@@ -70,9 +71,29 @@ describe('isSuppressedFromEmail', () => {
       const set = new Set([...PARTIAL_RESULT_STATUSES]);
       expect(set.has(ProcessingStatus.COMPLETED_WITH_WARNINGS)).toBe(true);
       expect(set.has(ProcessingStatus.OUTPUT_TRUNCATED)).toBe(true);
+      expect(set.has(ProcessingStatus.INSUFFICIENT_CONTENT)).toBe(true);
       expect(set.has(ProcessingStatus.COMPLETED)).toBe(false);
       expect(set.has(ProcessingStatus.PROCESSING)).toBe(false);
       expect(set.has(ProcessingStatus.FAILED)).toBe(false);
+    });
+  });
+
+  describe('INSUFFICIENT_CONTENT — pre-LLM gate failure', () => {
+    it('is suppressed via processingStatus alone (no isPartialResult flag needed)', () => {
+      // Defensive: even if a writer forgets to set isPartialResult, the
+      // status alone is enough to gate the email send.
+      expect(
+        isSuppressedFromEmail({ processingStatus: ProcessingStatus.INSUFFICIENT_CONTENT })
+      ).toBe(true);
+    });
+
+    it('is suppressed via the combined contract (status + isPartialResult)', () => {
+      expect(
+        isSuppressedFromEmail({
+          processingStatus: ProcessingStatus.INSUFFICIENT_CONTENT,
+          isPartialResult: true,
+        })
+      ).toBe(true);
     });
   });
 });

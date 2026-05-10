@@ -39,7 +39,7 @@ describe('getAnalysisDepthScore', () => {
       expect(
         getAnalysisDepthScore({
           ...baseInput,
-          summaryJSON: { financials: 'not an array' },
+          summaryJSON: { financialHighlights: 'not an array' },
         })
       ).toBe(0);
     });
@@ -77,16 +77,16 @@ describe('getAnalysisDepthScore', () => {
       expect(
         getAnalysisDepthScore({
           ...baseInput,
-          summaryJSON: { financials: [{ label: 'Revenue', value: '$100M' }] },
+          summaryJSON: { financialHighlights: [{ label: 'Revenue', value: '$100M' }] },
         })
-      ).toBe(ANALYSIS_DEPTH_BONUSES.financials);
+      ).toBe(ANALYSIS_DEPTH_BONUSES.financialHighlights);
     });
 
     it('empty financials array → no bonus', () => {
       expect(
         getAnalysisDepthScore({
           ...baseInput,
-          summaryJSON: { financials: [] },
+          summaryJSON: { financialHighlights: [] },
         })
       ).toBe(0);
     });
@@ -175,7 +175,7 @@ describe('getAnalysisDepthScore', () => {
         getAnalysisDepthScore({
           summaryJSON: {
             xSentiment: { direction: 'bullish' },
-            financials: [{ label: 'r' }],
+            financialHighlights: [{ label: 'r' }],
             dealTerms: { counterparty: 'X' },
             tranches: [{ amountDisplay: '$1' }],
             transactions: [{ shares: 1 }],
@@ -192,11 +192,11 @@ describe('getAnalysisDepthScore', () => {
       expect(
         getAnalysisDepthScore({
           ...baseInput,
-          summaryJSON: { financials: [{ label: 'r' }] },
+          summaryJSON: { financialHighlights: [{ label: 'r' }] },
           smartSubject: 'subject',
         })
       ).toBe(
-        ANALYSIS_DEPTH_BONUSES.financials + ANALYSIS_DEPTH_BONUSES.smartSubject
+        ANALYSIS_DEPTH_BONUSES.financialHighlights + ANALYSIS_DEPTH_BONUSES.smartSubject
       );
     });
 
@@ -205,13 +205,13 @@ describe('getAnalysisDepthScore', () => {
         ...baseInput,
         summaryJSON: {
           xSentiment: { direction: 'bullish' },
-          financials: [{ label: 'r' }],
+          financialHighlights: [{ label: 'r' }],
         },
       });
       const b = getAnalysisDepthScore({
         ...baseInput,
         summaryJSON: {
-          financials: [{ label: 'r' }],
+          financialHighlights: [{ label: 'r' }],
           xSentiment: { direction: 'bullish' },
         },
       });
