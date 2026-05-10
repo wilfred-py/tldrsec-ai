@@ -22,6 +22,7 @@ import {
   isProviderEnabled,
 } from './enrichment-flags';
 import { getXSentiment, type XSentimentEnrichment } from './x-sentiment-provider';
+import { isMaxEligible } from '../auth/tier-eligibility';
 // Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
@@ -579,6 +580,15 @@ export interface SummarizationOptions {
     documentType?: string;
     documentDescription?: string;
   };
+  // Tier-gating context for web-search enrichment ("Why it matters"). Phase 4
+  // of `tasks/x-search-max-only.md`: enrichment is MAX-only, but the producer
+  // is the writer (this function), not the email template. When userTier is
+  // undefined we treat the request as non-Max — safer default for legacy
+  // callers (admin scripts, direct service-level paths) than silently
+  // enriching for everyone.
+  userTier?: 'FREE' | 'PRO' | 'MAX' | string;
+  isTrialing?: boolean;
+  trialEndsAt?: Date | null;
 }
 /**
  * Interface for summarization result
@@ -619,7 +629,28 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
   };
   
   let filingRecordFromDB: SECFilingRecord | null = null;
-  const { filingId, summaryId, requestId, openRouterOptions, metadata, model: optionsModel } = options; 
+  const {
+    filingId,
+    summaryId,
+    requestId,
+    openRouterOptions,
+    metadata,
+    model: optionsModel,
+    userTier,
+    isTrialing,
+    trialEndsAt,
+  } = options;
+  // MAX-only enrichment gate (Phase 4 of tasks/x-search-max-only.md). Computed
+  // once and used as the single source of truth for: (a) whether to invoke
+  // web-search providers at all, (b) defense-in-depth output sanitization,
+  // (c) the persisted enrichmentApplied column. Default to non-Max when tier
+  // context is missing (legacy callers, admin scripts) — safer than silently
+  // enriching for everyone.
+  const enrichmentApplied = isMaxEligible({
+    tier: userTier ?? null,
+    isTrialing: isTrialing ?? false,
+    trialEndsAt: trialEndsAt ?? null,
+  });
   const startTime = Date.now();
   
   const aiClient = openRouterClient;
@@ -775,9 +806,12 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
 
     // Enrich supported filings with web search context.
     // Providers: counterparty + governance (8-K), debt issuance (424B2/424B3/FWP),
-    // earnings + capital return (8-K). Gated by PostHog flag + daily spend cap.
+    // earnings + capital return (8-K). Gated by tier (MAX-only) FIRST, then
+    // PostHog flag + daily spend cap. Tier check is first so non-Max requests
+    // never burn PostHog evaluations or budget for enrichment they can't see —
+    // see review item 16A in tasks/x-search-max-only.md.
     const ENRICHMENT_FORM_TYPES = new Set(['8-K', '8-K/A', '424B2', '424B3', 'FWP']);
-    if (ENRICHMENT_FORM_TYPES.has(filingRecordFromDB.formType) && !process.env.ENRICHMENT_FORCE_DISABLE) {
+    if (enrichmentApplied && ENRICHMENT_FORM_TYPES.has(filingRecordFromDB.formType) && !process.env.ENRICHMENT_FORCE_DISABLE) {
       const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol || 'unknown';
       try {
         const flagEnabled = await isWhyItMattersEnabled(accession);
@@ -809,8 +843,9 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     // X Sentiment enrichment runs on a wider form set (any high-importance form
     // for an allowlisted ticker) and uses xAI direct rather than OpenRouter, so
     // it lives outside the legacy ENRICHMENT_FORM_TYPES branch above. Eligibility,
-    // budget, and F3 sanitization are enforced inside getXSentiment.
-    if (tickerSymbol && tickerSymbol !== 'UNKNOWN' && !process.env.ENRICHMENT_FORCE_DISABLE) {
+    // budget, and F3 sanitization are enforced inside getXSentiment. Same MAX
+    // tier gate as the why-it-matters branch above (review 16A).
+    if (enrichmentApplied && tickerSymbol && tickerSymbol !== 'UNKNOWN' && !process.env.ENRICHMENT_FORCE_DISABLE) {
       const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol;
       try {
         const topFlag = await isWhyItMattersEnabled(accession);
@@ -1016,6 +1051,19 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         }
         monitoring.recordTiming('ai.numeric_grounding_duration', numericGrounding.durationMs);
 
+        // Producer-gate defense-in-depth: even if a model hallucinates
+        // whyItMatters into the JSON without our enrichment context, scrub
+        // it for non-Max requests. coerceWhyItMatters above is upstream and
+        // can drop on restatement; this belt-and-braces removal guarantees
+        // the persisted summaryJSON cannot carry MAX-only output for non-Max
+        // users (Phase 4 of x-search-max-only).
+        if (!enrichmentApplied) {
+          const dataAsRecord = parsedResult.data as Record<string, unknown>;
+          if ('whyItMatters' in dataAsRecord) {
+            delete dataAsRecord.whyItMatters;
+          }
+        }
+
         const summaryJSONWithSentiment = capturedXSentiment
           ? { ...parsedResult.data, xSentiment: capturedXSentiment.sentiment }
           : parsedResult.data;
@@ -1040,7 +1088,8 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               modelVersion: response.model || getDefaultModel(),
               promptVersion: 'v1.0', // Track prompt version
               cost,
-              attempts: 1
+              attempts: 1,
+              enrichmentApplied,
             }
           });
 
@@ -1109,12 +1158,19 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         
         // If we couldn't extract valid JSON or it's missing required fields, use response-fixer
         if (!validationResult.valid) {
-          const companyName = filingRecordFromDB.companyName || 
+          const companyName = filingRecordFromDB.companyName ||
                            (filingRecordFromDB.ticker?.symbol ? `${filingRecordFromDB.ticker.symbol} Company` : 'Unknown Company');
           fixedData = ensureMinimumFields(summaryText, filingRecordFromDB.formType as SECFilingType, companyName);
           componentLogger.info(`Used fallback data generation for ${filingRecordFromDB.formType}`);
         }
-        
+
+        // Defense-in-depth: same scrub as the success path. The fallback fixer
+        // doesn't normally produce whyItMatters, but extracted partial JSON
+        // could carry it through, so guard the partial-result branch too.
+        if (!enrichmentApplied && fixedData && 'whyItMatters' in fixedData) {
+          delete (fixedData as Record<string, unknown>).whyItMatters;
+        }
+
         // Update the summary record with the fixed data if summaryId exists
         if (summaryId) {
           await prisma.summary.update({
@@ -1131,7 +1187,8 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               modelVersion: response.model || getDefaultModel(),
               promptVersion: 'v1.0',
               cost,
-              attempts: 1
+              attempts: 1,
+              enrichmentApplied,
             }
           });
         }
