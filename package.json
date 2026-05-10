@@ -1,6 +1,6 @@
 {
   "name": "tldrsec-ai",
-  "version": "0.0.28.4",
+  "version": "0.0.29.1",
   "private": true,
   "type": "module",
   "scripts": {

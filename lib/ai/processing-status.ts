@@ -16,6 +16,17 @@ export const ProcessingStatus = {
   COMPLETED_WITH_WARNINGS: 'COMPLETED_WITH_WARNINGS',
   /** Model output truncated by max_tokens before the JSON closed. */
   OUTPUT_TRUNCATED: 'OUTPUT_TRUNCATED',
+  /**
+   * Pre-LLM content gate rejected the prepared excerpt for a 10-Q / 10-K /
+   * 20-F / 6-K filing — the parser fed us only XBRL headers / namespace
+   * boilerplate without an actual income statement. Per product contract
+   * these filings always contain financials, so this is a parser-side
+   * failure, not an AI-side one. The owning job is retried with backoff
+   * (cron-cycle intervals via JobQueue.retryCount/maxRetries) on the
+   * theory that EDGAR may finish processing the document body shortly
+   * after acceptance. Email is suppressed throughout.
+   */
+  INSUFFICIENT_CONTENT: 'INSUFFICIENT_CONTENT',
   /** Hard failure (API error, validation crash, etc.). */
   FAILED: 'FAILED',
 } as const;
@@ -29,6 +40,7 @@ export type ProcessingStatusValue = typeof ProcessingStatus[keyof typeof Process
 export const PARTIAL_RESULT_STATUSES: ReadonlySet<ProcessingStatusValue> = new Set([
   ProcessingStatus.COMPLETED_WITH_WARNINGS,
   ProcessingStatus.OUTPUT_TRUNCATED,
+  ProcessingStatus.INSUFFICIENT_CONTENT,
 ]);
 
 /**

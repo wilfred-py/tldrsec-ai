@@ -146,7 +146,7 @@ describe('calculateCompositeScore', () => {
       summaryText: 'x'.repeat(1000),
       summaryJSON: {
         xSentiment: { direction: 'bullish' },
-        financials: [{ x: 1 }],
+        financialHighlights: [{ x: 1 }],
         dealTerms: { counterparty: 'x' },
         transactions: [{ x: 1 }],
       },

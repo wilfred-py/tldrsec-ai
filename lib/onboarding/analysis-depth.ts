@@ -6,7 +6,7 @@ import { z } from 'zod';
  */
 const BONUSES = {
   xSentiment: 25,
-  financials: 20,
+  financialHighlights: 20,
   dealTermsOrTranches: 20,
   transactions: 15,
   smartSubject: 10,
@@ -31,7 +31,7 @@ const SummaryJsonSchema = z
       .passthrough()
       .optional()
       .nullable(),
-    financials: z.array(z.unknown()).optional().nullable(),
+    financialHighlights: z.array(z.unknown()).optional().nullable(),
     dealTerms: z.unknown().optional().nullable(),
     tranches: z.array(z.unknown()).optional().nullable(),
     transactions: z.array(z.unknown()).optional().nullable(),
@@ -82,9 +82,12 @@ export function getAnalysisDepthScore(input: AnalysisDepthInput): number {
     score += BONUSES.xSentiment;
   }
 
-  // financials array (10-K/10-Q scorecard, or 8-K pre/post)
-  if (Array.isArray(j.financials) && j.financials.length > 0) {
-    score += BONUSES.financials;
+  // financialHighlights array (10-K/10-Q scorecard).
+  // Field name MUST match what response-parser writes — it aliases the AI's
+  // `financials` to `financialHighlights` and deletes the old key, so a
+  // check against `j.financials` would always be false (dead code).
+  if (Array.isArray(j.financialHighlights) && j.financialHighlights.length > 0) {
+    score += BONUSES.financialHighlights;
   }
 
   // dealTerms (8-K M&A) OR tranches (8-K debt) — either path, not both

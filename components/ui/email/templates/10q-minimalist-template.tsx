@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, getChangeArrow, isUsableMetricRow, markdownToHtml } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
@@ -249,12 +249,19 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
   const rawData = summaryData as Record<string, unknown> | undefined;
 
   // Try to extract financial data from various possible structures
-  const financialHighlights = rawData?.financialHighlights as Array<{
+  // Filter out rows whose value is a sentinel placeholder ("N/A", "Null",
+  // "$NaN", etc.) before any downstream consumer sees them. The unified-prompt
+  // contract instructs the AI to emit "N/A" for unavailable values; the
+  // currency normalizer downstream then turns those into "$NaN" by parseFloat.
+  // Without this filter the scorecard renders all-"$NaN" rows and the
+  // "Why it matters" line says "Revenue is N/A YoY, N/A QoQ".
+  const rawFinancialHighlights = rawData?.financialHighlights as Array<{
     label: string;
     value: string | number;
     change?: string | number;
     qoqChange?: string | number;
   }> | undefined;
+  const financialHighlights = rawFinancialHighlights?.filter(isUsableMetricRow);
 
   const keyPoints = rawData?.keyPoints as string[] | undefined;
   const riskFactors = rawData?.riskFactors as string[] | undefined;
