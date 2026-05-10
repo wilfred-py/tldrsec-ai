@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.28.2] - 2026-05-10
+
+### Added
+- **Backfill script for `Summary.enrichmentApplied`** at `scripts/backfill-enrichment-applied.ts`. Phase 3 of the X-search-MAX-only gating plan (`tasks/x-search-max-only.md`) — flips `enrichmentApplied = true` on legacy `Summary` rows whose `summaryJSON` already contains a `whyItMatters` field, so they remain in the Max-tier cache after the producer-gate (#491) starts writing only fresh Max summaries with the flag set. Self-paginating UPDATE-RETURNING-LIMIT loop (UUID PK rules out `id BETWEEN` ranges) — each batch shrinks the working set since flipped rows no longer match the `WHERE enrichmentApplied = false AND summaryJSON ? 'whyItMatters'` predicate, so the loop terminates on the first short batch. Default 1000-row batches, 100ms inter-batch sleep to keep replication lag bounded; both tunable via `--batch-size` and `--sleep-ms`. Dry-run mode (`--dry-run`) reports counts without writing. Idempotent — safe to re-run.
+- **Backfill regression test** at `__tests__/migrations/enrichment-applied-backfill.test.ts` covers the predicate, batching, dry-run, and idempotency contracts.
+- **Allowlisted in `.gitignore`** alongside `send-campaign.ts` and `refresh-landing-fixtures.ts` — the `scripts/*` blanket ignore otherwise hides operator scripts.
+
+### Notes
+- This is a one-shot data-fix script, not a recurring job. Run post-deploy after #491 lands and the producer-gate starts writing.
+
 ## [0.0.28.1] - 2026-05-10
 
 ### Added
