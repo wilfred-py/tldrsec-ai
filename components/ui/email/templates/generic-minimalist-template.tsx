@@ -4,6 +4,7 @@ import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { HangingBulletItem } from './sections/BulletList';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface GenericMinimalistTemplateProps {
@@ -146,6 +147,9 @@ export function GenericMinimalistTemplate({ filing }: GenericMinimalistTemplateP
           </tr>
         </tbody>
       </table>
+
+      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
+      <XSentimentBlock rawData={summaryData} formType="Generic" />
 
       {/* Footer with CTA */}
       <EmailFooter

@@ -126,14 +126,20 @@ Then synthesize a sentiment assessment. Distinguish between:
 
 DO NOT include trading recommendations, price targets, or imperative verbs ("buy", "sell", "load up", "short this"). Describe sentiment, do not prescribe action.
 
+INLINE CITATION MARKERS — within factClaims and discussionSynthesis text, attach numeric markers in square brackets that reference 1-based positions in citationUrls. Examples:
+  factClaim: "Apple reported earnings beat consensus[1][3]"
+  factClaim: "Analyst upgrades came from two desks[2, 4]"
+  synthesis: "Wall Street reaction skewed positive [1] but retail traders were cautious [2, 3]"
+The same source can be cited multiple times. Marker positions must reference real URLs in citationUrls — do not invent indices. Markers in opinionClaims are allowed but optional.
+
 Respond with ONLY valid JSON in this exact shape:
 {
   "direction": "bullish" | "bearish" | "mixed" | "neutral" | "no_signal",
   "shift": "shifting_bullish" | "shifting_bearish" | "stable" | "no_signal",
   "confidence": "high" | "medium" | "low",
-  "factClaims": ["short factual claim with timestamp/source where possible"],
+  "factClaims": ["short factual claim with [N] markers, e.g., 'Revenue beat consensus[1][3]'"],
   "opinionClaims": ["short opinion / interpretation"],
-  "discussionSynthesis": "1-2 sentence neutral summary of the overall conversation",
+  "discussionSynthesis": "1-2 sentence neutral summary with [N] markers, e.g., 'Bulls cited beat[1] while bears flagged guidance[2]'",
   "citationUrls": ["https://x.com/..."],
   "windowHours": ${windowHours}
 }

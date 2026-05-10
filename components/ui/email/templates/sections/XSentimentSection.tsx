@@ -1,7 +1,80 @@
 import * as React from 'react';
 import { EmailColors, BadgeColors } from '../../design-system';
+import { splitTextOnMarkers } from '../../../../../lib/ai/parsers/x-sentiment-validator';
 
 const MONO_FONT = '"JetBrains Mono", "SF Mono", Monaco, Consolas, "Courier New", monospace';
+
+/**
+ * Render text containing inline `[N]` citation markers as React nodes:
+ *   - Plain text segments → string (React handles HTML escaping).
+ *   - Marker segments → `<a>` anchor(s) hyperlinked to `citationUrls[N-1]`.
+ *
+ * G3 IAA legal-posture invariant (per wiki/product/x-sentiment-enrichment.md:111
+ * and tasks/sentiment-citations.md Issue 2A): this function NEVER modifies
+ * synthesis or claim text content. It only wraps detected `[N]` markers with
+ * anchor tags. Text segments are passed through verbatim. Future maintainers:
+ * do NOT add regex replacements to the text content here — that would re-open
+ * the F3 strip semantics that the IAA review approved this feature under.
+ *
+ * Security: the `href` always comes from the F3-validated `citationUrls` array
+ * (host-allowlisted to x.com / twitter.com). Markdown-link forms like
+ * `[1](javascript:...)` cannot reach href because the parser regex matches
+ * only `[N]` and `[N, M, ...]` — trailing `(...)` is parsed as plain text.
+ * See test T14 in `__tests__/XSentimentSection-citations.test.tsx`.
+ */
+function renderTextWithCitations(
+  text: string,
+  citationUrls: readonly string[],
+): React.ReactNode[] {
+  const segments = splitTextOnMarkers(text);
+  const out: React.ReactNode[] = [];
+  for (let segIdx = 0; segIdx < segments.length; segIdx += 1) {
+    const seg = segments[segIdx];
+    if (seg.type === 'text') {
+      out.push(<React.Fragment key={`t-${segIdx}`}>{seg.value}</React.Fragment>);
+      continue;
+    }
+    // Resolve each index to a URL; drop indices with no URL at the position.
+    const resolved = seg.indices
+      .map((idx) => ({ idx, url: idx >= 1 ? citationUrls[idx - 1] : undefined }))
+      .filter((r) => typeof r.url === 'string' && r.url.length > 0);
+    if (resolved.length === 0) continue; // drop marker silently
+    out.push(
+      <React.Fragment key={`c-${segIdx}`}>
+        {'['}
+        {resolved.map((r, i) => (
+          <React.Fragment key={r.idx}>
+            {i > 0 ? ', ' : ''}
+            <a
+              href={r.url}
+              aria-label={`Source ${r.idx}, opens X post`}
+              style={{
+                fontSize: '11px',
+                verticalAlign: 'baseline',
+                color: EmailColors.text.meta,
+                textDecoration: 'underline',
+              }}
+            >
+              {r.idx}
+            </a>
+          </React.Fragment>
+        ))}
+        {']'}
+      </React.Fragment>,
+    );
+  }
+  return out;
+}
+
+/**
+ * Returns true when the text contains a `[N]` citation marker that survives
+ * the parser. Used by `shouldRenderXSentiment` to suppress sections whose
+ * synthesis references citations that don't exist.
+ */
+function hasCitationMarker(text: string | undefined | null): boolean {
+  if (!text) return false;
+  return splitTextOnMarkers(text).some((s) => s.type === 'cite');
+}
 
 export interface XSentimentSectionProps {
   direction: 'bullish' | 'bearish' | 'mixed' | 'neutral' | 'no_signal';
@@ -50,6 +123,14 @@ const VALID_CONFIDENCES = new Set(['high', 'medium', 'low']);
  * narrative AND no actionable signal — empty sections add noise. Also acts as
  * a defense-in-depth runtime check on enum fields, since the upstream payload
  * arrives via an unchecked type cast from `summaryData.xSentiment`.
+ *
+ * Rejection rules (any of these → suppress section):
+ *   1. No payload, missing/whitespace synthesis, or invalid direction/confidence enum.
+ *   2. direction === 'no_signal' (validator's degraded fallback).
+ *   3. factClaims is empty regardless of confidence (Issue 3A — empty bullet
+ *      block is visually broken; F3 stripped everything to opinion only).
+ *   4. Synthesis contains `[N]` markers but citationUrls is empty (Issue D5
+ *      state C — markers with no targets are dead links).
  */
 export function shouldRenderXSentiment(xs: Partial<XSentimentSectionProps> | null | undefined): xs is XSentimentSectionProps {
   if (!xs) return false;
@@ -57,9 +138,14 @@ export function shouldRenderXSentiment(xs: Partial<XSentimentSectionProps> | nul
   if (!xs.direction || !VALID_DIRECTIONS.has(xs.direction)) return false;
   if (xs.direction === 'no_signal') return false;
   if (!xs.confidence || !VALID_CONFIDENCES.has(xs.confidence)) return false;
-  // F3 demotes confidence→low when citations<2 OR factClaims empty. Don't
-  // surface a directional chip backed by zero verified claims.
-  if (xs.confidence === 'low' && (!xs.factClaims || xs.factClaims.length === 0)) return false;
+  // Issue 3A: factClaims-empty regardless of confidence — empty bullet block
+  // looks like a render bug; if F3 gutted facts, suppress the whole section.
+  if (!xs.factClaims || xs.factClaims.length === 0) return false;
+  // Issue D5 state C: synthesis has citation markers but there are no citations
+  // to point at — every marker would be dropped at render time, so suppress.
+  if (hasCitationMarker(xs.discussionSynthesis) && (!xs.citationUrls || xs.citationUrls.length === 0)) {
+    return false;
+  }
   return true;
 }
 
@@ -84,9 +170,13 @@ export function XSentimentSection({
   // Defense-in-depth: F3 already enforces x.com/twitter.com host allowlist,
   // but re-check here so a bypassed/cached payload can never inject a
   // javascript: or data: href into a customer email.
+  //
+  // Cardinality matches `MAX_CITATIONS` (10) in x-sentiment-validator. We
+  // intentionally do not slice further: with inline `[N]` markers, capping
+  // to fewer than the validator allows would silently drop anchors for
+  // markers pointing at indices 6-10 (visible "missing anchor" in synthesis).
   const citations = (citationUrls ?? [])
-    .filter((u) => typeof u === 'string' && isSafeXCitation(u))
-    .slice(0, 5);
+    .filter((u) => typeof u === 'string' && isSafeXCitation(u));
 
   return (
     <>
@@ -169,7 +259,7 @@ export function XSentimentSection({
         </td>
       </tr>
 
-      {/* Discussion synthesis paragraph */}
+      {/* Discussion synthesis paragraph — inline `[N]` markers anchor-wrapped */}
       <tr>
         <td style={{ padding: '8px 15px 0' }}>
           <p style={{
@@ -179,12 +269,12 @@ export function XSentimentSection({
             lineHeight: '1.55',
             margin: 0,
           }}>
-            {discussionSynthesis}
+            {renderTextWithCitations(discussionSynthesis, citations)}
           </p>
         </td>
       </tr>
 
-      {/* Fact claims as bullets */}
+      {/* Fact claims as bullets — inline `[N]` markers anchor-wrapped */}
       {claims.length > 0 && (
         <tr>
           <td style={{ padding: '10px 15px 0' }}>
@@ -205,7 +295,7 @@ export function XSentimentSection({
                       lineHeight: '1.5',
                       color: EmailColors.text.body,
                     }}>
-                      {claim}
+                      {renderTextWithCitations(claim, citations)}
                     </td>
                   </tr>
                 ))}
@@ -228,7 +318,7 @@ export function XSentimentSection({
               wordBreak: 'break-all' as const,
             }}>
               <span style={{ textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginRight: '6px' }}>
-                Sources:
+                {citations.length === 1 ? 'Source:' : 'Sources:'}
               </span>
               {citations.map((url, idx) => (
                 <React.Fragment key={idx}>

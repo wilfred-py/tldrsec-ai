@@ -4,6 +4,7 @@ import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { HangingBulletItem } from './sections/BulletList';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface FormDEF14AMinimalistTemplateProps {
@@ -418,6 +419,9 @@ export function FormDEF14AMinimalistTemplate({ filing }: FormDEF14AMinimalistTem
           </tr>
         </tbody>
       </table>
+
+      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
+      <XSentimentBlock rawData={summaryData} formType="DEF 14A" />
 
       {/* Footer with CTA */}
       <EmailFooter

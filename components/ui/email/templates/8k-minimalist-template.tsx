@@ -10,7 +10,7 @@ import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
 import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
 import { StalenessBanner } from './sections/StalenessBanner';
-import { XSentimentSection, shouldRenderXSentiment } from './sections/XSentimentSection';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 
 export { getItemDescription };
 
@@ -305,11 +305,6 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
 
   const displayTicker = symbol || ticker || 'N/A';
 
-  // X (Twitter) sentiment payload — populated when x_sentiment provider ran.
-  const xSentiment = data?.xSentiment as
-    NonNullable<FilingTemplateData['summaryData']>['xSentiment'] | undefined;
-  const renderXSentiment = shouldRenderXSentiment(xSentiment);
-
   // Determine materiality (2-level system)
   const isMaterial = isMaterialFiling(itemNumbers, summaryText || '');
   const signal = getSignalConfig(isMaterial);
@@ -483,22 +478,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
       </table>
 
       {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-      {renderXSentiment && xSentiment && (
-        <table width="100%" cellPadding="0" cellSpacing="0">
-          <tbody>
-            <XSentimentSection
-              direction={xSentiment.direction}
-              shift={xSentiment.shift}
-              confidence={xSentiment.confidence}
-              discussionSynthesis={xSentiment.discussionSynthesis}
-              factClaims={xSentiment.factClaims}
-              citationUrls={xSentiment.citationUrls}
-              windowHours={xSentiment.windowHours}
-            />
-            <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
-          </tbody>
-        </table>
-      )}
+      <XSentimentBlock rawData={summaryData} formType="8-K" />
 
       {/* Footer with CTA */}
       <EmailFooter
