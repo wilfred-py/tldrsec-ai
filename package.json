@@ -1,11 +1,12 @@
 {
   "name": "tldrsec-ai",
-  "version": "0.0.29.1",
+  "version": "0.0.29.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "vercel-build": "bash scripts/vercel-build.sh",
     "start": "next start",
     "lint": "next lint",
     "worktrees": "bash scripts/open-worktrees.sh",
