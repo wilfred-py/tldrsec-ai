@@ -5,8 +5,7 @@ import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadge
 import { EmailFooter } from './sections/EmailFooter';
 import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
-import { getExtractor } from '../../../../lib/email/extractor-registry';
-import type { Form144ExtractedData } from '../../../../lib/email/form144-data-extractor';
+import { extractForm144Data } from '../../../../lib/email/form144-data-extractor';
 import { XSentimentBlock } from './sections/XSentimentBlock';
 
 interface Form144MinimalistTemplateProps {
@@ -110,9 +109,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   const data = summaryData as Record<string, unknown> | undefined;
 
   // Extract structured data from summaryText if summaryData is sparse
-  const extractedData = summaryText
-    ? (getExtractor('144')?.(summaryText) as Form144ExtractedData ?? null)
-    : null;
+  const extractedData = summaryText ? extractForm144Data(summaryText) : null;
 
   // Merge data sources - prefer summaryData, fall back to extracted
   const filerName = (data?.filerName || extractedData?.filerName || 'Insider') as string;
