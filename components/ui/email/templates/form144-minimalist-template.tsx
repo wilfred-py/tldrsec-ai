@@ -5,8 +5,8 @@ import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadge
 import { EmailFooter } from './sections/EmailFooter';
 import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
-import { extractForm144Data } from '../../../../lib/email/form144-data-extractor';
-import { XSentimentBlock } from './sections/XSentimentBlock';
+import { getExtractor } from '../../../../lib/email/extractor-registry';
+import type { Form144ExtractedData } from '../../../../lib/email/form144-data-extractor';
 
 interface Form144MinimalistTemplateProps {
   filing: FilingTemplateData;
@@ -109,7 +109,9 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
   const data = summaryData as Record<string, unknown> | undefined;
 
   // Extract structured data from summaryText if summaryData is sparse
-  const extractedData = summaryText ? extractForm144Data(summaryText) : null;
+  const extractedData = summaryText
+    ? (getExtractor('144')?.(summaryText) as Form144ExtractedData ?? null)
+    : null;
 
   // Merge data sources - prefer summaryData, fall back to extracted
   const filerName = (data?.filerName || extractedData?.filerName || 'Insider') as string;
@@ -236,7 +238,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
       <FormPlusMaterialityBadgeRow
         filingType={filingType || 'Form 144'}
         signal={{
-          label: `${notable ? '!' : '\u2713'} ${signalLabel}`,
+          label: `${notable ? '!' : '✓'} ${signalLabel}`,
           colorKey: signalColorKey,
         }}
       />
@@ -325,9 +327,6 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
           </tr>
         </tbody>
       </table>
-
-      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-      <XSentimentBlock rawData={summaryData} formType="Form 144" />
 
       {/* Footer with CTA */}
       <EmailFooter

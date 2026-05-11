@@ -7,10 +7,11 @@ import { TranchesList, Tranche } from './sections/TranchesList';
 import { DealTermsCard, DealTerms } from './sections/DealTermsCard';
 import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
-import { extract8KData } from '../../../../lib/email/8k-data-extractor';
+import { getExtractor } from '../../../../lib/email/extractor-registry';
+import type { Form8KExtractedData } from '../../../../lib/email/8k-data-extractor';
 import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
 import { StalenessBanner } from './sections/StalenessBanner';
-import { XSentimentBlock } from './sections/XSentimentBlock';
+import { XSentimentSection, shouldRenderXSentiment } from './sections/XSentimentSection';
 
 export { getItemDescription };
 
@@ -159,7 +160,7 @@ function getSignalConfig(isMaterial: boolean) {
       bgColor: '#F1F5F9',      // Slate 100
       borderColor: '#94A3B8',  // Slate 400
       textColor: '#475569',    // Slate 600
-      icon: '\u2713',
+      icon: '✓',
     };
   }
 }
@@ -278,7 +279,9 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   const data = summaryData as Record<string, unknown> | undefined;
 
   // Extract structured data from summaryText if summaryData is sparse
-  const extractedData = summaryText ? extract8KData(summaryText) : null;
+  const extractedData = summaryText
+    ? (getExtractor('8-K')?.(summaryText) as Form8KExtractedData ?? null)
+    : null;
 
   // Merge data sources
   const eventType = (data?.eventType || extractedData?.eventType || '') as string;
@@ -304,6 +307,11 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
     : rawKeyHighlights;
 
   const displayTicker = symbol || ticker || 'N/A';
+
+  // X (Twitter) sentiment payload — populated when x_sentiment provider ran.
+  const xSentiment = data?.xSentiment as
+    NonNullable<FilingTemplateData['summaryData']>['xSentiment'] | undefined;
+  const renderXSentiment = shouldRenderXSentiment(xSentiment);
 
   // Determine materiality (2-level system)
   const isMaterial = isMaterialFiling(itemNumbers, summaryText || '');
@@ -478,7 +486,22 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
       </table>
 
       {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-      <XSentimentBlock rawData={summaryData} formType="8-K" />
+      {renderXSentiment && xSentiment && (
+        <table width="100%" cellPadding="0" cellSpacing="0">
+          <tbody>
+            <XSentimentSection
+              direction={xSentiment.direction}
+              shift={xSentiment.shift}
+              confidence={xSentiment.confidence}
+              discussionSynthesis={xSentiment.discussionSynthesis}
+              factClaims={xSentiment.factClaims}
+              citationUrls={xSentiment.citationUrls}
+              windowHours={xSentiment.windowHours}
+            />
+            <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
+          </tbody>
+        </table>
+      )}
 
       {/* Footer with CTA */}
       <EmailFooter
