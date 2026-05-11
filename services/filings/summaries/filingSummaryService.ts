@@ -1,6 +1,7 @@
 import { FilingType } from '../../../types/sec/filing';
 import { FilingSummaryResult, SECFiling, Company } from '../../filing/types';
 import { summarizeFiling, SummarizationOptions } from '../../../lib/ai/summarize';
+import type { XSentiment } from '../../../lib/ai/parsers/x-sentiment-validator';
 import * as secService from '../../secService';
 import { findExistingSummary, storeSummary, StoreSummaryOptions } from '../database/filingDatabase';
 import { scrapeDocumentLinksFromFilingPage, fetchDocumentContent } from '../extractors/documentScraper';
@@ -474,7 +475,11 @@ export async function getFilingSummary(
             primaryDocUrl: filing.primaryDocUrl,
             model: 'fallback',
             failureReason: 'AI summarization failed',
-            filingDetails: filingDetails
+            filingDetails: filingDetails,
+            // Even when AI's summary text fell back, summarize.ts may have
+            // attached xSentiment from the parser-fallback path on the nested
+            // summaryJSON field. Propagate so the X sentiment block can render.
+            xSentiment: summaryJSON ? (summaryJSON.summaryJSON as { xSentiment?: XSentiment } | undefined)?.xSentiment : undefined,
           },
           fetchOptions.storageOptions
         );
@@ -519,7 +524,11 @@ export async function getFilingSummary(
             primaryDocUrl: filing.primaryDocUrl,
             model: 'fallback',
             failureReason: `AI summary validation failed: ${summaryValidation.reason}`,
-            filingDetails: filingDetails
+            filingDetails: filingDetails,
+            // AI summary failed validation but the x_sentiment provider may
+            // have run; preserve its payload (nested at summaryJSON.summaryJSON)
+            // so the X sentiment block can still surface with a fallback body.
+            xSentiment: (summaryJSON.summaryJSON as { xSentiment?: XSentiment } | undefined)?.xSentiment,
           },
           fetchOptions.storageOptions
         );
@@ -552,7 +561,14 @@ export async function getFilingSummary(
           outputTokens: summaryJSON.outputTokens,
           model: summaryJSON.model || options.model,
           cost: summaryJSON.cost,
-          processingTimeMs: summaryJSON.processingTimeMs
+          processingTimeMs: summaryJSON.processingTimeMs,
+          // Thread the F3-validated X sentiment payload through to DB persistence.
+          // The variable `summaryJSON` here is summarizeFiling's RETURN object;
+          // the parsed AI data (which carries xSentiment) lives nested at
+          // `summaryJSON.summaryJSON`. Without this thread, the data was
+          // generated upstream (real $0.05/x_search call) but lost before
+          // reaching the DB row — the email render path then has nothing to show.
+          xSentiment: (summaryJSON.summaryJSON as { xSentiment?: XSentiment } | undefined)?.xSentiment,
         },
         fetchOptions.storageOptions
       );

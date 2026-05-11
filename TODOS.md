@@ -4,6 +4,32 @@ Tracker for follow-ups that surfaced during /ship gates but are not blocking the
 current PR. Each entry includes priority, what surfaced it, and the smallest
 viable next action.
 
+## ✅ P0 — xSentiment payload silently dropped before DB persistence (FIXED 2026-05-09 on `wilfred-py/sentiment-citations`)
+
+**Root cause**: `storeSummary` in `services/filings/database/filingDatabase.ts`
+constructed `summaryJSON` for the DB column from a fixed scalar field set
+(`accessionNumber`, `keyPoints`, `model`, `cost`, etc.) and never included
+`xSentiment`. All three caller-services (`filingSummaryService.ts`,
+`enhancedFilingSummaryService.ts`) were passing scalars from `summarizeFiling`'s
+return object but not the nested `summaryJSON.summaryJSON.xSentiment` field
+that carries the F3-validated payload.
+
+**Fix shipped** (3 files):
+- `services/filings/database/filingDatabase.ts:248-253` — `storeSummary`
+  conditionally includes `metadata.xSentiment` on the persisted summaryJSON
+  (mirrors the existing `failureReason` pattern).
+- `services/filings/summaries/filingSummaryService.ts` — 3 call sites
+  (success + 2 fallback paths) now thread
+  `summaryJSON.summaryJSON?.xSentiment` via metadata.
+- `services/filings/summaries/enhancedFilingSummaryService.ts` — success +
+  parser-fallback paths same.
+
+**Verification**: real-pipeline test against TSLA 10-K/10-Q/8-K confirms
+the persisted `Summary.summaryJSON` now has 16 keys (15 + xSentiment), with
+inline `[N]` markers in `factClaims` and `discussionSynthesis`. Re-sent emails
+to `wilfredchen1@gmail.com` rendered 25 inline citation anchors total from
+real Grok output. Resend IDs `953334e6-...`, `edf47c5f-...`, `f07d9148-...`.
+
 ## P1 — pre-existing test infrastructure (surfaced by /ship #486 baseline run)
 
 Confirmed pre-existing on bare `origin/main` via stash + re-run (15 failed / 62 passed,
@@ -136,3 +162,58 @@ came from the CEO/Eng phases and are out of scope for the deadline-driven ship
 - **xAI deadline-extension request.** When xAI next does a hard kill date,
   email enterprise support requesting a 30-day extension before assuming the
   deadline is fixed. Free option, ~1 minute. Track as a runbook item.
+## P2 — sentiment-citations follow-ups (surfaced by /autoplan on `wilfred-py/sentiment-citations`, 2026-05-06)
+
+Bundled "scope C" PR ships Track 1 (coverage to 5 templates) + Track 2 (inline `[N]`
+citations). The autoplan adversarial review surfaced these as out of scope but
+worth doing next:
+
+- **Form-type-aware sentiment prompts.** CEO C3 + Design D1: Form 4 should
+  anchor sentiment on the specific insider transaction, not general ticker
+  buzz. DEF 14A should use a support/opposition direction taxonomy, not
+  bullish/bearish. Form 144 / S-3 may not warrant sentiment at all.
+- **Click-through telemetry on Sources footer.** CEO C1 evidence-first
+  request: instrument the existing `<a>` tags so we can decide whether the
+  footer is actually useful before doubling down on per-claim provenance.
+- **Information-overload redesign.** Design D3: synthesis paragraph + bullets
+  + inline markers + footer is 4 layers of provenance for the same fact. Pick
+  two. Refactor is its own PR.
+- **13D template migration to minimalist + sentiment wiring.** Today's
+  `13d-template.tsx` is the older non-minimalist style; bring it onto the
+  minimalist component surface, then wire sentiment.
+- **Per-prompt eval suite for X sentiment.** No fixture-based regression
+  evals exist today — the pipeline relies on F3 + counters. Add a small
+  fixture set so prompt changes can be regression-tested.
+- **Embedded tweet preview cards.** 12-month feature — pull preview metadata
+  from x.com OEmbed API (or static thumbnails) so users see the source
+  without leaving inbox.
+- **Apple Mail dark-mode review.** Existing tokens may invert poorly; do a
+  dedicated visual review of all 8 template + section combinations once
+  Track 1 + Track 2 ship.
+- **factClaims-empty + opinion-only payload handling (adversarial #2).**
+  `shouldRenderXSentiment` now hard-rejects when `factClaims.length === 0`,
+  which silently drops payloads where the model legitimately returned
+  synthesis + opinionClaims + valid citations but no facts. Cost is spent on
+  `x_search` and the section never renders. Better: render synthesis-only
+  block (drop the bullet sub-block) when factClaims empty but synthesis +
+  citations are valid. UX redesign — tracked here so the conservative current
+  guard isn't load-bearing.
+- **Document the 10-citation cap to the model (adversarial #3).**
+  `MAX_CITATIONS = 10` in the validator; the prompt in
+  `lib/ai/x-sentiment-provider.ts:113-148` doesn't tell the model. If Grok
+  emits index `[11]` or higher, validator drops it silently. Add "max 10
+  sources; do not cite indices above 10" to the prompt to keep model output
+  in lockstep with the cap.
+- **Don't expose `MARKER_REGEX` via `_internal` (adversarial #4).** Tests can
+  use `.test()`/`.exec()` on the shared `/g` regex, mutating `lastIndex` and
+  flaking concurrent `splitTextOnMarkers` calls. Either drop from `_internal`
+  exports or convert to a getter that returns a fresh regex instance.
+- **Add `rel="noopener noreferrer"` to citation anchors (adversarial #6).**
+  `XSentimentSection.tsx:51` renders `<a>` without `rel`; webmail clients add
+  implicit `target="_blank"` which leaves a reverse-tabnabbing surface
+  against x.com. Cheap fix.
+- **Verify `monitoring.incrementCounter` in `XSentimentBlock` doesn't double
+  on react-email re-render (adversarial #7).** Confirm `react-email/render` is
+  single-pass for production. If it does retry/render twice in any code path,
+  counter doubles silently. Move to call-site or guard with a render-time
+  marker.

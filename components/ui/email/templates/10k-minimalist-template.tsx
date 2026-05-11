@@ -5,7 +5,7 @@ import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadge
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { HangingBulletItem } from './sections/BulletList';
-import { XSentimentSection, shouldRenderXSentiment } from './sections/XSentimentSection';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface Form10KMinimalistTemplateProps {
@@ -125,11 +125,6 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
 
   // Watch-for items: risk factors
   const watchForItems = riskFactors ? riskFactors.slice(0, 4) : [];
-
-  // X (Twitter) sentiment payload — populated when x_sentiment provider ran.
-  const xSentiment = rawData?.xSentiment as
-    NonNullable<FilingTemplateData['summaryData']>['xSentiment'] | undefined;
-  const renderXSentiment = shouldRenderXSentiment(xSentiment);
 
   // Preheader text for inbox preview
   const preheaderText = `${displayTicker} Annual Report: ${leadSentence.substring(0, 120)}`;
@@ -287,22 +282,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
       </table>
 
       {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-      {renderXSentiment && xSentiment && (
-        <table width="100%" cellPadding="0" cellSpacing="0">
-          <tbody>
-            <XSentimentSection
-              direction={xSentiment.direction}
-              shift={xSentiment.shift}
-              confidence={xSentiment.confidence}
-              discussionSynthesis={xSentiment.discussionSynthesis}
-              factClaims={xSentiment.factClaims}
-              citationUrls={xSentiment.citationUrls}
-              windowHours={xSentiment.windowHours}
-            />
-            <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
-          </tbody>
-        </table>
-      )}
+      <XSentimentBlock rawData={summaryData} formType="10-K" />
 
       {/* Footer with CTA */}
       <EmailFooter

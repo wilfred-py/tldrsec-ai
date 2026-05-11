@@ -8,6 +8,7 @@
 import { FilingType } from '../../../types/sec/filing';
 import { FilingSummaryResult, SECFiling, Company } from '../../filing/types';
 import { summarizeFiling, SummarizationOptions } from '../../../lib/ai/summarize';
+import type { XSentiment } from '../../../lib/ai/parsers/x-sentiment-validator';
 import * as secService from '../../secService';
 import { findExistingSummary, storeSummary } from '../database/filingDatabase';
 import { fetchEnhancedDocumentContent, getEnhancedSecApiHeaders } from '../extractors/enhancedDocumentScraper';
@@ -284,7 +285,11 @@ export async function getEnhancedFilingSummary(
             primaryDocUrl: filing.primaryDocUrl,
               model: 'fallback',
               failureReason: 'AI summarization failed',
-              fetchMethod
+              fetchMethod,
+              // Even when the AI's summary is unparseable, summarize.ts's
+              // fallback path attaches xSentiment to the nested summaryJSON if
+              // the provider ran. Don't drop it just because summary fell back.
+              xSentiment: summaryJSON ? (summaryJSON.summaryJSON as { xSentiment?: XSentiment } | undefined)?.xSentiment : undefined,
             }
           );
         }
@@ -337,6 +342,11 @@ export async function getEnhancedFilingSummary(
           cost: summaryJSON.cost,
           processingTimeMs: summaryJSON.processingTimeMs,
           fetchMethod,
+          // Thread the F3-validated X sentiment payload through to DB persistence.
+          // `summaryJSON` here is summarizeFiling's RETURN object; the parsed AI
+          // data carrying xSentiment lives nested at `summaryJSON.summaryJSON`
+          // (summarize.ts:941 success path / :1061 fallback path).
+          xSentiment: (summaryJSON.summaryJSON as { xSentiment?: XSentiment } | undefined)?.xSentiment,
           ...contentMetadata
         }
       );

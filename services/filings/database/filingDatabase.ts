@@ -244,7 +244,12 @@ async function storeSummaryForTicker(
       filingType: formType,
       model: metadata.model || 'unknown',
       modelConfig: metadata.modelConfig || null,
-      ...(metadata.failureReason ? { failureReason: metadata.failureReason } : {})
+      ...(metadata.failureReason ? { failureReason: metadata.failureReason } : {}),
+      // X sentiment enrichment payload (F3-validated). Threaded by callers from
+      // summarizeFiling()'s return value. Without this, the email render path
+      // can't surface the X sentiment block — the data was generated upstream
+      // (real $0.05/x_search call) but lost before reaching the DB row.
+      ...(metadata.xSentiment ? { xSentiment: metadata.xSentiment } : {}),
     },
     tokensUsed: tokensUsed,
     inputTokens: inputTokens,

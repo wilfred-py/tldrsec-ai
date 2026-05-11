@@ -4,7 +4,7 @@ import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
-import { XSentimentSection, shouldRenderXSentiment } from './sections/XSentimentSection';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 /**
@@ -381,11 +381,6 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
     }
   }
 
-  // X (Twitter) sentiment payload — only present when x_sentiment provider ran.
-  const xSentiment = rawData?.xSentiment as
-    NonNullable<FilingTemplateData['summaryData']>['xSentiment'] | undefined;
-  const renderXSentiment = shouldRenderXSentiment(xSentiment);
-
   // Build preheader text for inbox preview
   const preheaderText = leadSentence
     ? `${displayTicker} 10-Q: ${leadSentence.substring(0, 120)}`
@@ -623,23 +618,13 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
             </tr>
           )}
 
-          {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-          {renderXSentiment && xSentiment && (
-            <XSentimentSection
-              direction={xSentiment.direction}
-              shift={xSentiment.shift}
-              confidence={xSentiment.confidence}
-              discussionSynthesis={xSentiment.discussionSynthesis}
-              factClaims={xSentiment.factClaims}
-              citationUrls={xSentiment.citationUrls}
-              windowHours={xSentiment.windowHours}
-            />
-          )}
-
           {/* Bottom spacer */}
           <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
         </tbody>
       </table>
+
+      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
+      <XSentimentBlock rawData={summaryData} formType="10-Q" />
 
       {/* Footer with CTA */}
       <EmailFooter

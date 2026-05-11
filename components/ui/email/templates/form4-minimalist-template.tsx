@@ -7,6 +7,7 @@ import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extractForm4Data } from '../../../../lib/email/form4-data-extractor';
 import { StalenessBanner } from './sections/StalenessBanner';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 import {
   normalizeForm4Data,
   normalizePersonName,
@@ -1016,6 +1017,9 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
           </tr>
         </tbody>
       </table>
+
+      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
+      <XSentimentBlock rawData={summaryData} formType="Form 4" />
 
       <EmailFooter
         filingUrl={filingUrl}
