@@ -1,145 +1,216 @@
-/**
- * Validated Summary Generation
- *
- * Wraps the core summarizeFiling function to add extractor validation.
- * Extractors run after AI generation to validate and enrich output.
- *
- * This module provides:
- * 1. Post-generation validation using extractors
- * 2. Gap-filling for sparse AI output
- * 3. Discrepancy logging for monitoring AI quality
- *
- * @module summarize-with-validation
- */
-
 import { summarizeFiling, SummarizationOptions, SummarizationResult } from './summarize';
-import { getExtractor } from '../email/extractor-registry';
-import { mergeWithFallback, logDataDiscrepancies, calculateFillRate } from '../email/extractor-merge-utils';
+import { extract8KData } from '../email/8k-data-extractor';
+import { extractForm4Data } from '../email/form4-data-extractor';
+import { extractForm144Data } from '../email/form144-data-extractor';
+import { extract10KData } from '../email/10k-data-extractor';
+import { extract10QData } from '../email/10q-data-extractor';
+import { extractS1Data } from '../email/s1-data-extractor';
+import { extractS3Data } from '../email/s3-data-extractor';
+import { extractDEF14AData } from '../email/def14a-data-extractor';
+import { extractForm11KData } from '../email/form11k-data-extractor';
+import { extractSC13GData } from '../email/sc13g-data-extractor';
+import { extractSC13DData } from '../email/sc13d-data-extractor';
+import { extract424B2Data } from '../email/424b2-data-extractor';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 
 const componentLogger = logger.child('summarize-with-validation');
 
-/**
- * Extended summarization result with validation metadata
- */
+// ---------------------------------------------------------------------------
+// Private implementation: extractor dispatch
+// ---------------------------------------------------------------------------
+
+type ExtractorFunction = (summaryText: string) => Record<string, unknown>;
+
+const EXTRACTOR_REGISTRY: Record<string, ExtractorFunction> = {
+  '10-K': extract10KData as ExtractorFunction,
+  '10-Q': extract10QData as ExtractorFunction,
+  '8-K': extract8KData as ExtractorFunction,
+  '4': extractForm4Data as ExtractorFunction,
+  'Form 4': extractForm4Data as ExtractorFunction,
+  '144': extractForm144Data as ExtractorFunction,
+  'Form 144': extractForm144Data as ExtractorFunction,
+  'S-1': extractS1Data as ExtractorFunction,
+  'S-3': extractS3Data as ExtractorFunction,
+  'DEF 14A': extractDEF14AData as ExtractorFunction,
+  'DEF14A': extractDEF14AData as ExtractorFunction,
+  '11-K': extractForm11KData as ExtractorFunction,
+  '11K': extractForm11KData as ExtractorFunction,
+  'SC 13G': extractSC13GData as ExtractorFunction,
+  'SC13G': extractSC13GData as ExtractorFunction,
+  'SC 13D': extractSC13DData as ExtractorFunction,
+  'SC13D': extractSC13DData as ExtractorFunction,
+  '424B2': extract424B2Data as ExtractorFunction,
+};
+
+function getExtractor(formType: string): ExtractorFunction | null {
+  if (!formType) return null;
+  return EXTRACTOR_REGISTRY[formType] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Private implementation: merge + discrepancy logging
+// ---------------------------------------------------------------------------
+
+interface MergeResult {
+  data: Record<string, unknown>;
+  fieldsFilledByExtractor: string[];
+  fieldsWithDiscrepancies: string[];
+}
+
+function isEmpty(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+function hasDifference(aiValue: unknown, extractedValue: unknown): boolean {
+  if (isEmpty(aiValue) || isEmpty(extractedValue)) return false;
+  if (Array.isArray(aiValue) && Array.isArray(extractedValue)) {
+    return Math.abs(aiValue.length - extractedValue.length) > 1;
+  }
+  if (typeof aiValue === 'string' && typeof extractedValue === 'string') {
+    return aiValue.toLowerCase().trim() !== extractedValue.toLowerCase().trim();
+  }
+  return false;
+}
+
+function mergeWithFallback(
+  aiData: Record<string, unknown> | null | undefined,
+  extractedData: Record<string, unknown>
+): MergeResult {
+  if (!aiData) {
+    return {
+      data: { ...extractedData },
+      fieldsFilledByExtractor: Object.keys(extractedData),
+      fieldsWithDiscrepancies: [],
+    };
+  }
+
+  const mergedData: Record<string, unknown> = { ...aiData };
+  const fieldsFilledByExtractor: string[] = [];
+  const fieldsWithDiscrepancies: string[] = [];
+
+  for (const [key, extractedValue] of Object.entries(extractedData)) {
+    const aiValue = aiData[key];
+    if (!isEmpty(aiValue) && !isEmpty(extractedValue) && hasDifference(aiValue, extractedValue)) {
+      fieldsWithDiscrepancies.push(key);
+    }
+    if (isEmpty(aiValue) && !isEmpty(extractedValue)) {
+      mergedData[key] = extractedValue;
+      fieldsFilledByExtractor.push(key);
+    }
+  }
+
+  return { data: mergedData, fieldsFilledByExtractor, fieldsWithDiscrepancies };
+}
+
+function summarizeValue(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'string') {
+    return value.length > 50 ? `"${value.substring(0, 47)}..."` : `"${value}"`;
+  }
+  if (Array.isArray(value)) return `Array(${value.length})`;
+  if (typeof value === 'object') return `Object(${Object.keys(value as object).length} keys)`;
+  return String(value);
+}
+
+function logDataDiscrepancies(
+  formType: string,
+  aiData: Record<string, unknown> | null | undefined,
+  extractedData: Record<string, unknown> | null | undefined
+): void {
+  if (!aiData || !extractedData) return;
+  try {
+    const discrepancies: Array<{ field: string; aiValue: unknown; extractedValue: unknown }> = [];
+    for (const [key, extractedValue] of Object.entries(extractedData)) {
+      const aiValue = aiData[key];
+      if (!isEmpty(aiValue) && !isEmpty(extractedValue) && hasDifference(aiValue, extractedValue)) {
+        discrepancies.push({ field: key, aiValue, extractedValue });
+      }
+    }
+    if (discrepancies.length > 0) {
+      componentLogger.info('Data discrepancies detected between AI and extractor', {
+        formType,
+        discrepancyCount: discrepancies.length,
+        fields: discrepancies.map(d => d.field),
+      });
+      componentLogger.debug('Discrepancy details', {
+        formType,
+        discrepancies: discrepancies.map(d => ({
+          field: d.field,
+          aiSummary: summarizeValue(d.aiValue),
+          extractedSummary: summarizeValue(d.extractedValue),
+        })),
+      });
+    }
+  } catch (error) {
+    componentLogger.warn('Error logging discrepancies', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function calculateFillRate(mergeResult: MergeResult): number {
+  const totalFields = Object.keys(mergeResult.data).length;
+  if (totalFields === 0) return 0;
+  return Math.round((mergeResult.fieldsFilledByExtractor.length / totalFields) * 100);
+}
+
+// ---------------------------------------------------------------------------
+// Public interface
+// ---------------------------------------------------------------------------
+
 export interface ValidatedSummarizationResult extends SummarizationResult {
-  /** Whether extractor validation was applied */
   extractorValidated: boolean;
-  /** Fields that were filled by the extractor */
   fieldsFilledByExtractor?: string[];
-  /** Fields that had discrepancies between AI and extractor */
   fieldsWithDiscrepancies?: string[];
-  /** Percentage of fields filled by extractor (0-100) */
   extractorFillRate?: number;
 }
 
-/**
- * Options for validated summarization
- */
 export interface ValidatedSummarizationOptions extends SummarizationOptions {
-  /** Skip extractor validation (default: false) */
   skipValidation?: boolean;
-  /** Form type for extractor lookup (if not in metadata) */
   formType?: string;
 }
 
-/**
- * Summarize an SEC filing with post-generation extractor validation
- *
- * This function:
- * 1. Calls the core summarizeFiling to get AI-generated summary
- * 2. Runs the appropriate extractor on the summaryText
- * 3. Merges AI data with extracted data (AI wins conflicts)
- * 4. Logs discrepancies for monitoring
- * 5. Returns enriched result with validation metadata
- *
- * @param content - The SEC filing content to summarize
- * @param options - Summarization options including metadata
- * @returns Validated summarization result with enriched summaryJSON
- *
- * @example
- * ```typescript
- * const result = await summarizeFilingWithValidation(filingContent, {
- *   filingId: 'abc123',
- *   metadata: {
- *     formType: '10-K',
- *     companyName: 'NVIDIA Corporation',
- *     ticker: 'NVDA',
- *   },
- * });
- *
- * if (result.fieldsFilledByExtractor?.length) {
- *   console.log('Extractor filled:', result.fieldsFilledByExtractor);
- * }
- * ```
- */
 export async function summarizeFilingWithValidation(
   content: string,
   options: ValidatedSummarizationOptions
 ): Promise<ValidatedSummarizationResult> {
   const { skipValidation = false, formType, ...baseOptions } = options;
+  const effectiveFormType = formType ?? options.metadata?.formType;
 
-  // Get form type from options or metadata
-  const effectiveFormType = formType || options.metadata?.formType;
-
-  // Call core summarization
   const aiResult = await summarizeFiling(content, baseOptions);
 
-  // If validation is skipped or no form type, return as-is
   if (skipValidation || !effectiveFormType) {
-    return {
-      ...aiResult,
-      extractorValidated: false,
-    };
+    return { ...aiResult, extractorValidated: false };
   }
 
-  // Get appropriate extractor
   const extractor = getExtractor(effectiveFormType);
-
-  // If no extractor available for this form type, return as-is
   if (!extractor) {
-    componentLogger.debug('No extractor available for form type', {
-      formType: effectiveFormType,
-    });
-    return {
-      ...aiResult,
-      extractorValidated: false,
-    };
+    componentLogger.debug('No extractor available for form type', { formType: effectiveFormType });
+    return { ...aiResult, extractorValidated: false };
   }
 
-  // If no summary text, can't extract
   if (!aiResult.summaryText) {
-    componentLogger.warn('No summaryText available for extraction', {
-      formType: effectiveFormType,
-    });
-    return {
-      ...aiResult,
-      extractorValidated: false,
-    };
+    componentLogger.warn('No summaryText available for extraction', { formType: effectiveFormType });
+    return { ...aiResult, extractorValidated: false };
   }
 
   try {
-    // Extract structured data from summaryText
-    const extractedData = extractor(aiResult.summaryText) as Record<string, unknown>;
-
-    // Merge AI data with extracted data
+    const extractedData = extractor(aiResult.summaryText);
     const mergeResult = mergeWithFallback(
       aiResult.summaryJSON as Record<string, unknown> | null,
       extractedData
     );
-
-    // Log discrepancies for monitoring
     logDataDiscrepancies(
       effectiveFormType,
       aiResult.summaryJSON as Record<string, unknown> | null,
       extractedData
     );
-
-    // Calculate fill rate for monitoring
     const fillRate = calculateFillRate(mergeResult);
 
-    // Record metrics
     monitoring.incrementCounter(`ai.extractor_validation.${effectiveFormType}`, 1);
     if (mergeResult.fieldsFilledByExtractor.length > 0) {
       monitoring.incrementCounter(`ai.extractor_gap_fill.${effectiveFormType}`, 1);
@@ -165,26 +236,15 @@ export async function summarizeFilingWithValidation(
       extractorFillRate: fillRate,
     };
   } catch (error) {
-    // Don't let extractor errors fail the summarization
     componentLogger.error('Extractor validation failed', {
       formType: effectiveFormType,
       error: error instanceof Error ? error.message : String(error),
     });
     monitoring.incrementCounter(`ai.extractor_error.${effectiveFormType}`, 1);
-
-    return {
-      ...aiResult,
-      extractorValidated: false,
-    };
+    return { ...aiResult, extractorValidated: false };
   }
 }
 
-/**
- * Check if a form type supports extractor validation
- *
- * @param formType - The SEC form type to check
- * @returns true if validation is available for this form type
- */
 export function supportsExtractorValidation(formType: string): boolean {
   return getExtractor(formType) !== null;
 }
