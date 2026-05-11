@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.30.0] - 2026-05-11
+
+### Added
+- **End-to-end newsletter campaign funnel attribution.** Every campaign email now carries the subscriber's identity through the entire flow: email click (Resend webhook) → landing page (`?sub=<uuid>` cookie) → trial signup (Stripe webhook) → paid conversion. Three PostHog funnels (one per deliverability cohort, 14-day per-person window) give a per-cohort kill/scale decision two weeks after each broadcast. Replaces the prior "open Resend + Stripe dashboards and guess" attribution model.
+- **`SubscriberIdentifier` component (`components/analytics/subscriber-identifier.tsx`).** Mounted globally under `<PostHogProvider>` in `app/layout.tsx`. On any visit with `?sub=<uuid>`, it writes the subscriber id to cookie + localStorage *synchronously during render* (survives an instant OAuth click before any `useEffect` could fire) and calls `posthog.identify('sub_<uuid>')` so the subscriber's landing-page activity attributes to a real PostHog Person. Strict UUID-v4 validation fails closed on garbage input. One-shot identify gate via `useRef` keeps PostHog quiet across in-app navigation.
+- **`buildCampaignUrl(...)` in `lib/email/url-utils.ts`.** Single source of truth for campaign URLs. Every E1/E2/E3 CTA now routes through it: `tldrsec.app/?sub=<uuid>&utm_source=email&utm_medium=newsletter&utm_campaign=launch-2026-05&utm_content=eN`. Replaces the prior hardcoded `'https://tldrsec.app'` + `ref=campaign` query param scattered across templates.
+- **`campaign_sends` idempotency log table.** New Supabase table with `UNIQUE NULLS NOT DISTINCT (campaign_id, cohort_id, email_id, variant)` constraint. Send route INSERTs `status='pending'` before the Resend call, flips to `'sent'` / `'failed'` after completion. A duplicate POST returns 409 with the prior row's state instead of silently double-broadcasting to 40 real subscribers.
+- **Bounce + complaint suppression on `newsletter_subscribers`.** New `bounced_at`, `bounce_type`, `complained_at` columns. The Resend webhook handler's new `email.bounced` and `email.complained` branches set these timestamps by email match; the campaign send route filters them out alongside `unsubscribed_at IS NULL`. One hard bounce on E1 now naturally suppresses E2 and E3 to that address.
+- **Pinned cohort assignment on `newsletter_subscribers.cohort_id`.** Replaces the index-based slice that would drift across E1/E2/E3 sends if new subscribers joined mid-campaign. Backfill script `scripts/backfill-newsletter-cohorts.ts` assigned `c1=40, c2=40, c3=44` to the existing 124-subscriber list. Send route now SELECTs `WHERE cohort_id = $1` instead of `LIMIT/OFFSET` against the full ordered list.
+- **Resend tag schema extension (`subscriberId`, `campaignId`, `cohortId`, `emailId`).** The webhook handler accepts both `camelCase` and `snake_case` forms (matching the existing dual-key pattern documented in `wiki/product/resend-webhook.md`). For subscriber-keyed events the PostHog distinct_id is `sub_<uuid>` (prefixed so it never collides with a Clerk user cuid).
+- **`LANDING_CTA_CLICK` wired across the landing page.** Previously only `hero-section-v2.tsx` fired the event. Now `cta-section-v2`, `pricing-section-v2` (alongside the existing `PRICING_PLAN_SELECTED`), `footer-section-v2` (Sign Up + Pricing only, not Sign In), and `landing-navbar` all fire with the correct `cta_location`. Funnel step 3 (landing CTA click) now actually measures.
+
+### Changed
+- **`identifyUser` rewritten for subscriber→user identity stitching (`lib/hooks/use-analytics.ts`).** Alias-first / identify-second: while the PostHog distinct_id is still `sub_<uuid>`, `posthog.alias(user.id)` merges the subscriber timeline INTO the user timeline; THEN `posthog.identify(user.id)` switches the canonical id. Cookie fallback (`document.cookie` regex) handles OAuth flows where localStorage is lost across the Clerk redirect. Cleans up storage post-merge so subsequent identifies don't re-alias. Validated live in PostHog: one merged Person record with all 6 funnel events attributed.
+
+### Fixed
+- **Postgres `UNIQUE` on `campaign_sends` treated NULL ≠ NULL — duplicate variant-less sends slipped through.** Caught by the dry-run harness against live Supabase. Fix: `lib/supabase/migrations/fix-campaign-sends-null-variant-uniqueness.sql` rebuilds the constraint with `NULLS NOT DISTINCT` (Postgres 15+). Variant-less duplicate POSTs now correctly return 409.
+
 ## [0.0.29.2] - 2026-05-11
 
 ### Added
