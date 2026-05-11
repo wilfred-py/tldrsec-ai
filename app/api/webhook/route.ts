@@ -607,12 +607,27 @@ async function handleResendWebhook(req: Request) {
   try {
     if (evt.type === 'email.opened' || evt.type === 'email.clicked') {
       const tagMap = normalizeResendTags(evt.data.tags);
-      const userId = tagMap.userId || tagMap.user_id;
 
-      if (!userId) {
-        // No user attribution — skip silently. Resend still gets a 200 so it
+      // Dual-key fallback (camelCase + snake_case) — matches the existing
+      // pattern documented in wiki/product/resend-webhook.md. Guards against
+      // Resend payload format flips.
+      const subscriberIdTag = tagMap.subscriberId || tagMap.subscriber_id;
+      const campaignIdTag   = tagMap.campaignId   || tagMap.campaign_id;
+      const emailIdTag      = tagMap.emailId      || tagMap.email_id;
+      const cohortIdTag     = tagMap.cohortId     || tagMap.cohort_id;
+
+      // Transactional emails carry userId; campaign emails carry subscriberId.
+      // Either is a valid PostHog distinct_id. Subscriber ids are prefixed
+      // `sub_<uuid>` so they never collide with Clerk user cuids when the
+      // landing-page identify call later aliases them together.
+      const userId = tagMap.userId || tagMap.user_id;
+      const distinctId = userId || (subscriberIdTag ? `sub_${subscriberIdTag}` : undefined);
+      const isSubscriber = !userId && !!subscriberIdTag;
+
+      if (!distinctId) {
+        // No attribution — skip silently. Resend still gets a 200 so it
         // doesn't retry, but we don't pollute PostHog with anonymous events.
-        console.warn(`[webhook][resend] ${evt.type} missing userId tag for email ${evt.data.email_id}`);
+        console.warn(`[webhook][resend] ${evt.type} missing distinct_id (userId or subscriberId) tag for email ${evt.data.email_id}`);
       } else {
         const baseProps = {
           email_id: evt.data.email_id || '',
@@ -620,24 +635,89 @@ async function handleResendWebhook(req: Request) {
           form_type: tagMap.formType || tagMap.form_type,
           ticker: tagMap.ticker,
           filing_id: tagMap.filingId || tagMap.filing_id,
+          // Campaign attribution (only set for newsletter campaign emails)
+          campaign_id: campaignIdTag,
+          email_position: emailIdTag,           // 'e1' | 'e2' | 'e3'
+          cohort_id: cohortIdTag,               // 'c1' | 'c2' | 'c3'
+          is_subscriber: isSubscriber,
         };
 
         if (evt.type === 'email.opened') {
-          captureServerEvent(userId, EVENTS.EMAIL_OPENED, baseProps);
+          captureServerEvent(distinctId, EVENTS.EMAIL_OPENED, baseProps);
         } else {
-          captureServerEvent(userId, EVENTS.EMAIL_CLICKED, {
+          captureServerEvent(distinctId, EVENTS.EMAIL_CLICKED, {
             ...baseProps,
             link: evt.data.click?.link,
           });
         }
       }
+    } else if (evt.type === 'email.bounced' || evt.type === 'email.complained') {
+      // Suppression-list updates. Mark the subscriber's row in Supabase so
+      // the campaign send route stops shipping to dead/spam-complaining
+      // addresses. We also forward the event to PostHog as diagnostic data
+      // so the funnel-failure investigation has it.
+      await handleResendSuppressionEvent(evt);
     }
-    // All other event types (sent/delivered/bounced/complained/delivery_delayed)
-    // are acknowledged but not forwarded — add cases here if downstream consumers need them.
+    // sent / delivered / delivery_delayed: acknowledged but not forwarded —
+    // these don't move the funnel and don't affect deliverability state.
   } catch (err) {
     console.error('[webhook][resend] Handler error (non-fatal, returning 200):', err);
   }
 
   waitUntil(shutdownServerPostHog());
   return NextResponse.json({ received: true });
+}
+
+/**
+ * Handle Resend `email.bounced` and `email.complained` events.
+ *
+ * Looks up the subscriber by recipient email and writes the event timestamp
+ * (and bounce_type, for bounces) onto the row. The campaign send route's
+ * SELECT filter excludes any row with bounced_at OR complained_at set, so
+ * this naturally suppresses follow-up emails to the same address.
+ *
+ * Errors are logged but don't propagate — Resend gets a 200 either way.
+ * If a webhook event arrives for an address we don't have a row for (e.g.
+ * a transactional User who isn't a newsletter subscriber), the UPDATE
+ * affects 0 rows and we move on.
+ */
+async function handleResendSuppressionEvent(evt: ResendEvent): Promise<void> {
+  const recipient = Array.isArray(evt.data.to) ? evt.data.to[0] : evt.data.to;
+  if (!recipient || typeof recipient !== 'string') {
+    console.warn(`[webhook][resend] ${evt.type} missing recipient address`);
+    return;
+  }
+
+  const { createSupabaseServiceClient } = await import('@/lib/supabase/server-client');
+  const supabase = createSupabaseServiceClient();
+
+  if (evt.type === 'email.bounced') {
+    // Resend's bounce payload includes a `bounce` object with `type` (hard|soft|undetermined).
+    const bounceData = (evt.data as ResendEmailEventData & { bounce?: { type?: string } }).bounce;
+    const bounceType = bounceData?.type ?? 'undetermined';
+    const { error, count } = await supabase
+      .from('newsletter_subscribers')
+      .update({ bounced_at: new Date().toISOString(), bounce_type: bounceType }, { count: 'exact' })
+      .eq('email', recipient)
+      .is('bounced_at', null);  // don't overwrite an earlier bounce timestamp
+
+    if (error) {
+      console.error(`[webhook][resend] Failed to mark bounce for ${recipient}:`, error.message);
+    } else if ((count ?? 0) > 0) {
+      console.log(`[webhook][resend] Marked ${recipient} as bounced (${bounceType})`);
+    }
+  } else {
+    // email.complained
+    const { error, count } = await supabase
+      .from('newsletter_subscribers')
+      .update({ complained_at: new Date().toISOString() }, { count: 'exact' })
+      .eq('email', recipient)
+      .is('complained_at', null);
+
+    if (error) {
+      console.error(`[webhook][resend] Failed to mark complaint for ${recipient}:`, error.message);
+    } else if ((count ?? 0) > 0) {
+      console.log(`[webhook][resend] Marked ${recipient} as complained`);
+    }
+  }
 }

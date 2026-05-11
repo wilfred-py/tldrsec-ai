@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { viewportOnce } from '@/lib/animations/landing-animations';
 import Link from 'next/link';
+import { useAnalytics } from '@/lib/hooks/use-analytics';
+import { EVENTS } from '@/lib/analytics/events';
 import { CTA_SECTION } from '@/lib/landing/copy';
 
 /**
@@ -23,6 +25,13 @@ const trustPoints = CTA_SECTION.trustPoints;
  * - Pattern overlay for visual interest
  */
 export function CTASectionV2() {
+  const { trackEvent } = useAnalytics();
+  const handleCtaClick = () => {
+    trackEvent(EVENTS.LANDING_CTA_CLICK, {
+      cta_location: 'cta_section',
+      cta_text: 'Get Started',
+    });
+  };
   return (
     <section
       className="py-24 relative overflow-hidden"
@@ -59,7 +68,7 @@ export function CTASectionV2() {
           {/* CTA Button */}
           <div className="mb-8">
             <Button asChild className="brand-button-gradient">
-              <Link href="/sign-up">
+              <Link href="/sign-up" onClick={handleCtaClick}>
                 {CTA_SECTION.buttonLabel}
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Link>

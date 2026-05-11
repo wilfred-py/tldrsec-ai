@@ -9,6 +9,8 @@ import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
 import { Menu, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Logo } from '@/components/ui/logo';
+import { useAnalytics } from '@/lib/hooks/use-analytics';
+import { EVENTS } from '@/lib/analytics/events';
 
 interface LandingNavbarProps {
   heroRef: RefObject<HTMLElement | null>;
@@ -66,12 +68,23 @@ export function LandingNavbar({ heroRef }: LandingNavbarProps) {
     { label: 'Pricing', href: '#pricing' },
   ];
 
+  const { trackEvent } = useAnalytics();
+
   // 3-state CTA button logic (with fallback before Clerk loads)
   const ctaHref = !isLoaded ? '/sign-up' : isOnboarded ? '/dashboard' : isSignedIn ? '/onboarding' : '/sign-up';
   const ctaLabel = !isLoaded ? 'Get Started' : isOnboarded ? 'Go to Dashboard' : isSignedIn ? 'Complete Setup' : 'Get Started';
 
+  const handleCtaClick = () => {
+    setIsNavigating(true);
+    trackEvent(EVENTS.LANDING_CTA_CLICK, {
+      cta_location: 'nav',
+      cta_text: ctaLabel,
+      variant: !isLoaded ? 'loading' : isOnboarded ? 'dashboard' : isSignedIn ? 'onboarding' : 'signed_out',
+    });
+  };
+
   const ctaButton = (
-    <Link href={ctaHref} onClick={() => setIsNavigating(true)}>
+    <Link href={ctaHref} onClick={handleCtaClick}>
       <Button
         className="brand-button-gradient"
         disabled={isNavigating}
