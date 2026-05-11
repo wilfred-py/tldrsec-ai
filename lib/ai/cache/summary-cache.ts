@@ -26,7 +26,7 @@ export interface SummaryCacheKey {
  */
 export interface SummaryCacheEntry {
   summaryId: string;
-  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'COMPLETED_WITH_WARNINGS';
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'COMPLETED_WITH_WARNINGS' | 'INSUFFICIENT_CONTENT';
   result?: SummarizationResult;
   error?: string;
   lastUpdated: Date;
@@ -86,7 +86,7 @@ export class SummaryCache {
         // Convert database entry to cache entry
         const cacheEntry: SummaryCacheEntry = {
           summaryId: existingSummary.id,
-          status: existingSummary.processingStatus as 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'COMPLETED_WITH_WARNINGS',
+          status: existingSummary.processingStatus as 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'COMPLETED_WITH_WARNINGS' | 'INSUFFICIENT_CONTENT',
           result: {
             summaryId: existingSummary.id,
             summaryText: existingSummary.summaryText,
@@ -143,7 +143,7 @@ export class SummaryCache {
    */
   updateStatus(
     key: SummaryCacheKey, 
-    status: 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'COMPLETED_WITH_WARNINGS',
+    status: 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'COMPLETED_WITH_WARNINGS' | 'INSUFFICIENT_CONTENT',
     result?: SummarizationResult,
     error?: string
   ): void {
@@ -166,7 +166,12 @@ export class SummaryCache {
     componentLogger.debug(`Updated cache entry for ${cacheKey} to ${status}`);
     
     // Clean up completed/failed entries after a delay
-    if (status === 'COMPLETED' || status === 'FAILED' || status === 'COMPLETED_WITH_WARNINGS') {
+    if (
+      status === 'COMPLETED' ||
+      status === 'FAILED' ||
+      status === 'COMPLETED_WITH_WARNINGS' ||
+      status === 'INSUFFICIENT_CONTENT'
+    ) {
       setTimeout(() => {
         // Only remove if it's the same entry (not replaced)
         const currentEntry = this.inMemoryCache.get(cacheKey);

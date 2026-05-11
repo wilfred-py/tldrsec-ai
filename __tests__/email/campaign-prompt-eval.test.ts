@@ -147,17 +147,41 @@ describe('Campaign voice + tone (AC10)', () => {
       expect(html).toMatch(/href="https:\/\/tldrsec\.app"[^>]*style="display:inline-block;background-color:#2563eb/);
     });
 
-    it('keeps an EDGAR audit hyperlink in the body so users can verify the source', async () => {
-      const { html } = await getCampaignEmailContent(1, baseOptions);
-      // "Source: SEC EDGAR" anchor goes through `getSecFilingViewerUrl()`
-      // — same path production filing emails use, so a real `filing.filingUrl`
-      // resolves to an `/Archives/edgar/data/...-index.htm` page (the actual
-      // filing index) and an empty/missing URL falls back to EDGAR company
-      // search. Either way, the anchor is to sec.gov, brand-purple, and
-      // labeled "Source: SEC EDGAR".
+    it('renders an EDGAR audit hyperlink when a real filing URL is present', async () => {
+      // DB-driven sends with a real `Summary.url`/`Summary.filingUrl` get the
+      // "Source: SEC EDGAR" anchor, brand-purple, pointing at the actual
+      // filing on sec.gov. The fallback fixture (no filings supplied) leaves
+      // `filingUrl` empty by design and the anchor is omitted — covered by
+      // the next test. See `__tests__/email/campaign-edgar-link.test.ts` for
+      // the full URL-shape regression matrix.
+      const { html } = await getCampaignEmailContent(1, {
+        ...baseOptions,
+        filings: [{
+          ticker: 'AAPL',
+          companyName: 'Apple Inc',
+          filingType: '10-Q',
+          filingDate: new Date('2026-04-15'),
+          importance: 'high',
+          summary: 'Quarterly results.',
+          title: 'Q2 fiscal 2026 results',
+          filingUrl: 'https://www.sec.gov/Archives/edgar/data/320193/000032019326000077/aapl-20260330.htm',
+        }],
+      });
       expect(html).toMatch(/<a href="https:\/\/www\.sec\.gov\/[^"]*"[^>]*>\s*Source: SEC EDGAR\s*<\/a>/);
       // Brand-purple EmailColors.semantic.accent (#7C3AED) for the link.
       expect(html).toMatch(/<a href="https:\/\/www\.sec\.gov\/[^"]*" style="color:#7C3AED/);
+    });
+
+    it('omits the EDGAR audit anchor in the fallback path (no real filing URL)', async () => {
+      // Pre-fix, the fallback fixture's empty `filingUrl` produced a
+      // "Source: SEC EDGAR" link to EDGAR's companysearch page — recipients
+      // perceived this as a broken redirect. Post-fix, the anchor is
+      // omitted; the line collapses to "Filed: <date>". DB-driven sends
+      // continue to render the anchor (covered above).
+      const { html } = await getCampaignEmailContent(1, baseOptions);
+      expect(html).not.toMatch(/Source: SEC EDGAR/);
+      expect(html).not.toContain('searchedgar/companysearch');
+      expect(html).toContain('Filed: ');
     });
   });
 

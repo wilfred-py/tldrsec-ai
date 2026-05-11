@@ -20,7 +20,7 @@ import { renderAsync } from '@react-email/render';
 import { getPrismaClient } from '../db/prisma';
 import { logger } from '../logging';
 import { escapeHtml } from './security-helpers';
-import { getSecFilingViewerUrl, buildCampaignUrl } from './url-utils';
+import { getSecFilingViewerUrl, resolveSecPrimaryDocumentUrl, buildCampaignUrl } from './url-utils';
 import {
   capHeadline,
   ensureTickerPrefix,
@@ -203,6 +203,15 @@ export interface ScoredSummaryRow {
   smartSubject: string | null;
   tokensUsed: number | null;
   filingUrl: string | null;
+  /**
+   * Primary document URL when ingestion was able to compute it
+   * (`Summary.url` in Prisma, populated from `metadata.primaryDocUrl`).
+   * Preferred over `filingUrl` for the email link so recipients land on
+   * the actual filing instead of the documents-list page. Same field-
+   * preference rule production summary emails apply at
+   * `lib/email/summary-service.ts:148`.
+   */
+  url: string | null;
   ticker: { symbol: string; companyName: string };
   score: number;
 }
@@ -235,6 +244,12 @@ export async function fetchScoredSummariesLast30Days(limit: number = 50): Promis
         filingDate: { gte: thirtyDaysAgo },
         summaryText: { not: '' },
         importance: { not: null },
+        // Filter out orphaned rows where the ticker relation no longer exists.
+        // Prisma's required-relation contract throws at deserialization time
+        // when an included `ticker` is null in DB — observed in prod with rows
+        // whose Ticker was deleted but Summary remained. The whole findMany
+        // fails for the entire batch when even one orphan is in-scope.
+        ticker: { is: {} },
         OR: [
           { processingStatus: null },
           { processingStatus: { notIn: SUMMARY_FAILED_STATUSES } },
@@ -249,6 +264,10 @@ export async function fetchScoredSummariesLast30Days(limit: number = 50): Promis
         smartSubject: true,
         tokensUsed: true,
         filingUrl: true,
+        // `url` holds the resolved primary doc URL when ingestion populated
+        // `metadata.primaryDocUrl`; falls back to `filingUrl` in
+        // `toCampaignFiling` when null. Mirrors production digest behavior.
+        url: true,
         ticker: {
           select: { symbol: true, companyName: true },
         },
@@ -293,7 +312,7 @@ export function dedupeByTicker<T extends { ticker: { symbol: string } }>(
   return out;
 }
 
-function toCampaignFiling(s: ScoredSummaryRow): CampaignFiling {
+export function toCampaignFiling(s: ScoredSummaryRow): CampaignFiling {
   const json = s.summaryJSON as Record<string, unknown> | null;
   let title = s.smartSubject || '';
   if (!title && json) {
@@ -311,10 +330,50 @@ function toCampaignFiling(s: ScoredSummaryRow): CampaignFiling {
     importance: (s.importance as CampaignFiling['importance']) || 'medium',
     summary: summaryText,
     title,
-    // Pass the real EDGAR URL through so the campaign hero's "Source" link
-    // resolves to the actual filing index, same path production uses.
-    filingUrl: s.filingUrl ?? undefined,
+    // Prefer the primary doc URL (`Summary.url`) over the filing-level URL
+    // (`Summary.filingUrl`) — same rule production summary emails apply at
+    // `lib/email/summary-service.ts:148`. When `url` is null (legacy rows
+    // ingested before primaryDocUrl was tracked, or rows where the upstream
+    // index.json fetch failed at ingest time), `fetchCampaignFilings`
+    // resolves the `-index.htm` URL via `resolveSecPrimaryDocumentUrl` as a
+    // backstop before this struct hits the renderer.
+    filingUrl: s.url ?? s.filingUrl ?? undefined,
   };
+}
+
+/**
+ * Resolve `-index.htm` and directory-shaped EDGAR URLs to the primary document
+ * via `resolveSecPrimaryDocumentUrl` so recipients land on the actual filing
+ * (not the documents-list page) even when `Summary.url` was not populated at
+ * ingest time. Runs in parallel because the resolver has an in-process
+ * accession-keyed cache and a small filing batch (1-3) won't slam EDGAR.
+ *
+ * Resolution failures (network error, no matching primary doc, malformed URL)
+ * are non-fatal — the resolver returns the input URL unchanged, so the link
+ * is at worst the same as today's behavior. Never throws.
+ */
+async function resolveCampaignFilingUrls(
+  filings: CampaignFiling[],
+): Promise<CampaignFiling[]> {
+  return Promise.all(
+    filings.map(async (f) => {
+      if (!f.filingUrl) return f;
+      try {
+        const resolved = await resolveSecPrimaryDocumentUrl(f.filingUrl, f.filingType);
+        if (resolved === f.filingUrl) return f;
+        return { ...f, filingUrl: resolved };
+      } catch (err) {
+        // resolveSecPrimaryDocumentUrl already swallows internally, but belt-and-
+        // suspenders so a failed resolve never breaks the whole campaign send.
+        campaignLogger.warn('Primary doc resolution failed; using input URL', {
+          ticker: f.ticker,
+          filingType: f.filingType,
+          error: err instanceof Error ? err.message : 'Unknown',
+        });
+        return f;
+      }
+    }),
+  );
 }
 
 /**
@@ -323,13 +382,18 @@ function toCampaignFiling(s: ScoredSummaryRow): CampaignFiling {
  * and filing size (larger = more substance). One filing per ticker.
  *
  * Returns up to `count` filings, or empty array if none are found.
+ *
+ * URLs are resolved to primary documents via `resolveCampaignFilingUrls` before
+ * returning so the renderer sees a viewable doc URL even when `Summary.url`
+ * was null in the DB row.
  */
 export async function fetchCampaignFilings(count: number = 3): Promise<CampaignFiling[]> {
   const scored = await fetchScoredSummariesLast30Days(50);
   if (scored.length === 0) return [];
 
   const deduped = dedupeByTicker(scored, 1).slice(0, count);
-  const results = deduped.map(toCampaignFiling);
+  const mapped = deduped.map(toCampaignFiling);
+  const results = await resolveCampaignFilingUrls(mapped);
 
   campaignLogger.info(`Fetched ${results.length} campaign filings`, {
     total: scored.length,
@@ -434,11 +498,17 @@ async function email1(options: CampaignEmailOptions): Promise<CampaignEmailConte
 
   // EDGAR audit link — production filing emails store a real `filingUrl` on
   // the Summary record and run it through `getSecFilingViewerUrl()` to land
-  // on the proper archive index page. Mirror that here. When the campaign
-  // filing carries no URL (e.g. the curated fallback fixture has no real
-  // accession number), the helper falls back to EDGAR's company-search
-  // landing — which is at least more useful than a 10-Q search results list.
-  const edgarUrl = getSecFilingViewerUrl(filing?.filingUrl ?? CAMPAIGN_FALLBACK_HERO.filingUrl ?? '', rawFilingType);
+  // on the proper archive index page. Mirror that here.
+  //
+  // The renderer only emits the "Source: SEC EDGAR" anchor when there's a
+  // real per-filing URL. Otherwise (curated fallback fixture with no real
+  // accession, e.g. when `fetchCampaignFilings()` returns empty due to a
+  // backlog or transient DB error), the line collapses to "Filed: <date>"
+  // alone — better than handing the recipient a "Source" link that opens
+  // EDGAR's company-search page. Real DB-driven sends always carry a URL
+  // through `toCampaignFiling` and continue to render the link.
+  const rawEdgarSource = filing?.filingUrl ?? CAMPAIGN_FALLBACK_HERO.filingUrl ?? '';
+  const edgarUrl = rawEdgarSource ? getSecFilingViewerUrl(rawEdgarSource, rawFilingType) : '';
 
   // Trial CTA target. Campaign recipients are unregistered waitlist members
   // — clicking the bottom button (positioned where production filing emails
@@ -449,13 +519,17 @@ async function email1(options: CampaignEmailOptions): Promise<CampaignEmailConte
     ? buildCampaignUrl({ subscriberId: options.subscriberId, emailId: options.emailId })
     : 'https://tldrsec.app';
 
+  const filedLine = edgarUrl
+    ? `Filed: ${filedDate} &middot; <a href="${edgarUrl}" style="color:${EmailColors.semantic.accent};text-decoration:underline;font-weight:500;">Source: SEC EDGAR</a>`
+    : `Filed: ${filedDate}`;
+
   const content = `
     ${heroHtml}
 
     <p style="margin:0 0 16px 15px;color:${EmailColors.text.body};font-size:14px;line-height:1.6;">${summaryBody}</p>
 
     <p style="margin:0 0 32px 15px;color:${EmailColors.text.muted};font-size:12px;">
-      Filed: ${filedDate} &middot; <a href="${edgarUrl}" style="color:${EmailColors.semantic.accent};text-decoration:underline;font-weight:500;">Source: SEC EDGAR</a>
+      ${filedLine}
     </p>
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 16px;">
@@ -483,7 +557,7 @@ ${rawHeroHeadline}${rawWhyItMatters ? `\n\n${rawWhyItMatters}` : ''}
 
 ${rawSummaryBody}
 
-Filed: ${filedDate} · Source: SEC EDGAR (${edgarUrl})
+${edgarUrl ? `Filed: ${filedDate} · Source: SEC EDGAR (${edgarUrl})` : `Filed: ${filedDate}`}
 
 >> See more filings like this: ${ctaUrl}
 

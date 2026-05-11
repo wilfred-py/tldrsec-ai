@@ -19,7 +19,14 @@ const componentLogger = logger.child('xai-direct');
 const XAI_BASE_URL = 'https://api.x.ai/v1';
 const XAI_RESPONSES_PATH = '/responses';
 const DEFAULT_TIMEOUT_MS = 120_000;
-const DEFAULT_MODEL = 'grok-4.20-reasoning';
+// xAI native slug for grok-4.3 (bare slug; no `x-ai/` prefix — that's an
+// OpenRouter convention). Reasoning is built-in via the `reasoning` request
+// param; there is no separate `-reasoning` SKU.
+//
+// Previous default `'grok-4.20-reasoning'` was a typo that 404'd on every
+// sentiment call: x-sentiment-provider.ts builds its request without a
+// `model` field, so this default was reached in production.
+const DEFAULT_MODEL = 'grok-4.3';
 
 const TICK_TO_USD = 1e-10;
 

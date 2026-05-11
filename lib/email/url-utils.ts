@@ -176,6 +176,33 @@ export async function resolveSecPrimaryDocumentUrl(
       htmItems.sort((a, b) => Number(b.size || 0) - Number(a.size || 0));
       primary = htmItems[0];
     }
+    // 3. XML-primary fallback for ownership forms (3/4/5/144/13G/13D).
+    //    Two realities force this design:
+    //      a) EDGAR's index.json returns `type: "text.gif"` for every item
+    //         regardless of what the file actually is — so the API's `type`
+    //         field is useless for matching. Both steps 1+2 above use it
+    //         anyway because in practice .htm name-pattern fallback (step 2)
+    //         catches HTM-primary filings even when type is wrong. For XML
+    //         primaries we need a different signal.
+    //      b) Form 3/4/5/144/13G/13D filings have no .htm primary. The
+    //         filing IS an XML doc rendered with an XSLT stylesheet, which
+    //         `getSecFilingViewerUrl` injects downstream when given a bare
+    //         .xml path.
+    //    Gate on form type via `getXsltStylesheetDir` so 10-K/10-Q never
+    //    fall through and pick up XBRL fragments. Filter out known XBRL
+    //    linkbase / summary / R-file patterns, then take the largest
+    //    remaining .xml.
+    if (!primary && getXsltStylesheetDir(formType)) {
+      const xmlItems = items.filter(
+        (i) =>
+          /\.xml$/i.test(i.name) &&
+          !/^FilingSummary\.xml$/i.test(i.name) &&
+          !/^R\d+\.xml$/i.test(i.name) &&
+          !/_(lab|pre|def|cal|ref)\.xml$/i.test(i.name),
+      );
+      xmlItems.sort((a, b) => Number(b.size || 0) - Number(a.size || 0));
+      primary = xmlItems[0];
+    }
     if (!primary?.name) return filingUrl;
     const resolved = `${basePath}/${primary.name}`;
     PRIMARY_DOC_CACHE.set(cacheKey, resolved);

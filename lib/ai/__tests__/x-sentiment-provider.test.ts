@@ -55,7 +55,7 @@ const mockNoRefundFailure = recordEnrichmentFailureNoRefund as jest.MockedFuncti
 function buildXaiResponse(overrides: Partial<Awaited<ReturnType<typeof callXaiResponses>>> = {}) {
   return {
     id: 'resp_1',
-    model: 'grok-4.20-reasoning',
+    model: 'grok-4.3',
     status: 'completed',
     text: JSON.stringify({
       direction: 'bullish',

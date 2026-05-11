@@ -128,6 +128,8 @@ Apply these steps IN ORDER to every task:
 
 - **Landing-page Gmail fixtures (`lib/landing/gmail-mock-summaries.ts`) — refresh weekly.** The hero component renders hardcoded summaries; they go stale. Each Monday: run `npx tsx scripts/refresh-landing-fixtures.ts` against prod DB (uses `.env.local`), pick 15 from the candidate output, hand-curate (editorial voice, news-verified, ≥8 brand-recognition tickers), and ship a PR. ~25 min. The `Updated weekly` footer copy (`components/landing/sections-v2/gmail-inbox-hero.tsx`) sets visitor expectations so this cadence cannot silently slip without breaking the promise.
 
+  **Hero-frame ↔ demo-widget coupling.** The hero positioning (currently the Form-4 / insider-buying wedge per `lib/landing/copy.ts` `HOMEPAGE_HERO_VARIANT`) sets an implicit promise about *what kind* of summaries the demo widget showcases. If the hero frame changes — for example, from "insider-buying wedge" to a different positioning — the weekly fixture curation criteria need to follow. Today's criteria optimize for "≥8 brand-recognition tickers" but say nothing about insider-trade representation. When the hero leans on Form 4, the demo should over-index on Form 4 examples to reinforce the claim. Before changing the hero frame, audit the curation criteria here; before changing the curation criteria, audit the hero frame. Tracked as a TODO in `.claude/tasks/landing-copy-rework.md`.
+
 ## Knowledge Base (Obsidian Vault)
 
 **IMPORTANT: This project's knowledge base lives in an Obsidian vault, NOT in `.context/wiki/`.**

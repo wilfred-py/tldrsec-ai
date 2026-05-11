@@ -8,9 +8,30 @@ import { sendEmail } from './index';
 import { logger } from '../logging';
 import { SecureEmailLogger } from './security-helpers';
 import { EmailSubjectService } from './subject-service';
+import { resolveSecPrimaryDocumentUrl } from './url-utils';
 
 // Create secure logger to prevent PII exposure
 const secureLogger = new SecureEmailLogger(logger.child('summary-service'));
+
+/**
+ * Upgrade an EDGAR filing URL to its primary document URL when possible.
+ *
+ * `Summary.url` (primaryDocUrl) is intermittently null upstream — at the time
+ * of the campaign-link audit, 100% of recent rows had `url=null` and a
+ * `-index.htm` `filingUrl`. The renderer-layer resolver is the load-bearing
+ * mechanism for those rows. `resolveSecPrimaryDocumentUrl` fetches EDGAR's
+ * `index.json` (cache-keyed by accession, so a digest with N filings makes at
+ * most N EDGAR fetches per process lifetime regardless of recipient count)
+ * and returns the input URL unchanged on any failure — never throws.
+ */
+async function safeResolveFilingUrl(filingUrl: string, formType: string): Promise<string> {
+  if (!filingUrl) return filingUrl;
+  try {
+    return await resolveSecPrimaryDocumentUrl(filingUrl, formType);
+  } catch {
+    return filingUrl;
+  }
+}
 
 /**
  * Get summaries for 10-K and 10-Q filings for a user's tickers
@@ -139,13 +160,19 @@ export async function sendLatestSummariesEmail(): Promise<{ success: boolean; er
       }
       
       // Add to filings for this ticker
-      // Use primaryDocUrl (stored in url field) when available for direct document links
+      // Prefer Summary.url (primaryDocUrl) over Summary.filingUrl, then upgrade
+      // any remaining `-index.htm` shape via the EDGAR resolver. The resolver
+      // covers the meaningful failure mode where ingestion didn't populate
+      // Summary.url (which the diagnostic showed was 100% of recent rows at
+      // the time of the campaign-link audit).
+      const candidateUrl = summary.url || summary.filingUrl;
+      const resolvedUrl = await safeResolveFilingUrl(candidateUrl, summary.filingType);
       tickerMap.get(ticker.symbol).filings.push({
         symbol: ticker.symbol,
         companyName: ticker.companyName,
         filingType: summary.filingType,
         filingDate: summary.filingDate,
-        filingUrl: summary.url || summary.filingUrl, // Prefer primaryDocUrl for direct document links
+        filingUrl: resolvedUrl,
         summaryId: summary.id,
         summaryUrl: `${process.env.NEXT_PUBLIC_APP_URL}/summary/${summary.id}`,
         summaryText: summary.summaryText,
@@ -279,6 +306,12 @@ export async function sendFilingSummaryEmail(
       }
     }
 
+    // Resolve filingUrl to its primary document via EDGAR index.json. Caller
+    // (summarize-cached-handler) already prefers cachedContent.primaryDocUrl,
+    // but on cache miss / transient cache failure the URL falls back to the
+    // raw -index.htm shape — same backstop the digest path now applies.
+    const resolvedFilingUrl = await safeResolveFilingUrl(filingData.filingUrl, filingData.filingType);
+
     // Generate email content using filing data
     const { html, text } = await getEmailTemplate(EmailType.FILING_NOTIFICATION, {
       recipientName: 'Investor',
@@ -288,7 +321,7 @@ export async function sendFilingSummaryEmail(
       filingType: filingData.filingType,
       filingDate: filingData.filingDate,
       summary: filingData.summary,
-      filingUrl: filingData.filingUrl,
+      filingUrl: resolvedFilingUrl,
       summaryData: filingData.summaryData,  // Pass structured data to email template
       importance: filingData.importance,
       feedbackUpUrl,

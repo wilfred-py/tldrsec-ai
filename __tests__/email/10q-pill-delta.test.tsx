@@ -164,11 +164,64 @@ describe('Form10QMinimalistTemplate — PillDelta', () => {
     expect(html).toContain('>30.00%<');
   });
 
-  it('passes through "N/A" values unchanged', () => {
+  it('filters rows whose VALUE is the "N/A" sentinel (the COIN $NaN regression)', () => {
+    // Single all-N/A row → no usable rows → scorecard suppressed entirely.
+    // Renders the empty-state placeholder instead of "$NaN" rows.
     const html = renderHtml(makeFiling([
       { label: 'FCF Margin', value: 'N/A', change: 'N/A' },
     ]));
-    expect(html).toContain('>N/A<');
+    expect(html).not.toContain('FCF Margin');
+    expect(html).not.toContain('$NaN');
+    expect(html).not.toContain('EARNINGS SCORECARD');
+    expect(html).not.toContain('Earnings Scorecard');
+  });
+
+  it('filters all six sentinel-value rows produced when the AI cannot extract financials', () => {
+    // Reproduces the prod COIN 10-Q rendering bug: prompt told Grok to emit
+    // "N/A" for unavailable values; without filtering, every row ran through
+    // normalizeCurrency and rendered as "$NaN".
+    const html = renderHtml(makeFiling([
+      { label: 'Revenue', value: 'N/A', change: 'N/A', qoqChange: 'N/A' },
+      { label: 'Gross Margin', value: 'N/A', change: 'N/A', qoqChange: 'N/A' },
+      { label: 'Operating Margin', value: 'N/A', change: 'N/A', qoqChange: 'N/A' },
+      { label: 'FCF Margin', value: 'N/A', change: 'N/A', qoqChange: 'N/A' },
+      { label: 'Net Income', value: 'N/A', change: 'N/A', qoqChange: 'N/A' },
+      { label: 'EPS', value: 'N/A', change: 'N/A', qoqChange: 'N/A' },
+    ]));
+    expect(html).not.toContain('$NaN');
+    expect(html).not.toContain('Earnings Scorecard');
+    // "Why it matters" must not echo the sentinel deltas either.
+    expect(html).not.toContain('N/A YoY');
+    expect(html).not.toContain('N/A QoQ');
+  });
+
+  it('keeps usable rows and drops sentinel rows in a mixed scorecard', () => {
+    const html = renderHtml(makeFiling([
+      { label: 'Revenue', value: '$611.02M', change: '+7.07%', qoqChange: '+0.56%' },
+      { label: 'FCF Margin', value: 'N/A', change: 'N/A', qoqChange: 'N/A' },
+      { label: 'EPS', value: '$3.59', change: '-6.75%' },
+    ]));
+    expect(html).toContain('Revenue');
+    expect(html).toContain('EPS');
+    expect(html).not.toContain('FCF Margin');
+    expect(html).not.toContain('$NaN');
+  });
+
+  it.each([
+    ['$NaN'],
+    ['NaN'],
+    ['null'],
+    ['Null'],
+    ['undefined'],
+    ['Not disclosed'],
+    ['TBD'],
+    ['n/m'],
+  ])('filters rows whose value is the sentinel %s', (sentinel) => {
+    const html = renderHtml(makeFiling([
+      { label: 'Revenue', value: sentinel, change: '+5%' },
+    ]));
+    expect(html).not.toContain('Earnings Scorecard');
+    expect(html).not.toContain(`>${sentinel}<`);
   });
 
   it('renders an em-dash placeholder when delta is missing', () => {

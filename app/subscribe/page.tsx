@@ -38,7 +38,7 @@ const plans = [
     icon: Sparkles,
     monthlyPrice: SUBSCRIPTION_PLANS.PRO.monthlyPrice,
     annualPrice: SUBSCRIPTION_PLANS.PRO.annualPrice,
-    description: 'Everything you need for serious investing',
+    description: 'Standard summaries for focused watchlists',
     features: SUBSCRIPTION_PLANS.PRO.features,
     cta: 'Upgrade to Pro',
     href: '/subscribe?plan=pro',
@@ -51,7 +51,7 @@ const plans = [
     icon: Crown,
     monthlyPrice: SUBSCRIPTION_PLANS.MAX.monthlyPrice,
     annualPrice: SUBSCRIPTION_PLANS.MAX.annualPrice,
-    description: 'For professional traders & analysts',
+    description: 'Enriched summaries with live web context, for analysts',
     features: SUBSCRIPTION_PLANS.MAX.features,
     cta: 'Upgrade to Max',
     href: '/subscribe?plan=max',
@@ -452,7 +452,9 @@ function SubscribePageContent() {
               <DialogDescription>
                 {showDowngradeConfirm === 'FREE'
                   ? `You'll lose access to ${SUBSCRIPTION_PLANS[getEffectivePlan()].name} features at the end of your billing period. Your current plan will remain active until then.`
-                  : `Your plan will be changed to ${showDowngradeConfirm ? SUBSCRIPTION_PLANS[showDowngradeConfirm].name : ''}. You'll lose access to higher-tier features.`
+                  : showDowngradeConfirm === 'PRO' && getEffectivePlan() === 'MAX'
+                    ? `Your plan will be changed to Pro. You'll lose web-context enrichment on summaries, drop from first priority to standard priority, and be limited to 25 tickers.`
+                    : `Your plan will be changed to ${showDowngradeConfirm ? SUBSCRIPTION_PLANS[showDowngradeConfirm].name : ''}. You'll lose access to higher-tier features.`
                 }
               </DialogDescription>
             </DialogHeader>

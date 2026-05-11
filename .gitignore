@@ -78,6 +78,8 @@ scripts/*
 !scripts/check-prisma-imports.sh
 !scripts/send-campaign.ts
 !scripts/refresh-landing-fixtures.ts
+!scripts/backfill-enrichment-applied.ts
+!scripts/vercel-build.sh
 
 # Prisma generated files
 lib/generated/

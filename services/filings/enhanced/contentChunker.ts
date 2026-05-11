@@ -1,4 +1,4 @@
-import { estimateTokenCount } from '../../../lib/ai/token-counter';
+import { calculateCost, estimateTokenCount } from '../../../lib/ai/token-counter';
 import { logger } from '../../../lib/logging';
 
 // Create a module-specific logger
@@ -86,16 +86,16 @@ export interface TokenCostEstimate {
 }
 
 /**
- * Calculate estimated cost based on token counts
- * @param inputTokens Number of input tokens
- * @param outputTokens Number of output tokens (estimated or actual)
- * @returns Estimated cost in USD
+ * Calculate estimated cost based on token counts.
+ *
+ * Thin wrapper around lib/ai/token-counter.calculateCost() to preserve the
+ * single-number return shape used by 7 callers (this file + aiSummarizer.ts +
+ * the index re-export). Previously hardcoded Claude-era pricing ($3/$15 per
+ * million) which was 6× too high for grok-4.1-fast and 2.4× too high for
+ * grok-4.3 — every chunked-summary cost estimate was wrong.
  */
 export function calculateTokenCost(inputTokens: number, outputTokens: number): number {
-  // Claude Sonnet pricing: $3 per 1M input tokens, $15 per 1M output tokens
-  const inputCost = (inputTokens / 1000000) * 3;
-  const outputCost = (outputTokens / 1000000) * 15;
-  return inputCost + outputCost;
+  return calculateCost(inputTokens, outputTokens).totalCost;
 }
 
 /**
@@ -109,7 +109,7 @@ export function estimateProcessingCost(
   const totalTokens = estimateTokenCount(content);
   
   if (totalTokens <= maxTokensPerChunk) {
-    // Single processing
+    // Single processing — one call, billed at whichever tier matches its size.
     const estimatedOutputTokens = Math.ceil(totalTokens * 0.3);
     return {
       inputTokens: totalTokens,
@@ -118,14 +118,20 @@ export function estimateProcessingCost(
       estimatedCost: calculateTokenCost(totalTokens, estimatedOutputTokens)
     };
   } else {
-    // Chunked processing
+    // Chunked processing — N independent API calls. Each chunk bills as its
+    // own request, so the per-chunk size is what determines the pricing tier
+    // (NOT the cross-chunk sum). Previously this passed `totalTokens` into
+    // `calculateTokenCost`, which now sees >200K and switches to the high tier;
+    // but each actual chunk is ≤maxTokensPerChunk (default 50K) and bills at
+    // the low tier — over-estimating spend by 2x on long filings.
     const numberOfChunks = Math.ceil(totalTokens / maxTokensPerChunk);
     const estimatedOutputTokens = numberOfChunks * estimatedOutputTokensPerChunk;
+    const perChunkCost = calculateTokenCost(maxTokensPerChunk, estimatedOutputTokensPerChunk);
     return {
       inputTokens: totalTokens,
       estimatedOutputTokens,
       totalTokens: totalTokens + estimatedOutputTokens,
-      estimatedCost: calculateTokenCost(totalTokens, estimatedOutputTokens)
+      estimatedCost: perChunkCost * numberOfChunks
     };
   }
 }

@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, getChangeArrow, isUsableMetricRow, markdownToHtml } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
-import { XSentimentSection, shouldRenderXSentiment } from './sections/XSentimentSection';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 /**
@@ -249,12 +249,19 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
   const rawData = summaryData as Record<string, unknown> | undefined;
 
   // Try to extract financial data from various possible structures
-  const financialHighlights = rawData?.financialHighlights as Array<{
+  // Filter out rows whose value is a sentinel placeholder ("N/A", "Null",
+  // "$NaN", etc.) before any downstream consumer sees them. The unified-prompt
+  // contract instructs the AI to emit "N/A" for unavailable values; the
+  // currency normalizer downstream then turns those into "$NaN" by parseFloat.
+  // Without this filter the scorecard renders all-"$NaN" rows and the
+  // "Why it matters" line says "Revenue is N/A YoY, N/A QoQ".
+  const rawFinancialHighlights = rawData?.financialHighlights as Array<{
     label: string;
     value: string | number;
     change?: string | number;
     qoqChange?: string | number;
   }> | undefined;
+  const financialHighlights = rawFinancialHighlights?.filter(isUsableMetricRow);
 
   const keyPoints = rawData?.keyPoints as string[] | undefined;
   const riskFactors = rawData?.riskFactors as string[] | undefined;
@@ -373,11 +380,6 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
       if (s) watchFor.push(s);
     }
   }
-
-  // X (Twitter) sentiment payload — only present when x_sentiment provider ran.
-  const xSentiment = rawData?.xSentiment as
-    NonNullable<FilingTemplateData['summaryData']>['xSentiment'] | undefined;
-  const renderXSentiment = shouldRenderXSentiment(xSentiment);
 
   // Build preheader text for inbox preview
   const preheaderText = leadSentence
@@ -616,23 +618,13 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
             </tr>
           )}
 
-          {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-          {renderXSentiment && xSentiment && (
-            <XSentimentSection
-              direction={xSentiment.direction}
-              shift={xSentiment.shift}
-              confidence={xSentiment.confidence}
-              discussionSynthesis={xSentiment.discussionSynthesis}
-              factClaims={xSentiment.factClaims}
-              citationUrls={xSentiment.citationUrls}
-              windowHours={xSentiment.windowHours}
-            />
-          )}
-
           {/* Bottom spacer */}
           <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
         </tbody>
       </table>
+
+      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
+      <XSentimentBlock rawData={summaryData} formType="10-Q" />
 
       {/* Footer with CTA */}
       <EmailFooter

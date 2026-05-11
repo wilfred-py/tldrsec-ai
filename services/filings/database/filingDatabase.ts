@@ -244,7 +244,12 @@ async function storeSummaryForTicker(
       filingType: formType,
       model: metadata.model || 'unknown',
       modelConfig: metadata.modelConfig || null,
-      ...(metadata.failureReason ? { failureReason: metadata.failureReason } : {})
+      ...(metadata.failureReason ? { failureReason: metadata.failureReason } : {}),
+      // X sentiment enrichment payload (F3-validated). Threaded by callers from
+      // summarizeFiling()'s return value. Without this, the email render path
+      // can't surface the X sentiment block — the data was generated upstream
+      // (real $0.05/x_search call) but lost before reaching the DB row.
+      ...(metadata.xSentiment ? { xSentiment: metadata.xSentiment } : {}),
     },
     tokensUsed: tokensUsed,
     inputTokens: inputTokens,
@@ -294,7 +299,17 @@ async function storeSummaryForTicker(
             }
           } : {})
         },
-        update: summaryData
+        update: {
+          ...summaryData,
+          // Re-summarization paths (cache refresh, retry, model change) must
+          // refresh the primary doc URL too. Pre-fix the update branch only
+          // wrote summaryData, so a row first ingested before primaryDocUrl
+          // was tracked stayed at url=null forever — which broke the email
+          // link path that prefers `Summary.url` over `Summary.filingUrl`.
+          // Only overwrite when the caller actually has a primaryDocUrl;
+          // a missing one shouldn't clobber a previously-good value.
+          ...(metadata.primaryDocUrl ? { url: metadata.primaryDocUrl } : {}),
+        },
       });
     });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { CTASectionV2 } from '@/components/landing/sections-v2/cta-section-v2';
+import { CTA_SECTION } from '@/lib/landing/copy';
 
 jest.mock('framer-motion', () => ({
   motion: {
@@ -18,20 +19,29 @@ jest.mock('next/link', () => {
 describe('CTASectionV2', () => {
   it('should render headline', () => {
     render(<CTASectionV2 />);
-    expect(screen.getByText(/Start Monitoring/i)).toBeInTheDocument();
+    expect(screen.getByText(CTA_SECTION.heading)).toBeInTheDocument();
   });
 
   it('should render Get Started CTA link to /sign-up', () => {
     render(<CTASectionV2 />);
-    const link = screen.getByRole('link', { name: /Get Started/i });
+    const link = screen.getByRole('link', { name: new RegExp(CTA_SECTION.buttonLabel, 'i') });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/sign-up');
   });
 
   it('should display trust signals', () => {
     render(<CTASectionV2 />);
-    expect(screen.getByText(/7-day free trial/i)).toBeInTheDocument();
-    expect(screen.getByText(/unlimited tickers/i)).toBeInTheDocument();
+    CTA_SECTION.trustPoints.forEach((point) => {
+      expect(screen.getByText(point)).toBeInTheDocument();
+    });
+  });
+
+  // Frame-sanity guard: the CTA copy must reflect the Form-4 / insider-edge
+  // framing committed to in decision 7A. This catches a future revert that
+  // would silently pass the constant-import assertions above.
+  it('uses insider-edge framing in heading and body (Form-4 wedge)', () => {
+    expect(CTA_SECTION.heading).toMatch(/insider/i);
+    expect(CTA_SECTION.body).toMatch(/insider/i);
   });
 
   it('should have light blue gradient background', () => {

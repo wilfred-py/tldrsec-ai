@@ -7,7 +7,7 @@
 
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
-import { getDefaultModel, getFallbackModel } from './config';
+import { getDefaultModel, getFallbackModel, costConfig } from './config';
 import {
   ApiError,
   createAiQuotaExceededError,
@@ -65,45 +65,46 @@ interface CircuitBreakerState {
 }
 
 /**
- * Create model info dynamically based on environment configuration
- * Only includes models that are configured in environment variables
+ * Build a ModelInfo entry for an xAI Grok slug. Pricing is pulled from
+ * costConfig (which reads env vars) rather than hardcoded literals — this
+ * fixes the prior bug where every Grok call would under-report cost because
+ * the literals were stale grok-4.1-fast pricing ($0.30/$0.50 vs grok-4.3's
+ * $1.25/$2.50, a 4-5× under-report on every call).
+ */
+function buildGrokModelInfo(modelId: string, priority: number, timeout: number): ModelInfo {
+  return {
+    id: modelId,
+    name: 'Grok 4.3',
+    contextWindow: 1_000_000, // grok-4.3 1M context
+    costPerInputToken: costConfig.xaiGrokInputCost / 1_000_000,
+    costPerOutputToken: costConfig.xaiGrokOutputCost / 1_000_000,
+    maxOutputTokens: 8000,
+    priority,
+    timeout,
+  };
+}
+
+/**
+ * Create model info dynamically based on environment configuration.
+ * Only includes models that are configured in environment variables.
  */
 function createDynamicModelInfo(): Record<string, ModelInfo> {
   const models: Record<string, ModelInfo> = {};
-  
+
   const defaultModel = getDefaultModel();
   const fallbackModel = getFallbackModel();
-  
-  // Add default model if it's an xAI model
+
   if (defaultModel.startsWith('x-ai/')) {
-    models[defaultModel] = {
-      id: defaultModel,
-      name: defaultModel.includes('grok-4') ? 'Grok 4 Fast Reasoning' : 'Grok Model',
-      contextWindow: defaultModel.includes('grok-4') ? 2000000 : 128000,
-      costPerInputToken: defaultModel.includes('grok-4') ? 0.0000003 : 0.00000015,
-      costPerOutputToken: defaultModel.includes('grok-4') ? 0.0000005 : 0.00000025,
-      maxOutputTokens: 8000,
-      priority: 1,
-      timeout: 20000
-    };
+    models[defaultModel] = buildGrokModelInfo(defaultModel, 1, 20000);
   }
-  
-  // Add fallback model if different from default
-  if (fallbackModel !== defaultModel) {
-    if (fallbackModel.startsWith('x-ai/')) {
-      models[fallbackModel] = {
-        id: fallbackModel,
-        name: fallbackModel.includes('grok-4') ? 'Grok 4 Fast Reasoning' : 'Grok Model',
-        contextWindow: fallbackModel.includes('grok-4') ? 2000000 : 128000,
-        costPerInputToken: fallbackModel.includes('grok-4') ? 0.0000003 : 0.00000015,
-        costPerOutputToken: fallbackModel.includes('grok-4') ? 0.0000005 : 0.00000025,
-        maxOutputTokens: 8000,
-        priority: 2,
-        timeout: 15000
-      };
-    }
+
+  // fallbackModel typically aliases defaultModel (see config.ts comment) so
+  // this branch is normally a no-op. Kept for the case where an operator
+  // intentionally configures a different fallback slug.
+  if (fallbackModel !== defaultModel && fallbackModel.startsWith('x-ai/')) {
+    models[fallbackModel] = buildGrokModelInfo(fallbackModel, 2, 15000);
   }
-  
+
   return models;
 }
 

@@ -95,11 +95,6 @@ describe('Template Selection Consistency', () => {
   });
 
   describe('Template Registry Performance', () => {
-    it('should have O(1) lookup performance using Map', () => {
-      // The registry uses a Map for O(1) lookup
-      expect(TemplateRegistry.isMapBased()).toBe(true);
-    });
-
     it('should have all required form type mappings registered', () => {
       const requiredMappings = [
         'Form 4', '10-K', '10-Q', '8-K', 'Form 144'

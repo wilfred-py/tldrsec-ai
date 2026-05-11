@@ -29,7 +29,7 @@ function getAIConfigForFormType(formType: string) {
   // All form types should use 0.2 temperature
   return {
     temperature: 0.2,
-    model: 'grok-3-mini',
+    model: 'grok-4.3',
     maxTokens: 4000,
   };
 }

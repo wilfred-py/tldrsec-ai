@@ -41,7 +41,7 @@ describe('OpenRouter Client', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.TLDRSEC_AI_SUMMARIZER = 'test-api-key';
-    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast:free';
+    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
     client = new OpenRouterClient();
   });
 
@@ -77,7 +77,7 @@ describe('OpenRouter Client', () => {
 
       expect(result).toBeDefined();
       expect(result.content).toBe('Test AI response');
-      expect(result.model).toBe('x-ai/grok-4-fast:free');
+      expect(result.model).toBe('x-ai/grok-4.3');
       expect(result.usage.inputTokens).toBe(100);
       expect(result.usage.outputTokens).toBe(50);
       expect(result.cost.totalCost).toBe(0); // Free model
@@ -156,7 +156,7 @@ describe('OpenRouter Client', () => {
         { role: 'user', content: 'test' }
       ]);
 
-      expect(result.model).toBe('x-ai/grok-4-fast:free');
+      expect(result.model).toBe('x-ai/grok-4.3');
     });
 
     it('should use specified model', async () => {

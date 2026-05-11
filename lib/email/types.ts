@@ -28,6 +28,7 @@ export enum EmailType {
   VERIFICATION = 'verification',
   FILING_NOTIFICATION = 'filing-notification',
   QUARTERLY_EARNINGS = 'quarterly-earnings',
+  ONBOARDING_FALLBACK_NOTICE = 'onboarding-fallback-notice',
 }
 
 /**

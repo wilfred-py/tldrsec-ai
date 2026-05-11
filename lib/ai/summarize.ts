@@ -22,6 +22,7 @@ import {
   isProviderEnabled,
 } from './enrichment-flags';
 import { getXSentiment, type XSentimentEnrichment } from './x-sentiment-provider';
+import { isMaxEligible } from '../auth/tier-eligibility';
 // Removed Anthropic SDK import - using OpenRouter client
 // import { extractFilingContent } from '../parsers/filing-extractor'; // Currently unused
 import { logger } from '../logging';
@@ -29,6 +30,15 @@ import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
 import { prisma } from '../db/prisma';
 import { getSchemaForFormType, JSONSchema } from './prompts/unified-prompts';
+import { validateTickerGroundingInPlace } from './parsers/ticker-grounding';
+import { coerceWhyItMatters } from './parsers/why-it-matters';
+import { validateNumericGrounding } from './parsers/numeric-grounding';
+import {
+  hasFinancialStatementSignal,
+  hasUsableFinancialHighlights,
+  requiresFinancialContent,
+} from './parsers/financial-content-gate';
+import { ProcessingStatus } from './processing-status';
 
 /**
  * Validates if a parsed response has all required fields for its filing type
@@ -576,6 +586,15 @@ export interface SummarizationOptions {
     documentType?: string;
     documentDescription?: string;
   };
+  // Tier-gating context for web-search enrichment ("Why it matters"). Phase 4
+  // of `tasks/x-search-max-only.md`: enrichment is MAX-only, but the producer
+  // is the writer (this function), not the email template. When userTier is
+  // undefined we treat the request as non-Max — safer default for legacy
+  // callers (admin scripts, direct service-level paths) than silently
+  // enriching for everyone.
+  userTier?: 'FREE' | 'PRO' | 'MAX' | string;
+  isTrialing?: boolean;
+  trialEndsAt?: Date | null;
 }
 /**
  * Interface for summarization result
@@ -616,7 +635,28 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
   };
   
   let filingRecordFromDB: SECFilingRecord | null = null;
-  const { filingId, summaryId, requestId, openRouterOptions, metadata, model: optionsModel } = options; 
+  const {
+    filingId,
+    summaryId,
+    requestId,
+    openRouterOptions,
+    metadata,
+    model: optionsModel,
+    userTier,
+    isTrialing,
+    trialEndsAt,
+  } = options;
+  // MAX-only enrichment gate (Phase 4 of tasks/x-search-max-only.md). Computed
+  // once and used as the single source of truth for: (a) whether to invoke
+  // web-search providers at all, (b) defense-in-depth output sanitization,
+  // (c) the persisted enrichmentApplied column. Default to non-Max when tier
+  // context is missing (legacy callers, admin scripts) — safer than silently
+  // enriching for everyone.
+  const enrichmentApplied = isMaxEligible({
+    tier: userTier ?? null,
+    isTrialing: isTrialing ?? false,
+    trialEndsAt: trialEndsAt ?? null,
+  });
   const startTime = Date.now();
   
   const aiClient = openRouterClient;
@@ -772,9 +812,12 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
 
     // Enrich supported filings with web search context.
     // Providers: counterparty + governance (8-K), debt issuance (424B2/424B3/FWP),
-    // earnings + capital return (8-K). Gated by PostHog flag + daily spend cap.
+    // earnings + capital return (8-K). Gated by tier (MAX-only) FIRST, then
+    // PostHog flag + daily spend cap. Tier check is first so non-Max requests
+    // never burn PostHog evaluations or budget for enrichment they can't see —
+    // see review item 16A in tasks/x-search-max-only.md.
     const ENRICHMENT_FORM_TYPES = new Set(['8-K', '8-K/A', '424B2', '424B3', 'FWP']);
-    if (ENRICHMENT_FORM_TYPES.has(filingRecordFromDB.formType) && !process.env.ENRICHMENT_FORCE_DISABLE) {
+    if (enrichmentApplied && ENRICHMENT_FORM_TYPES.has(filingRecordFromDB.formType) && !process.env.ENRICHMENT_FORCE_DISABLE) {
       const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol || 'unknown';
       try {
         const flagEnabled = await isWhyItMattersEnabled(accession);
@@ -806,8 +849,9 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     // X Sentiment enrichment runs on a wider form set (any high-importance form
     // for an allowlisted ticker) and uses xAI direct rather than OpenRouter, so
     // it lives outside the legacy ENRICHMENT_FORM_TYPES branch above. Eligibility,
-    // budget, and F3 sanitization are enforced inside getXSentiment.
-    if (tickerSymbol && tickerSymbol !== 'UNKNOWN' && !process.env.ENRICHMENT_FORCE_DISABLE) {
+    // budget, and F3 sanitization are enforced inside getXSentiment. Same MAX
+    // tier gate as the why-it-matters branch above (review 16A).
+    if (enrichmentApplied && tickerSymbol && tickerSymbol !== 'UNKNOWN' && !process.env.ENRICHMENT_FORCE_DISABLE) {
       const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol;
       try {
         const topFlag = await isWhyItMattersEnabled(accession);
@@ -882,7 +926,56 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         }
       });
     }
-    
+
+    // Pre-LLM content gate (10-Q / 10-K / 20-F / 6-K).
+    //
+    // Refuse to invoke the LLM when the prepared excerpt lacks
+    // financial-statement signal (no period header, no statement title,
+    // no line items, no dollar density). The unified prompt instructs
+    // the AI to emit literal "N/A" for unavailable values; downstream
+    // normalizeCurrency turns those into "$NaN" and ships a misleading
+    // scorecard.
+    //
+    // Throws a retriable SummarizationError so the worker's
+    // exponential-backoff retry mechanism (1, 2, 4, 8, 16 minutes — see
+    // JobQueueService.updateJobStatus at lib/job-queue/index.ts:457)
+    // re-attempts on the theory that EDGAR may finish processing the
+    // document body shortly after acceptance. After maxRetries the job
+    // is marked FAILED and the email is never sent.
+    //
+    // Reproduces COIN 2026-05-07 regression: parser fed Grok only XBRL
+    // namespace headers; Grok returned 6 rows of `value: "$NaN"`.
+    if (requiresFinancialContent(filingRecordFromDB.formType)) {
+      const preGate = hasFinancialStatementSignal(enrichedContent);
+      if (!preGate.ok) {
+        componentLogger.warn(
+          `Pre-LLM content gate failed for ${filingRecordFromDB.formType} (summaryId=${summaryId || 'direct'}): ${preGate.reasons.join('; ')}`,
+          { signals: preGate.signals }
+        );
+        monitoring.incrementCounter('ai.content_gate_pre_llm_failed', 1);
+        if (summaryId) {
+          await prisma.summary.update({
+            where: { id: summaryId },
+            data: {
+              processingStatus: ProcessingStatus.INSUFFICIENT_CONTENT,
+              processingCompletedAt: new Date(),
+              isPartialResult: true,
+              processingError: `Pre-LLM gate failed: ${preGate.reasons.join('; ')}`,
+              processingTimeMs: Date.now() - startTime,
+            },
+          });
+        }
+        throw new SummarizationError(
+          `Pre-LLM content gate failed for ${filingRecordFromDB.formType}: ${preGate.reasons.join('; ')}`,
+          summaryId || 'unknown',
+          filingRecordFromDB.formType,
+          ErrorCode.AI_INSUFFICIENT_CONTENT,
+          true, // retriable — EDGAR may finish processing shortly after acceptance
+          'insufficient_content'
+        );
+      }
+    }
+
     // Configure the OpenRouter request
     // Phase 4: Include system prompt for bulletproof JSON enforcement
     const model = optionsModel || getDefaultModel();
@@ -938,9 +1031,155 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         monitoring.recordTiming('ai.parsing_duration', Date.now() - parsingStartTime);
         monitoring.incrementCounter('ai.summarization_parsing_success', 1);
 
+        // Post-parse grounding hooks (PR 1 wire-up). Mutate parsedResult.data
+        // in place BEFORE composing summaryJSONWithSentiment so the redactions
+        // flow into both the persisted record and the returned payload.
+        // Order matters: whyItMatters coercion can drop the field on
+        // restatement; ticker grounding then walks remaining prose and
+        // redacts foreign-ticker contamination (e.g., "TSLA" mentioned in a
+        // JPM filing). Both have env kill switches for fast rollback.
+        if (process.env.DISABLE_WHY_IT_MATTERS_GROUNDING !== '1') {
+          const beforeHasWhy = typeof (parsedResult.data as Record<string, unknown>).whyItMatters === 'string';
+          coerceWhyItMatters(parsedResult.data as Record<string, unknown>, tickerSymbol);
+          const afterHasWhy = typeof (parsedResult.data as Record<string, unknown>).whyItMatters === 'string';
+          if (beforeHasWhy && !afterHasWhy) {
+            componentLogger.warn(`whyItMatters dropped by coercion for ${summaryId ? `summaryId=${summaryId}` : 'direct summarization'}`, {
+              formType: filingRecordFromDB.formType,
+              accessionNumber: filingRecordFromDB.accessionNumber,
+            });
+            monitoring.incrementCounter('ai.why_it_matters_violation', 1);
+          }
+        }
+
+        if (process.env.DISABLE_TICKER_GROUNDING !== '1') {
+          const tickerViolations = validateTickerGroundingInPlace(
+            parsedResult.data as Record<string, unknown>,
+            tickerSymbol,
+          );
+          for (const v of tickerViolations) {
+            componentLogger.warn(`ticker grounding violation: ${v.field} contained foreign tickers ${v.foreignTickers.join(',')} (expected ${tickerSymbol})`, {
+              formType: filingRecordFromDB.formType,
+              accessionNumber: filingRecordFromDB.accessionNumber,
+              field: v.field,
+              foreignTickers: v.foreignTickers,
+            });
+            monitoring.incrementCounter('ai.ticker_grounding_violation', 1, { field: v.field });
+          }
+        }
+
+        // Numeric grounding (PR 2). Substring-checks every emitted dollar /
+        // percent / share count against the SEC source doc; redacts to null
+        // when absent. Critical because strict json_schema can force the
+        // model to fill in fields it can't actually justify. Grounds against
+        // processedContent ONLY (not enrichedContent) — values backed only
+        // by web-search / historical-context enrichment WILL be redacted;
+        // enrichment is for color, not numeric truth.
+        const numericGrounding = validateNumericGrounding(
+          parsedResult.data as Record<string, unknown>,
+          processedContent,
+          {
+            formType: filingRecordFromDB.formType,
+            chunked: processedDoc.isChunked,
+          },
+        );
+        if (numericGrounding.rejectedFields.length > 0 || numericGrounding.unredactablePaths.length > 0) {
+          componentLogger.info(
+            `numeric_grounding: ${numericGrounding.rejectedFields.length} violations, ${numericGrounding.unredactablePaths.length} unredactable, durationMs=${numericGrounding.durationMs}, warnOnly=${numericGrounding.warnOnly}`,
+            {
+              formType: filingRecordFromDB.formType,
+              accessionNumber: filingRecordFromDB.accessionNumber,
+              paths: numericGrounding.rejectedFields.map((r) => r.path),
+              unredactablePaths: numericGrounding.unredactablePaths,
+              warnOnly: numericGrounding.warnOnly,
+            },
+          );
+          for (const rej of numericGrounding.rejectedFields) {
+            monitoring.incrementCounter('ai.numeric_grounding_violation', 1, {
+              path: rej.path.split(/[.[]/)[0],
+            });
+          }
+          for (const path of numericGrounding.unredactablePaths) {
+            monitoring.incrementCounter('ai.numeric_grounding_violation_unredactable', 1, {
+              path: path.split(/[.[]/)[0],
+            });
+          }
+        }
+        monitoring.recordTiming('ai.numeric_grounding_duration', numericGrounding.durationMs);
+
+        // Producer-gate defense-in-depth: even if a model hallucinates
+        // whyItMatters into the JSON without our enrichment context, scrub
+        // it for non-Max requests. coerceWhyItMatters above is upstream and
+        // can drop on restatement; this belt-and-braces removal guarantees
+        // the persisted summaryJSON cannot carry MAX-only output for non-Max
+        // users (Phase 4 of x-search-max-only).
+        if (!enrichmentApplied) {
+          const dataAsRecord = parsedResult.data as Record<string, unknown>;
+          if ('whyItMatters' in dataAsRecord) {
+            delete dataAsRecord.whyItMatters;
+          }
+        }
+
         const summaryJSONWithSentiment = capturedXSentiment
           ? { ...parsedResult.data, xSentiment: capturedXSentiment.sentiment }
           : parsedResult.data;
+
+        // Post-LLM content gate (10-Q / 10-K / 20-F / 6-K).
+        //
+        // The LLM may return structurally valid JSON (passes parser
+        // validation) where every financialHighlights row has a sentinel
+        // value like "$NaN" / "N/A". Belt-and-suspenders with the pre-LLM
+        // gate — catches cases where the excerpt LOOKED financial enough
+        // to pass pre-gate but the AI couldn't extract usable numbers.
+        // Marks as COMPLETED_WITH_WARNINGS so isSuppressedFromEmail() skips
+        // the send.
+        if (requiresFinancialContent(filingRecordFromDB.formType)) {
+          const postGate = hasUsableFinancialHighlights(parsedResult.data);
+          if (!postGate.ok) {
+            componentLogger.warn(
+              `Post-LLM content gate failed for ${filingRecordFromDB.formType} (summaryId=${summaryId || 'direct'}): ${postGate.reasons.join('; ')}`,
+              { signals: postGate.signals }
+            );
+            monitoring.incrementCounter('ai.content_gate_post_llm_failed', 1);
+            if (summaryId) {
+              await prisma.summary.update({
+                where: { id: summaryId },
+                data: {
+                  summaryText: parsedResult.data.summary,
+                  summaryJSON: summaryJSONWithSentiment,
+                  processingStatus: 'COMPLETED_WITH_WARNINGS',
+                  processingCompletedAt: new Date(),
+                  isPartialResult: true,
+                  processingError: `Post-LLM gate failed: ${postGate.reasons.join('; ')}`,
+                  processingTimeMs: Date.now() - startTime,
+                  tokensUsed: inputTokens + outputTokens,
+                  model: response.model || getDefaultModel(),
+                  modelVersion: response.model || getDefaultModel(),
+                  promptVersion: 'v1.0',
+                  cost,
+                  attempts: 1,
+                },
+              });
+            }
+            return {
+              summaryId: summaryId || undefined,
+              summary: parsedResult.data.summary as string,
+              summaryText: parsedResult.data.summary as string,
+              summaryJSON: summaryJSONWithSentiment as Record<string, unknown>,
+              keyPoints: (parsedResult.data.keyPoints || []) as string[],
+              isPartial: true,
+              parsingErrors: postGate.reasons,
+              duration: Date.now() - startTime,
+              modelUsed: response.model || getDefaultModel(),
+              model: response.model || getDefaultModel(),
+              inputTokens,
+              outputTokens,
+              tokensUsed: inputTokens + outputTokens,
+              cost,
+              processingTimeMs: Date.now() - startTime,
+              attempts: 1,
+            };
+          }
+        }
 
         // Update the summary record if summaryId exists
         if (summaryId) {
@@ -962,7 +1201,8 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               modelVersion: response.model || getDefaultModel(),
               promptVersion: 'v1.0', // Track prompt version
               cost,
-              attempts: 1
+              attempts: 1,
+              enrichmentApplied,
             }
           });
 
@@ -1031,12 +1271,19 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         
         // If we couldn't extract valid JSON or it's missing required fields, use response-fixer
         if (!validationResult.valid) {
-          const companyName = filingRecordFromDB.companyName || 
+          const companyName = filingRecordFromDB.companyName ||
                            (filingRecordFromDB.ticker?.symbol ? `${filingRecordFromDB.ticker.symbol} Company` : 'Unknown Company');
           fixedData = ensureMinimumFields(summaryText, filingRecordFromDB.formType as SECFilingType, companyName);
           componentLogger.info(`Used fallback data generation for ${filingRecordFromDB.formType}`);
         }
-        
+
+        // Defense-in-depth: same scrub as the success path. The fallback fixer
+        // doesn't normally produce whyItMatters, but extracted partial JSON
+        // could carry it through, so guard the partial-result branch too.
+        if (!enrichmentApplied && fixedData && 'whyItMatters' in fixedData) {
+          delete (fixedData as Record<string, unknown>).whyItMatters;
+        }
+
         // Update the summary record with the fixed data if summaryId exists
         if (summaryId) {
           await prisma.summary.update({
@@ -1053,7 +1300,8 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
               modelVersion: response.model || getDefaultModel(),
               promptVersion: 'v1.0',
               cost,
-              attempts: 1
+              attempts: 1,
+              enrichmentApplied,
             }
           });
         }

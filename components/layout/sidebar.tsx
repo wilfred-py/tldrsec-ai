@@ -14,14 +14,22 @@ import {
 } from "lucide-react";
 import UserButton from "@/components/auth/user-button";
 import { useUser } from "@clerk/nextjs";
+import { useSubscription } from "@/hooks/use-subscription";
+import { SUBSCRIPTION_PLANS, type PlanType } from "@/lib/stripe/plans";
+
+function planLabel(planType: string | undefined): { label: string; isPaid: boolean } {
+  const key = (planType ?? 'FREE') as PlanType;
+  if (key === 'PRO' || key === 'MAX') {
+    return { label: `${SUBSCRIPTION_PLANS[key].name} Plan`, isPaid: true };
+  }
+  return { label: 'Free Plan', isPaid: false };
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
-
-  // For demo purposes - in a real app, this would come from user's database record
-  const userPlan = "Pro Plan";
-  const isProPlan = userPlan === "Pro Plan";
+  const { subscription } = useSubscription();
+  const { label: userPlan, isPaid } = planLabel(subscription?.planType);
 
   const navItems = [
     {
@@ -85,7 +93,7 @@ export function Sidebar() {
               <div className="flex flex-col text-sm">
                 <span className="font-medium">{user?.fullName || "User"}</span>
                 <div className="flex items-center text-xs text-muted-foreground">
-                  {isProPlan && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
+                  {isPaid && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
                   {userPlan}
                 </div>
               </div>
@@ -105,10 +113,8 @@ function MobileSidebar({
   pathname: string;
 }) {
   const { user } = useUser();
-
-  // For demo purposes - in a real app, this would come from user's database record
-  const userPlan = "Pro Plan";
-  const isProPlan = userPlan === "Pro Plan";
+  const { subscription } = useSubscription();
+  const { label: userPlan, isPaid } = planLabel(subscription?.planType);
 
   return (
     <div className="flex h-full flex-col gap-2">
@@ -144,7 +150,7 @@ function MobileSidebar({
           <div className="flex flex-col text-sm">
             <span className="font-medium">{user?.fullName || "User"}</span>
             <div className="flex items-center text-xs text-muted-foreground">
-              {isProPlan && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
+              {isPaid && <CrownIcon className="h-3 w-3 mr-1 text-yellow-500" />}
               {userPlan}
             </div>
           </div>

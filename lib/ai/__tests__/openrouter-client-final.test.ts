@@ -80,7 +80,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
     jest.clearAllMocks();
     
     process.env.TLDRSEC_AI_SUMMARIZER = 'test-api-key';
-    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4-fast:free';
+    process.env.DEFAULT_AI_MODEL = 'x-ai/grok-4.3';
     
     mockFetch.mockResolvedValue({
       ok: true,
@@ -125,13 +125,13 @@ describe('OpenRouterClient Comprehensive Tests', () => {
 
     it('should return available xAI models', () => {
       const models = client.getAvailableModels();
-      expect(models).toHaveProperty('x-ai/grok-4-fast-reasoning');
+      expect(models).toHaveProperty('x-ai/grok-4.3');
       expect(models).toHaveProperty('anthropic/claude-3-haiku');
       expect(models).toHaveProperty('openai/gpt-3.5-turbo');
       
-      const freeModel = models['x-ai/grok-4-fast:free'];
+      const freeModel = models['x-ai/grok-4.3'];
       expect(freeModel).toMatchObject({
-        id: 'x-ai/grok-4-fast:free',
+        id: 'x-ai/grok-4.3',
         name: expect.any(String),
         contextWindow: expect.any(Number),
         costPerInputToken: 0,
@@ -145,13 +145,13 @@ describe('OpenRouterClient Comprehensive Tests', () => {
   describe('Model Selection Logic', () => {
     it('should select preferred model when suitable', () => {
       const model = (client as any).modelAgent.selectModel({
-        preferredModel: 'x-ai/grok-4-fast:free',
+        preferredModel: 'x-ai/grok-4.3',
         maxCost: 1.0,
         requiredContextWindow: 100000,
         requiredCapabilities: ['reasoning']
       });
       
-      expect(model).toBe('x-ai/grok-4-fast:free');
+      expect(model).toBe('x-ai/grok-4.3');
     });
 
     it('should fallback when preferred model unsuitable', () => {
@@ -161,7 +161,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
         requiredContextWindow: 50000
       });
       
-      expect(model).toBe('x-ai/grok-4-fast:free');
+      expect(model).toBe('x-ai/grok-4.3');
     });
 
     it('should respect context window constraints', () => {
@@ -169,7 +169,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
         requiredContextWindow: 5000000 // Exceeds all models
       });
       
-      expect(model).toBe('x-ai/grok-4-fast:free'); // Default fallback
+      expect(model).toBe('x-ai/grok-4.3'); // Default fallback
     });
 
     it('should respect capability requirements', () => {
@@ -177,24 +177,24 @@ describe('OpenRouterClient Comprehensive Tests', () => {
         requiredCapabilities: ['reasoning', 'impossible-capability']
       });
       
-      expect(model).toBe('x-ai/grok-4-fast:free'); // Default fallback
+      expect(model).toBe('x-ai/grok-4.3'); // Default fallback
     });
 
-    it('should get next model in fallback chain', () => {
+    it('returns null in the single-model chain (post-grok-4.3 migration)', () => {
+      // Single-element chain: defaultModel === fallbackModel === grok-4.3.
+      // No "next" model exists; resilience comes from the inner retry loop +
+      // alias-collapse preserving outer-loop attempts.
       const agent = (client as any).modelAgent;
-      expect(agent.getNextModel('x-ai/grok-4-fast-reasoning')).toBe('x-ai/grok-code-fast-1');
-      expect(agent.getNextModel('x-ai/grok-code-fast-1')).toBe('anthropic/claude-3-haiku');
-      expect(agent.getNextModel('anthropic/claude-3-haiku')).toBe('openai/gpt-3.5-turbo');
-      expect(agent.getNextModel('openai/gpt-3.5-turbo')).toBeNull();
+      expect(agent.getNextModel('x-ai/grok-4.3')).toBeNull();
       expect(agent.getNextModel('unknown-model')).toBeNull();
     });
 
     it('should return model info correctly', () => {
       const agent = (client as any).modelAgent;
-      const info = agent.getModelInfo('x-ai/grok-4-fast:free');
+      const info = agent.getModelInfo('x-ai/grok-4.3');
       
       expect(info).toMatchObject({
-        id: 'x-ai/grok-4-fast:free',
+        id: 'x-ai/grok-4.3',
         contextWindow: 2000000,
         costPerInputToken: 0,
         costPerOutputToken: 0
@@ -222,7 +222,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
       expect(response).toMatchObject({
         id: expect.any(String),
         content: 'Test response content',
-        model: 'x-ai/grok-4-fast:free',
+        model: 'x-ai/grok-4.3',
         usage: { inputTokens: 100, outputTokens: 50 },
         cost: { totalCost: 0 }
       });
@@ -245,7 +245,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
 
     it('should use custom parameters', async () => {
       await client.sendMessage(mockMessages, {
-        model: 'x-ai/grok-4',
+        model: 'x-ai/grok-4.3',
         temperature: 0.7,
         maxTokens: 2000
       });
@@ -253,7 +253,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
       const call = mockFetch.mock.calls[0];
       const body = JSON.parse(call[1].body as string);
       
-      expect(body.model).toBe('x-ai/grok-4');
+      expect(body.model).toBe('x-ai/grok-4.3');
       expect(body.temperature).toBe(0.7);
       expect(body.max_tokens).toBe(2000);
     });
@@ -288,7 +288,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
       } as any);
 
       const response = await client.sendMessage(mockMessages, {
-        model: 'x-ai/grok-4' // Paid model: $3/M input, $15/M output
+        model: 'x-ai/grok-4.3' // Paid model: $3/M input, $15/M output
       });
       
       expect(response.cost.inputCost).toBeCloseTo(0.003); // 1000 * 0.000003
@@ -298,7 +298,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
 
     it('should handle zero costs for free models', async () => {
       const response = await client.sendMessage(mockMessages, {
-        model: 'x-ai/grok-4-fast:free'
+        model: 'x-ai/grok-4.3'
       });
       
       expect(response.cost).toEqual({
@@ -411,7 +411,7 @@ describe('OpenRouterClient Comprehensive Tests', () => {
       
       expect(mockExecuteWithRetry).toHaveBeenCalledWith(
         expect.any(Function),
-        'openrouter-xai-x-ai/grok-4-fast:free',
+        'openrouter-xai-x-ai/grok-4.3',
         expect.objectContaining({
           maxRetries: expect.any(Number)
         }),
@@ -580,14 +580,14 @@ describe('OpenRouterClient Comprehensive Tests', () => {
 
     it('should indicate when fallback was used', async () => {
       const originalSelectModel = (client as any).modelAgent.selectModel;
-      (client as any).modelAgent.selectModel = jest.fn().mockReturnValue('x-ai/grok-4');
+      (client as any).modelAgent.selectModel = jest.fn().mockReturnValue('x-ai/grok-4.3');
       
       const response = await client.sendMessage(mockMessages, {
-        model: 'x-ai/grok-4-fast:free'
+        model: 'x-ai/grok-4.3'
       });
       
       expect(response.fallbackUsed).toBe(true);
-      expect(response.originalModel).toBe('x-ai/grok-4-fast:free');
+      expect(response.originalModel).toBe('x-ai/grok-4.3');
       
       // Restore
       (client as any).modelAgent.selectModel = originalSelectModel;

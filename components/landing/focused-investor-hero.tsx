@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { WaitlistForm } from '@/components/waitlist/waitlist-form';
 import { WaitlistCounter } from './waitlist-counter';
 import { FloatingElements } from './floating-elements';
+import { WAITLIST_HERO } from '@/lib/landing/copy';
 // import { ProfessionalFooter } from './professional-footer';
 
 interface FocusedInvestorHeroProps {
@@ -26,15 +27,24 @@ export function FocusedInvestorHero({ baseCount, realCount }: FocusedInvestorHer
 
             {/* Enhanced headline with improved spacing */}
             <h1 className="text-5xl md:text-6xl font-bold text-fintech-text-primary leading-tight mb-8 tracking-tight">
-              Stop spending 10+ hours a week{' '}
-              <span className="text-fintech-primary">reading SEC filings</span>
+              {WAITLIST_HERO.h1.parts.map((part, i) =>
+                part.highlight ? (
+                  <span key={i} className="text-fintech-primary">{part.text}</span>
+                ) : (
+                  <span key={i}>{part.text}</span>
+                )
+              )}
             </h1>
 
             {/* Enhanced subheading */}
             <p className="text-xl md:text-2xl text-fintech-text-secondary mb-16 leading-relaxed font-light max-w-3xl mx-auto">
-
-              <span className="font-medium text-fintech-accent">Insightful summaries of every SEC filing</span>{' '}
-              from companies in your portfolio, delivered straight to your inbox.
+              {WAITLIST_HERO.subhead.parts.map((part, i) =>
+                part.highlight ? (
+                  <span key={i} className="font-medium text-fintech-accent">{part.text}</span>
+                ) : (
+                  <span key={i}>{part.text}</span>
+                )
+              )}
             </p>
 
             {/* Form section with enhanced spacing */}

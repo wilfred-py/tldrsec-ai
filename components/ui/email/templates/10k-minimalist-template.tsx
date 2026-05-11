@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, getChangeStyle, getChangeArrow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, getChangeStyle, getChangeArrow, isUsableMetricRow, markdownToHtml } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { HangingBulletItem } from './sections/BulletList';
-import { XSentimentSection, shouldRenderXSentiment } from './sections/XSentimentSection';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface Form10KMinimalistTemplateProps {
@@ -43,12 +43,17 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
   // Extract structured data if available (from AI summaryJSON)
   const rawData = summaryData as Record<string, unknown> | undefined;
 
-  // Try to extract financial data from various possible structures
-  const financialHighlights = rawData?.financialHighlights as Array<{
+  // Try to extract financial data from various possible structures.
+  // Filter sentinel placeholder rows ("N/A" / "Null" / "$NaN") before any
+  // downstream consumer sees them — the prompt instructs the AI to emit
+  // these for unavailable values, and without filtering the scorecard
+  // renders all-"$NaN" rows.
+  const rawFinancialHighlights = rawData?.financialHighlights as Array<{
     label: string;
     value: string | number;
     change?: string | number;
   }> | undefined;
+  const financialHighlights = rawFinancialHighlights?.filter(isUsableMetricRow);
 
   const keyPoints = rawData?.keyPoints as string[] | undefined;
   const riskFactors = rawData?.riskFactors as string[] | undefined;
@@ -120,11 +125,6 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
 
   // Watch-for items: risk factors
   const watchForItems = riskFactors ? riskFactors.slice(0, 4) : [];
-
-  // X (Twitter) sentiment payload — populated when x_sentiment provider ran.
-  const xSentiment = rawData?.xSentiment as
-    NonNullable<FilingTemplateData['summaryData']>['xSentiment'] | undefined;
-  const renderXSentiment = shouldRenderXSentiment(xSentiment);
 
   // Preheader text for inbox preview
   const preheaderText = `${displayTicker} Annual Report: ${leadSentence.substring(0, 120)}`;
@@ -282,22 +282,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
       </table>
 
       {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-      {renderXSentiment && xSentiment && (
-        <table width="100%" cellPadding="0" cellSpacing="0">
-          <tbody>
-            <XSentimentSection
-              direction={xSentiment.direction}
-              shift={xSentiment.shift}
-              confidence={xSentiment.confidence}
-              discussionSynthesis={xSentiment.discussionSynthesis}
-              factClaims={xSentiment.factClaims}
-              citationUrls={xSentiment.citationUrls}
-              windowHours={xSentiment.windowHours}
-            />
-            <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
-          </tbody>
-        </table>
-      )}
+      <XSentimentBlock rawData={summaryData} formType="10-K" />
 
       {/* Footer with CTA */}
       <EmailFooter

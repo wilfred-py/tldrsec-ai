@@ -170,4 +170,133 @@ describe('PostOnboardingHeroCard', () => {
     const link = screen.getByRole('link', { name: /Open Inbox/ });
     expect(link).toHaveAttribute('href', 'mailto:user@fastmail.com');
   });
+
+  describe('summary-content variant (Section 1 Issue 1A)', () => {
+    const sampleSummary = {
+      id: 'sum_abc123',
+      ticker: 'COIN',
+      companyName: 'Coinbase Global, Inc.',
+      filingType: '8-K',
+      filingDate: '2025-12-15T00:00:00.000Z',
+      headline:
+        'Coinbase reports Q4 trading volume +42% YoY and announces partnership with major bank.',
+      importance: 'high' as const,
+    };
+
+    it('renders summary headline + ticker + company when summary is present', () => {
+      render(
+        <PostOnboardingHeroCard
+          tickers={sampleTickers}
+          userEmail="wilfred@gmail.com"
+          summary={sampleSummary}
+        />
+      );
+
+      expect(
+        screen.getByText(/Coinbase reports Q4 trading volume/)
+      ).toBeInTheDocument();
+      expect(screen.getByText('COIN')).toBeInTheDocument();
+      expect(screen.getByText('Coinbase Global, Inc.')).toBeInTheDocument();
+      expect(screen.getByText('8-K')).toBeInTheDocument();
+      expect(screen.getByText(/high/i)).toBeInTheDocument();
+    });
+
+    it('falls back to inbox-CTA layout when summary is null (regression)', () => {
+      render(
+        <PostOnboardingHeroCard
+          tickers={sampleTickers}
+          userEmail="wilfred@gmail.com"
+          summary={null}
+        />
+      );
+
+      expect(
+        screen.getByText(/Your first summaries are on the way/)
+      ).toBeInTheDocument();
+      // No /summary/ link in fallback layout — only inbox CTA
+      expect(
+        screen.queryByRole('link', { name: /Read summary/ })
+      ).not.toBeInTheDocument();
+    });
+
+    it('summary variant routes "Read summary" CTA to /summary/{id}', () => {
+      render(
+        <PostOnboardingHeroCard
+          tickers={sampleTickers}
+          userEmail="wilfred@gmail.com"
+          summary={sampleSummary}
+        />
+      );
+
+      const cta = screen.getByRole('link', { name: /Read summary/ });
+      expect(cta).toHaveAttribute('href', '/summary/sum_abc123');
+    });
+
+    it('summary variant retains inbox CTA as secondary action', () => {
+      render(
+        <PostOnboardingHeroCard
+          tickers={sampleTickers}
+          userEmail="wilfred@gmail.com"
+          summary={sampleSummary}
+        />
+      );
+
+      const inboxLink = screen.getByRole('link', { name: /Open Inbox/ });
+      expect(inboxLink).toHaveAttribute(
+        'href',
+        'https://mail.google.com/mail/u/0/#inbox'
+      );
+    });
+
+    it('summary variant personalizes headline with firstName', () => {
+      render(
+        <PostOnboardingHeroCard
+          tickers={sampleTickers}
+          userEmail="wilfred@gmail.com"
+          firstName="Wilfred"
+          summary={sampleSummary}
+        />
+      );
+
+      expect(
+        screen.getByText("Hi Wilfred, here's your first summary")
+      ).toBeInTheDocument();
+    });
+
+    it('summary variant respects dismissal — clicking X hides the card', () => {
+      const { container } = render(
+        <PostOnboardingHeroCard
+          tickers={sampleTickers}
+          userEmail="wilfred@gmail.com"
+          summary={sampleSummary}
+        />
+      );
+
+      const dismissBtn = screen.getByRole('button', { name: /Dismiss/i });
+      fireEvent.click(dismissBtn);
+      expect(localStorage.getItem(DISMISS_KEY)).not.toBeNull();
+      expect(container.firstChild).toBeNull();
+    });
+
+    it('summary variant omits importance badge when importance is null', () => {
+      const summaryNoImportance = { ...sampleSummary, importance: null };
+      render(
+        <PostOnboardingHeroCard
+          tickers={sampleTickers}
+          userEmail="wilfred@gmail.com"
+          summary={summaryNoImportance}
+        />
+      );
+
+      // The variant still renders; just no "high"/"critical" label
+      expect(
+        screen.getByText(/Coinbase reports Q4 trading volume/)
+      ).toBeInTheDocument();
+      // Importance label should NOT be present (case-insensitive search for any of the 4 levels)
+      expect(screen.queryByText(/^critical$/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^high$/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^medium$/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^low$/i)).not.toBeInTheDocument();
+    });
+  });
 });

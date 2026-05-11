@@ -46,8 +46,9 @@ function isBuildTime(): boolean {
 **NEW REQUIRED VARIABLES:**
 ```bash
 # Primary API Configuration
-OPENROUTER_API_KEY=sk-or-v1-...                    # CRITICAL: Replace ANTHROPIC_API_KEY
-DEFAULT_AI_MODEL=x-ai/grok-4-fast-reasoning        # CRITICAL: New model identifier
+OPENROUTER_API_KEY=sk-or-v1-...                    # CRITICAL
+DEFAULT_AI_MODEL=x-ai/grok-4.3                     # CRITICAL: Single live Grok variant after 2026-05-15
+OPENROUTER_FALLBACK_MODEL=x-ai/grok-4.3            # Alias of default — preserves outer-retry loop
 
 # Optional Configuration (with safe defaults)
 OPENROUTER_API_URL=https://openrouter.ai/api/v1    # Default provided
@@ -56,12 +57,17 @@ OPENROUTER_TIMEOUT_MS=120000                       # Default: 2 minutes
 OPENROUTER_RATE_LIMIT=60                           # Default: 60/min
 OPENROUTER_HTTP_REFERER=                           # Optional branding
 OPENROUTER_X_TITLE=tldrsec-ai                      # App identifier
+OPENROUTER_MAX_INPUT_TOKENS=1000000                # grok-4.3 1M context
 
-# Cost Control (xAI pricing model)
-XAI_GROK4_INPUT_COST=0.30                          # $0.30/M tokens input
-XAI_GROK4_OUTPUT_COST=0.50                         # $0.50/M tokens output
+# Cost Control — Grok 4.3 tiered pricing
+# ≤200K input tokens: $1.25/M input, $2.50/M output
+# >200K input tokens: $2.50/M input, $5.00/M output
+XAI_GROK_INPUT_COST=1.25
+XAI_GROK_OUTPUT_COST=2.50
+XAI_GROK_INPUT_COST_HIGH=2.50
+XAI_GROK_OUTPUT_COST_HIGH=5.00
 OPENROUTER_SURCHARGE=0.10                          # 10% OpenRouter fee
-MAX_COST_PER_REQUEST=0.75                          # Max $0.75 per summary
+MAX_COST_PER_REQUEST=3.00                          # Per-call cap (now actually enforced)
 ```
 
 **DEPLOYMENT ENVIRONMENT UPDATES REQUIRED:**
@@ -339,11 +345,11 @@ rateLimit: {
    ```bash
    # Staging environment setup
    vercel env add OPENROUTER_API_KEY sk-or-v1-... --target preview
-   vercel env add DEFAULT_AI_MODEL x-ai/grok-4-fast-reasoning --target preview
+   vercel env add DEFAULT_AI_MODEL x-ai/grok-4.3 --target preview
    
    # Production environment setup  
    vercel env add OPENROUTER_API_KEY sk-or-v1-... --target production
-   vercel env add DEFAULT_AI_MODEL x-ai/grok-4-fast-reasoning --target production
+   vercel env add DEFAULT_AI_MODEL x-ai/grok-4.3 --target production
    ```
 
 2. **Cloudflare Worker Updates**:

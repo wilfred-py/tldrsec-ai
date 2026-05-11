@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { openRouterClient, OpenRouterClient } from '../../lib/ai/openrouter-client';
+import { costConfig } from '../../lib/ai/config';
 import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { normalizeFormType } from './formTypeService';
@@ -175,7 +176,7 @@ export async function generateAISummary(
     
     // DEBUG: Check environment and client setup
     const apiKey = process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY;
-    const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4-fast:free';
+    const model = process.env.DEFAULT_AI_MODEL || 'x-ai/grok-4.3';
     
     logger.info(`[DEBUG] Starting xAI summary generation via OpenRouter`, {
       correlationId,
@@ -200,7 +201,7 @@ export async function generateAISummary(
         requestType: 'standard',
         timeout: parseInt(process.env.AI_SUMMARY_TIMEOUT_MS || '100000', 10), // 100s - must fit within 150s job timeout (leaves ~50s for SEC fetch + DB ops)
         requiredCapabilities: ['reasoning'],
-        costLimit: 0.50, // $0.50 maximum per summary for cost control
+        costLimit: costConfig.maxCostPerRequest, // Per-call cap from MAX_COST_PER_REQUEST env var (default $3.00 for grok-4.3)
         remainingExecutionTime: 100000 // 100s - aligned with job timeout constraint
       }
     );

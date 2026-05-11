@@ -31,6 +31,7 @@ import {
   type EmailSummary,
   type FinancialHighlight,
 } from '@/lib/landing/gmail-mock-summaries';
+import { getHeroCopy, type HeroVariant } from '@/lib/landing/copy';
 import type { GlobalMinutesSaved } from '@/lib/db/landing-stats';
 import { MinutesSavedCounter } from '@/components/landing/minutes-saved-counter';
 
@@ -43,18 +44,15 @@ const EMAIL_ROW_HEIGHT = 52; // Fixed height for email rows in pixels
 interface GmailInboxHeroProps {
   className?: string;
   heroRef?: React.RefObject<HTMLElement>;
+  /**
+   * Hero copy experiment arm. Resolved server-side in `app/page.tsx` and
+   * passed through `LandingPageV2`. Defaults to 'control' for direct mounts.
+   * Unrecognized values fall back to 'control' inside `getHeroCopy`.
+   */
+  variant?: HeroVariant;
   /** Server-fetched platform-wide minutes-saved totals + projection rate. */
   globalStats?: GlobalMinutesSaved;
 }
-
-/**
- * Trust metrics displayed in the hero section
- */
-const trustMetrics = [
-  { value: '10 min', label: 'filing-to-inbox' },
-  { value: '99.9%', label: 'uptime' },
-  { value: 'All types', label: 'of SEC filings' },
-];
 
 /**
  * Get badge color based on filing type
@@ -420,7 +418,12 @@ function formatSecondsAgo(seconds: number): string {
  * widget caption, and a large centered Gmail-style inbox widget.
  * Real curated summaries that users can click to preview.
  */
-export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroRef, globalStats }) => {
+export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroRef, variant, globalStats }) => {
+  // Hero copy bundle for the active experiment arm. Falls back to control
+  // inside getHeroCopy on any unrecognized variant value.
+  const heroCopy = getHeroCopy(variant);
+  const trustMetrics = heroCopy.trustMetrics;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const isInView = useInView(containerRef, { once: true, amount: 0.2 });
@@ -643,11 +646,11 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
     }
   }, [heroRef]);
 
-  // Extract caption logic for clarity
+  // Extract caption logic for clarity. Strings live in lib/landing/copy.ts.
   const getCaptionText = () => {
-    if (isSignedIn && !isOnboarded) return 'Just one more step!';
-    if (!isSignedIn) return '7-day free trial. Cancel anytime.';
-    return ''; // Authenticated and onboarded users see no caption
+    if (isSignedIn && !isOnboarded) return heroCopy.caption.incompleteOnboarding;
+    if (!isSignedIn) return heroCopy.caption.unauth;
+    return heroCopy.caption.onboarded;
   };
 
   return (
@@ -666,7 +669,11 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
             animate="animate"
             className="text-center max-w-4xl mx-auto"
           >
-            {globalStats && globalStats.totalMinutes >= 1 && (
+            {globalStats && globalStats.totalMinutes >= 1 ? (
+              // Live stats counter (origin/main #496) takes the eyebrow slot when
+              // the DB query returns data — stronger social proof than the static
+              // "For investors and analysts" string. Falls back to the static
+              // eyebrow below on DB miss / cold start.
               <motion.div
                 variants={staggerItem}
                 role="status"
@@ -686,14 +693,28 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                   </span>
                 </span>
               </motion.div>
+            ) : (
+              <motion.p
+                variants={staggerItem}
+                className="mb-5 text-center text-[13px] font-semibold uppercase tracking-[0.12em]"
+                style={{ color: 'var(--brand-primary)' }}
+              >
+                {heroCopy.eyebrow}
+              </motion.p>
             )}
 
             <motion.h1 variants={staggerItem} className="brand-hero-display mb-5 text-center text-black lg:!text-[3.5rem]">
-              SEC filings, read in <span className="brand-gradient-text">minutes</span> instead of <span className="brand-gradient-text">hours</span>.
+              {heroCopy.h1.parts.map((part, i) =>
+                part.gradient ? (
+                  <span key={i} className="brand-gradient-text">{part.text}</span>
+                ) : (
+                  <span key={i}>{part.text}</span>
+                )
+              )}
             </motion.h1>
 
             <motion.p variants={staggerItem} className="brand-body-large mb-7 max-w-2xl mx-auto text-center">
-              Summaries of every 10-K, 10-Q, 8-K, and Form 4 in your portfolio — delivered to your inbox minutes after filing.
+              {heroCopy.subhead}
             </motion.p>
 
             {!isOnboarded && (
@@ -706,14 +727,14 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                 ) : isSignedIn ? (
                   <Link href="/onboarding">
                     <Button className="brand-button-gradient">
-                      Complete Setup
+                      {heroCopy.ctaButton.incompleteOnboarding}
                       <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
                   </Link>
                 ) : (
                   <Link href="/sign-up">
                     <Button className="brand-button-gradient">
-                      Get Summaries Like This
+                      {heroCopy.ctaButton.unauth}
                       <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
                   </Link>
@@ -767,7 +788,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                   </div>
                   <div className="flex-grow flex items-center justify-center gap-1 sm:gap-2 min-w-0">
                     <Mail className="w-3 h-3 sm:w-4 sm:h-4 text-neutral-600 flex-shrink-0" />
-                    <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">SEC Filing Summaries</span>
+                    <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">{heroCopy.widgetHeader}</span>
                   </div>
                   {unreadCount > 0 && (
                     <Badge className="bg-red-500 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 flex-shrink-0">
@@ -948,12 +969,12 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                 {/* Footer - compact on mobile */}
                 <div className="px-2 sm:px-4 py-2 sm:py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
                   <span className="text-[10px] sm:text-xs text-gray-500 truncate">
-                    Click any email to preview
+                    {heroCopy.widgetCaption}
                   </span>
                   <div className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-400 flex-shrink-0">
                     <Clock className="w-3 h-3" />
-                    <span className="hidden sm:inline">Updated weekly</span>
-                    <span className="sm:hidden">Weekly</span>
+                    <span className="hidden sm:inline">{heroCopy.widgetUpdatedDesktop}</span>
+                    <span className="sm:hidden">{heroCopy.widgetUpdatedMobile}</span>
                   </div>
                 </div>
               </motion.div>

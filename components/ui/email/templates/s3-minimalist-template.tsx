@@ -4,6 +4,7 @@ import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { HangingBulletItem } from './sections/BulletList';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
 
 interface FormS3MinimalistTemplateProps {
@@ -237,6 +238,9 @@ export function FormS3MinimalistTemplate({ filing }: FormS3MinimalistTemplatePro
           </tr>
         </tbody>
       </table>
+
+      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
+      <XSentimentBlock rawData={summaryData} formType="S-3" />
 
       {/* Footer with CTA */}
       <EmailFooter

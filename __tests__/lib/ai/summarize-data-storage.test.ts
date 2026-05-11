@@ -194,7 +194,7 @@ describe('AI Summarization Data Storage', () => {
   function mockOpenRouterResponse(data: Record<string, unknown>) {
     (openRouterClient.sendMessage as jest.Mock).mockResolvedValue({
       content: JSON.stringify(data),
-      model: 'x-ai/grok-beta',
+      model: 'x-ai/grok-4.3',
       usage: {
         inputTokens: 1000,
         outputTokens: 500,

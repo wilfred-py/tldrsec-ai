@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { GmailInboxHero } from '@/components/landing/sections-v2/gmail-inbox-hero';
+import { HOMEPAGE_HERO, HOMEPAGE_HERO_VARIANT } from '@/lib/landing/copy';
 
 // Mock auth context
 jest.mock('@/contexts/auth-context', () => ({
@@ -43,22 +44,22 @@ describe('GmailInboxHero', () => {
 
     // Headline (text broken across spans for selective gradient)
     const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1.textContent).toMatch(/SEC filings, read in minutes instead of hours/);
+    expect(h1).toHaveTextContent(HOMEPAGE_HERO.h1.text);
 
     // Subhead
-    expect(screen.getByText(/Summaries of every 10-K/i)).toBeInTheDocument();
+    expect(screen.getByText(HOMEPAGE_HERO.subhead)).toBeInTheDocument();
 
-    // Trust metrics (use getAllByText since "10 min" matches headline too)
-    expect(screen.getByText(/filing-to-inbox/i)).toBeInTheDocument();
-    expect(screen.getByText(/99\.9%/i)).toBeInTheDocument();
-    expect(screen.getByText(/of SEC filings/i)).toBeInTheDocument();
+    // Trust metrics
+    HOMEPAGE_HERO.trustMetrics.forEach((metric) => {
+      expect(screen.getByText(metric.label)).toBeInTheDocument();
+    });
 
     // CTA (unauthenticated state)
-    const ctaLink = screen.getByRole('link', { name: /Get Summaries Like This/i });
+    const ctaLink = screen.getByRole('link', { name: new RegExp(HOMEPAGE_HERO.ctaButton.unauth, 'i') });
     expect(ctaLink).toHaveAttribute('href', '/sign-up');
 
     // Widget caption (may appear multiple times due to toolbar footer text)
-    const captions = screen.getAllByText(/click any email/i);
+    const captions = screen.getAllByText(new RegExp(HOMEPAGE_HERO.widgetCaption, 'i'));
     expect(captions.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -154,7 +155,7 @@ describe('GmailInboxHero', () => {
   // T9: CTA links for different auth states
   it('should link to /sign-up for unauthenticated users', () => {
     render(<GmailInboxHero />);
-    const ctaLink = screen.getByRole('link', { name: /Get Summaries Like This/i });
+    const ctaLink = screen.getByRole('link', { name: new RegExp(HOMEPAGE_HERO.ctaButton.unauth, 'i') });
     expect(ctaLink).toHaveAttribute('href', '/sign-up');
   });
 
@@ -210,5 +211,64 @@ describe('GmailInboxHero', () => {
       // After tab, activeElement should NOT be the close button anymore
       expect(document.activeElement).not.toBe(closeButton);
     }
+  });
+
+  // T12: className prop is applied to the root section
+  // Ported from the now-deleted __tests__/components/gmail-inbox-hero.test.tsx
+  // (consolidation: decision 11A in landing-copy-rework).
+  it('applies a custom className prop to the root section', () => {
+    const customClass = 'test-class';
+    const { container } = render(<GmailInboxHero className={customClass} />);
+    expect(container.firstChild).toHaveClass(customClass);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // PostHog hero-copy experiment variant tests (decision 12A)
+  // Both arms render identical copy in step 4 of landing-copy-rework. Step 5
+  // will diverge the variant arm; these tests will then catch arm-specific
+  // regressions.
+  // ────────────────────────────────────────────────────────────────────────
+
+  // T13: variant="control" renders the canonical hero copy.
+  it('renders control hero copy when variant="control"', () => {
+    render(<GmailInboxHero variant="control" />);
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1).toHaveTextContent(HOMEPAGE_HERO.h1.text);
+    expect(screen.getByText(HOMEPAGE_HERO.subhead)).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: new RegExp(HOMEPAGE_HERO.ctaButton.unauth, 'i') })
+    ).toBeInTheDocument();
+  });
+
+  // T14: variant="variant" renders the Form-4 / insider-buying wedge arm.
+  it('renders variant hero copy (Form-4 wedge framing) when variant="variant"', () => {
+    render(<GmailInboxHero variant="variant" />);
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1).toHaveTextContent(HOMEPAGE_HERO_VARIANT.h1.text);
+    expect(screen.getByText(HOMEPAGE_HERO_VARIANT.subhead)).toBeInTheDocument();
+    // Variant arm must NOT render the control H1 (catches accidental re-aliasing).
+    expect(h1).not.toHaveTextContent(HOMEPAGE_HERO.h1.text);
+  });
+
+  // T15: missing/undefined variant prop falls back to control without crashing.
+  // Mirrors the production failure mode where PostHog SDK errors or returns
+  // null and the server-side resolver passes through `'control'`. Also covers
+  // direct mounts (storybook, ad-hoc tests) that omit the prop entirely.
+  it('falls back to control copy when variant prop is undefined', () => {
+    render(<GmailInboxHero />);
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1).toHaveTextContent(HOMEPAGE_HERO.h1.text);
+  });
+
+  // T16: an unrecognized variant string also falls back to control. Guards
+  // against a future flag-config typo or a PostHog response that doesn't
+  // match the expected enum values.
+  it('falls back to control copy when variant is an unrecognized value', () => {
+    // Cast through unknown to bypass the prop-type narrowing — the failure
+    // we're guarding against is exactly when an invalid value reaches the
+    // component at runtime (e.g. PostHog config drift).
+    render(<GmailInboxHero variant={'broken' as unknown as 'control'} />);
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1).toHaveTextContent(HOMEPAGE_HERO.h1.text);
   });
 });
