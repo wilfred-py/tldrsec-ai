@@ -60,7 +60,7 @@ Existing scorecard, headline, summary, financialHighlights, segments, riskFactor
 
 Verification:
 - `npm test -- --testPathPattern="(unified-prompts|10k|10q|earnings|market-context|peer-context|thematic|materiality)"` passes.
-- A real recent NVDA 10-K and AAPL 10-Q processed end-to-end populate every new field at ≥80% fill rate across 10 representative tickers.
+- The most recent NVDA 10-K and AAPL 10-Q processed end-to-end populate every new field at >95% fill rate (i.e. across `marketContext`, `thematicTakeaways`, `materialitySignal`, plus `peerContext` for 10-K or `trendsDelta` for 10-Q — at most one field across the two filings is permitted to be empty/null).
 - Cost-per-summary observed in production telemetry for 10-K ≤ $0.30 and 10-Q ≤ $0.18 (vs current $0.148 / $0.088 baselines from `2026-01-16-summary-table-field-analysis.md`).
 
 ## What We're NOT Doing
@@ -1098,7 +1098,7 @@ End-to-end validation against real filings. Telemetry confirms fill rates and co
 
 ```typescript
 describe('Earnings mini deep dive E2E', () => {
-  it.skip('10-K: NVDA FY2026 produces all new fields at >=80% fill', async () => {
+  it.skip('10-K: most recent NVDA 10-K produces all new fields at >95% fill', async () => {
     // Use existing fixture or load from data/test-fixtures
     const result = await runFullSummarization({
       formType: '10-K',
@@ -1185,9 +1185,13 @@ Add to `docs/plans/2026-05-10-earnings-mini-deep-dive.md` "Operational Verificat
 - [ ] `npm run lint` passes
 
 #### Manual Verification:
-- [ ] **Production smoke test**: Wait for the next 10-K and next 10-Q from any allowlisted ticker to flow through after deploy. Inspect:
-  - `Summary.summaryJSON` contains all five new fields populated.
-  - Quality-gate warnings log < 20% of filings (target fill rate ≥80%).
+- [ ] **Production verification on recent NVDA and AAPL filings (primary gate)**: Re-run summarization for the most recent NVDA 10-K and AAPL 10-Q from production. Required:
+  - **>95% fill rate** across the 4 new fields per filing — at most one field across the two filings may be empty/null. If two or more new fields come back empty across NVDA + AAPL, the feature is NOT ready to ship; iterate on prompt grounding and re-run.
+  - `Summary.summaryJSON` contains all four new fields populated (`marketContext`, `thematicTakeaways`, `materialitySignal`, plus `peerContext` for 10-K / `trendsDelta` for 10-Q).
+  - Each populated field passes a grounding spot-check: the rationale or copy cites the specific filing section, prior-filing summary, or enrichment block it draws from.
+- [ ] **Production smoke test (broader fleet)**: Wait for the next 10-K and next 10-Q from any other allowlisted ticker to flow through after deploy. Inspect:
+  - `Summary.summaryJSON` contains all new fields populated.
+  - Quality-gate warnings log <5% of NVDA/AAPL filings and <20% of long-tail filings.
   - Cost-per-summary stays under $0.30 (10-K) / $0.18 (10-Q).
   - X-sentiment block, market-context block, peer-context (10-K) or trends-delta block (10-Q) all appear cleanly in the rendered email.
   - Materiality badge renders only when score is high/medium/low; suppressed when noise.
