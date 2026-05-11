@@ -5,8 +5,7 @@ import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadge
 import { EmailFooter } from './sections/EmailFooter';
 import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
-import { getExtractor } from '../../../../lib/email/extractor-registry';
-import type { Form4ExtractedData } from '../../../../lib/email/form4-data-extractor';
+import { extractForm4Data } from '../../../../lib/email/form4-data-extractor';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { XSentimentBlock } from './sections/XSentimentBlock';
 import {
@@ -687,9 +686,7 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
   const normalizedData = normalizeForm4Data(rawData as Record<string, unknown> | null, summaryText);
 
   // Extract structured data from summaryText as fallback
-  const extractedData = summaryText
-    ? (getExtractor('4')?.(summaryText) as Form4ExtractedData ?? null)
-    : null;
+  const extractedData = summaryText ? extractForm4Data(summaryText) : null;
   const hasExtractedData = extractedData && (
     extractedData.filerName ||
     extractedData.transactions.length > 0 ||
@@ -832,11 +829,11 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         <span style={{ color: '#111827' }}>
           <span style={{ color: '#6B7280' }}>{previousStake}</span>
           {/* NBSPs instead of span padding — Outlook Word renderer drops padding on inline spans */}
-          <span>{'  →  '}</span>
+          <span>{'\u00A0\u00A0→\u00A0\u00A0'}</span>
           <span>{newStake}</span>
           {pctDisplay && Number.isFinite(pctNum) && pctNum !== 0 && (
             <>
-              {' '}
+              {'\u00A0'}
               <span style={{ color: pctColor }}>({pctDisplay})</span>
             </>
           )}

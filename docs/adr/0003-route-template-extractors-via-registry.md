@@ -1,6 +1,6 @@
 # ADR 0003: Route email template extractors through the central registry
 
-**Status**: Accepted  
+**Status**: Withdrawn  
 **Date**: 2026-05-11
 
 ## Context
@@ -18,38 +18,24 @@ import { extract8KData } from '../../../../lib/email/8k-data-extractor';
 import { extractForm144Data } from '../../../../lib/email/form144-data-extractor';
 ```
 
-`lib/email/extractor-registry.ts` already existed on `main` as the single source
-of truth for routing form types to extractors, but the templates bypassed it.
-This meant every template coupled directly to a specific extractor module —
-adding a new extractor alias or swapping an implementation required touching
-each template individually.
+This looked like an opportunity to route through `lib/email/extractor-registry.ts`,
+which appeared in an earlier snapshot of main as the single source of truth for
+form-type → extractor routing.
 
 ## Decision
 
-Replace each direct extractor import with a `getExtractor` call from the
-central registry. Retain a `import type` for the data shape (erased at runtime)
-to preserve type safety at the call site.
+**Withdrawn.** `lib/email/extractor-registry.ts` was intentionally deleted in PR #508
+("deepen: absorb extractor-registry and extractor-merge-utils into Summary Enrichment
+module"). The registry was eliminated because its interface was nearly as complex as its
+implementation and it had only two callers. The extractor dispatch table now lives as
+private implementation inside `summarize-with-validation`.
 
-```typescript
-// Before
-import { extractForm4Data } from '../../../../lib/email/form4-data-extractor';
-const extractedData = summaryText ? extractForm4Data(summaryText) : null;
-
-// After
-import { getExtractor } from '../../../../lib/email/extractor-registry';
-import type { Form4ExtractedData } from '../../../../lib/email/form4-data-extractor';
-const extractedData = summaryText
-  ? (getExtractor('4')?.(summaryText) as Form4ExtractedData ?? null)
-  : null;
-```
+Routing the templates through a module that no longer exists is not viable. The correct
+pattern for email templates is direct import from the per-form extractor module — this
+is explicit, statically analysable, and incurs no runtime indirection.
 
 ## Consequences
 
-- Three templates no longer bind to specific extractor function names at runtime.
-  Adding a new alias in the registry is sufficient to reach any template.
-- The routing decision lives in one place (`extractor-registry.ts`) rather than
-  being scattered across each template.
-- `import type` carries no runtime dependency; it is erased by TypeScript at
-  compile time. Runtime coupling is only to the registry.
-- No files deleted; no extractors removed. The data-extractor modules retain
-  their full surface area for other callers (e.g., server-side summarizers).
+- Templates retain direct imports. No change to runtime behaviour.
+- The registry seam for templates does not exist and should not be recreated without a
+  concrete, multi-caller justification.

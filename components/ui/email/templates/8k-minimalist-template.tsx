@@ -7,8 +7,7 @@ import { TranchesList, Tranche } from './sections/TranchesList';
 import { DealTermsCard, DealTerms } from './sections/DealTermsCard';
 import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
-import { getExtractor } from '../../../../lib/email/extractor-registry';
-import type { Form8KExtractedData } from '../../../../lib/email/8k-data-extractor';
+import { extract8KData } from '../../../../lib/email/8k-data-extractor';
 import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { XSentimentBlock } from './sections/XSentimentBlock';
@@ -160,7 +159,7 @@ function getSignalConfig(isMaterial: boolean) {
       bgColor: '#F1F5F9',      // Slate 100
       borderColor: '#94A3B8',  // Slate 400
       textColor: '#475569',    // Slate 600
-      icon: '✓',
+      icon: '\u2713',
     };
   }
 }
@@ -279,9 +278,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   const data = summaryData as Record<string, unknown> | undefined;
 
   // Extract structured data from summaryText if summaryData is sparse
-  const extractedData = summaryText
-    ? (getExtractor('8-K')?.(summaryText) as Form8KExtractedData ?? null)
-    : null;
+  const extractedData = summaryText ? extract8KData(summaryText) : null;
 
   // Merge data sources
   const eventType = (data?.eventType || extractedData?.eventType || '') as string;
