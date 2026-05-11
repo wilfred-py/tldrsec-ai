@@ -20,7 +20,7 @@ import { renderAsync } from '@react-email/render';
 import { getPrismaClient } from '../db/prisma';
 import { logger } from '../logging';
 import { escapeHtml } from './security-helpers';
-import { getSecFilingViewerUrl } from './url-utils';
+import { getSecFilingViewerUrl, buildCampaignUrl } from './url-utils';
 import {
   capHeadline,
   ensureTickerPrefix,
@@ -80,6 +80,19 @@ interface CampaignEmailOptions {
   variant?: 'A' | 'B';
   /** Dynamic filings from the database. If provided, replaces hardcoded samples. */
   filings?: CampaignFiling[];
+  /**
+   * Supabase newsletter_subscribers.id (UUID). When set, all CTAs in the
+   * email use buildCampaignUrl() so the landing page can identify the
+   * subscriber via ?sub=<uuid>. Optional for back-compat with fixture
+   * renders and tests that don't need real attribution.
+   */
+  subscriberId?: string;
+  /**
+   * Email position in the campaign sequence: 'e1' | 'e2' | 'e3'. Required
+   * alongside subscriberId so utm_content reflects which email drove the
+   * click. Without it, CTAs fall back to the legacy hardcoded URLs.
+   */
+  emailId?: 'e1' | 'e2' | 'e3';
 }
 
 interface CampaignEmailContent {
@@ -430,7 +443,11 @@ async function email1(options: CampaignEmailOptions): Promise<CampaignEmailConte
   // Trial CTA target. Campaign recipients are unregistered waitlist members
   // — clicking the bottom button (positioned where production filing emails
   // put "View on SEC Website") routes them to the landing page, not EDGAR.
-  const ctaUrl = 'https://tldrsec.app';
+  // When subscriberId+emailId provided, the URL carries ?sub=<uuid> + UTMs
+  // so PostHog can stitch landing-page identity to the email click.
+  const ctaUrl = options.subscriberId && options.emailId
+    ? buildCampaignUrl({ subscriberId: options.subscriberId, emailId: options.emailId })
+    : 'https://tldrsec.app';
 
   const content = `
     ${heroHtml}
@@ -489,6 +506,13 @@ Unsubscribe: ${options.unsubscribeUrl}`;
  * Soft CTA to landing page.
  */
 async function email2(options: CampaignEmailOptions): Promise<CampaignEmailContent> {
+  // Landing-page CTA. With subscriberId+emailId, ?sub= + UTMs are appended
+  // so PostHog can stitch the click to a subscriber identity. Without them,
+  // falls back to plain landing URL (used by fixture renders + tests).
+  const e2CtaUrl = options.subscriberId && options.emailId
+    ? buildCampaignUrl({ subscriberId: options.subscriberId, emailId: options.emailId })
+    : 'https://tldrsec.app';
+
   // Use dynamic filings if available (top 3), otherwise hardcoded samples.
   // Raw values are stored here; HTML interpolation sites below escape per-field.
   // The plaintext text body uses these raw values directly.
@@ -567,9 +591,9 @@ async function email2(options: CampaignEmailOptions): Promise<CampaignEmailConte
           <p style="margin:0 0 16px;color:#475569;font-size:14px;">
             Want these delivered automatically? We're opening early access to waitlist members.
           </p>
-          <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="https://tldrsec.app" style="height:44px;v-text-anchor:middle;width:200px;" arcsize="14%" fillcolor="#2563eb"><center style="color:#ffffff;font-family:${FONT_STACK};font-size:14px;font-weight:600;">See How It Works</center></v:roundrect><![endif]-->
+          <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${e2CtaUrl}" style="height:44px;v-text-anchor:middle;width:200px;" arcsize="14%" fillcolor="#2563eb"><center style="color:#ffffff;font-family:${FONT_STACK};font-size:14px;font-weight:600;">See How It Works</center></v:roundrect><![endif]-->
           <!--[if !mso]><!-->
-          <a href="https://tldrsec.app" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;">
+          <a href="${e2CtaUrl}" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;">
             See How It Works
           </a>
           <!--<![endif]-->
@@ -585,7 +609,7 @@ ${filings.length} filings we caught for you this week, ranked by what each one a
 ${filingsText}On EDGAR, each of these would take 30-60 minutes to read and analyze. Our AI summarized all three within minutes of filing.
 
 Want these delivered automatically? We're opening early access to waitlist members.
-Visit: https://tldrsec.app
+Visit: ${e2CtaUrl}
 
 ---
 Unsubscribe: ${options.unsubscribeUrl}`;
@@ -616,7 +640,17 @@ Unsubscribe: ${options.unsubscribeUrl}`;
  */
 async function email3(options: CampaignEmailOptions): Promise<CampaignEmailContent> {
   const subject = stripCrlf('the multibaggers you didn\'t buy');
-  const trialUrl = 'https://tldrsec.app/sign-up?plan=pro&ref=campaign';
+  // Trial CTA. With subscriberId+emailId, route through buildCampaignUrl so the
+  // sign-up page knows which subscriber arrived (?sub=<uuid>) and which email
+  // drove the click (utm_content=e3). Falls back to legacy URL for fixtures.
+  const trialUrl = options.subscriberId && options.emailId
+    ? buildCampaignUrl({
+        subscriberId: options.subscriberId,
+        emailId: options.emailId,
+        path: '/sign-up',
+        extraParams: { plan: 'pro' },
+      })
+    : 'https://tldrsec.app/sign-up?plan=pro&ref=campaign';
 
   // Two sub-CTA copy variants — A leads on risk reversal, B leads on breadth.
   // Both kept tight to a single line — the "card won't be charged"

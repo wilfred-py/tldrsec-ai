@@ -350,3 +350,80 @@ function resolveSecFilingUrl(filingUrl: string, formType?: string): string {
   // Return as-is for any other URL format
   return filingUrl;
 }
+
+// ─── Campaign URL builder ──────────────────────────────────────────────────
+
+/**
+ * Default campaign id. Newsletter broadcast 2026-05.
+ * If we run a second campaign, callers pass `campaignId` explicitly.
+ */
+const DEFAULT_CAMPAIGN_ID = 'launch-2026-05';
+
+interface BuildCampaignUrlOptions {
+  /** Supabase newsletter_subscribers.id (UUID). Stitched into PostHog as distinct_id `sub_<uuid>`. */
+  subscriberId: string;
+  /** Email position in the sequence: e1 | e2 | e3. Becomes utm_content. */
+  emailId: 'e1' | 'e2' | 'e3';
+  /** Path on tldrsec.app. Defaults to `/` (the landing page). */
+  path?: string;
+  /** Extra query params (e.g. `plan=pro` for sign-up CTAs). */
+  extraParams?: Record<string, string>;
+  /** Campaign id (defaults to current campaign). */
+  campaignId?: string;
+  /** Override the base URL — primarily for tests. */
+  baseUrl?: string;
+}
+
+/**
+ * Build a campaign-tagged URL for inclusion in newsletter campaign emails.
+ *
+ * Every link in a campaign email goes through this builder so the landing page
+ * can identify the subscriber via `?sub=<id>` and PostHog gets standard UTM
+ * parameters for funnel filtering.
+ *
+ * Resulting shape:
+ *   https://tldrsec.app/{path}?sub=<uuid>
+ *     &utm_source=email
+ *     &utm_medium=newsletter
+ *     &utm_campaign=launch-2026-05
+ *     &utm_content=e1
+ *     [&plan=pro&...]
+ *
+ * @example
+ * buildCampaignUrl({ subscriberId: '550e8400-...', emailId: 'e1' })
+ *   // → https://tldrsec.app/?sub=550e8400-...&utm_source=email&utm_medium=newsletter
+ *   //     &utm_campaign=launch-2026-05&utm_content=e1
+ *
+ * buildCampaignUrl({ subscriberId, emailId: 'e3', path: '/sign-up', extraParams: { plan: 'pro' } })
+ *   // → https://tldrsec.app/sign-up?sub=...&utm_source=...&plan=pro
+ */
+export function buildCampaignUrl(options: BuildCampaignUrlOptions): string {
+  const {
+    subscriberId,
+    emailId,
+    path = '/',
+    extraParams,
+    campaignId = DEFAULT_CAMPAIGN_ID,
+    baseUrl,
+  } = options;
+
+  const base = baseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? DEFAULT_APP_URL;
+  // Strip trailing slash from base so we don't get `//path`.
+  const normalizedBase = base.replace(/\/+$/, '');
+  // Ensure path starts with '/'
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  const params = new URLSearchParams();
+  params.set('sub', subscriberId);
+  params.set('utm_source', 'email');
+  params.set('utm_medium', 'newsletter');
+  params.set('utm_campaign', campaignId);
+  params.set('utm_content', emailId);
+  if (extraParams) {
+    for (const [k, v] of Object.entries(extraParams)) {
+      if (v !== undefined && v !== null && v !== '') params.set(k, v);
+    }
+  }
+
+  return `${normalizedBase}${normalizedPath}?${params.toString()}`;
+}
