@@ -7,6 +7,7 @@ import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { getExtractor } from '../../../../lib/email/extractor-registry';
 import type { Form144ExtractedData } from '../../../../lib/email/form144-data-extractor';
+import { XSentimentBlock } from './sections/XSentimentBlock';
 
 interface Form144MinimalistTemplateProps {
   filing: FilingTemplateData;
@@ -327,6 +328,9 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
           </tr>
         </tbody>
       </table>
+
+      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
+      <XSentimentBlock rawData={summaryData} formType="Form 144" />
 
       {/* Footer with CTA */}
       <EmailFooter
