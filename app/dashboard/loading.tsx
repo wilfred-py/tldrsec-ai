@@ -1,4 +1,3 @@
-import { StatsSkeleton } from "@/components/dashboard/sections/stats-skeleton";
 import { ActivitySkeleton } from "@/components/dashboard/sections/activity-skeleton";
 import {
   Tabs,
@@ -16,8 +15,6 @@ export default function DashboardLoading() {
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="sr-only">Dashboard</h1>
-
-      <StatsSkeleton />
 
       <Tabs defaultValue="activity" className="w-full">
         <TabsList className="mb-4 bg-[var(--brand-bg)] border border-[var(--brand-border)] rounded-lg p-1">
