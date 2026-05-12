@@ -32,6 +32,16 @@ const nextConfig = {
     optimizePackageImports: ['@clerk/nextjs', 'lucide-react'],
     // Enable Edge Runtime compatibility
     esmExternals: true,
+    // Router Cache TTLs (Next 15+). Default is 0/300; dynamic=0 means back-nav
+    // re-renders dynamic pages from scratch every time — that's the ~5s wait
+    // users hit going back to /dashboard from a summary. 10s covers the typical
+    // "click summary, read, go back" flow without staling SEC filing data,
+    // which clusters at market open/close (30s would feel stale during earnings).
+    // After 10s, Next revalidates in the background while serving cached HTML.
+    staleTimes: {
+      dynamic: 10,
+      static: 180,
+    },
   },
   // Security + cache-control headers. Merged from the previously-dead next.config.ts.
   async headers() {
