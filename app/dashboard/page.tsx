@@ -1,5 +1,11 @@
 import { Suspense } from "react";
 import { currentUser } from "@clerk/nextjs/server";
+
+// Calls currentUser() (Clerk server) at render time — incompatible with
+// static prerender at build. Moved here from app/dashboard/layout.tsx as
+// part of restoring Router Cache for back-nav (Subtask 2 of streaming-perf-v2).
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { mapTickersToCompanies } from "@/lib/db/dashboard-queries";

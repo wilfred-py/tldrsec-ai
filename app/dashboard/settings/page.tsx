@@ -5,6 +5,10 @@ import SettingsForm from "@/components/settings/SettingsForm";
 import UserProfileSection from "@/components/settings/UserProfileSection";
 import { getPrismaClient } from "@/lib/db/prisma";
 
+// Calls currentUser() (Clerk server) — needs request-time render. Moved from
+// app/dashboard/layout.tsx (streaming-perf-v2 Subtask 2).
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
   const user = await currentUser();
 
