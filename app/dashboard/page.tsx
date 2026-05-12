@@ -7,9 +7,7 @@ import { THREE_TIER_LIMITS } from "@/lib/subscription/three-tier-limits";
 import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
 import { PostOnboardingHeroCard } from "@/components/dashboard/post-onboarding-hero-card";
 import { TickersPanel } from "@/components/dashboard/tickers-panel";
-import { DashboardStatsSection } from "@/components/dashboard/sections/dashboard-stats-section";
 import { DashboardActivitySection } from "@/components/dashboard/sections/dashboard-activity-section";
-import { StatsSkeleton } from "@/components/dashboard/sections/stats-skeleton";
 import { ActivitySkeleton } from "@/components/dashboard/sections/activity-skeleton";
 import { SectionErrorBoundary } from "@/components/dashboard/section-error-boundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -135,13 +133,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           summary={firstSummary}
         />
       )}
-
-      {/* Stats — streams independently */}
-      <SectionErrorBoundary sectionName="stats">
-        <Suspense fallback={<StatsSkeleton />}>
-          <DashboardStatsSection tickerIds={tickerIds} />
-        </Suspense>
-      </SectionErrorBoundary>
 
       {/* Tabs: Activity feed (streamed) / Tickers (immediate) */}
       <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.30.1] - 2026-05-12
+
+### Removed
+- **Dashboard "minutes saved · filings summarized" stats bar.** The small counter that sat above the Emails/Tickers tab selector is gone. Users now land directly on the filter tabs with no preamble, shortening the path from page load to the first piece of useful information. Deleted `components/dashboard/sections/dashboard-stats-section.tsx`, `components/dashboard/sections/stats-skeleton.tsx`, and the now-orphaned `fetchDashboardStats()` query in `lib/db/dashboard-queries.ts`. The matching skeleton in `app/dashboard/loading.tsx` was removed in lockstep so the loading shell still mirrors the rendered page.
+
 ## [0.0.30.0] - 2026-05-11
 
 ### Added
