@@ -1,7 +1,78 @@
+import { z } from 'zod';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { sendFilingSummaryEmail } from '@/lib/email/summary-service';
 import { SUCCESS_STATUSES } from '@/lib/db/summary-status';
-import { getAnalysisDepthScore } from '@/lib/onboarding/analysis-depth';
+
+// ---------------------------------------------------------------------------
+// Analysis-depth scoring (private implementation)
+// ---------------------------------------------------------------------------
+
+const ANALYSIS_BONUSES = {
+  xSentiment: 25,
+  financialHighlights: 20,
+  dealTermsOrTranches: 20,
+  transactions: 15,
+  smartSubject: 10,
+  longSummaryText: 10,
+} as const;
+
+const SUMMARY_TEXT_LONG_THRESHOLD = 600;
+
+const SummaryJsonSchema = z
+  .object({
+    xSentiment: z
+      .object({
+        direction: z
+          .enum(['bullish', 'bearish', 'mixed', 'neutral', 'no_signal'])
+          .optional(),
+      })
+      .passthrough()
+      .optional()
+      .nullable(),
+    financialHighlights: z.array(z.unknown()).optional().nullable(),
+    dealTerms: z.unknown().optional().nullable(),
+    tranches: z.array(z.unknown()).optional().nullable(),
+    transactions: z.array(z.unknown()).optional().nullable(),
+  })
+  .passthrough();
+
+function analysisDepthScore(input: {
+  summaryJSON: unknown;
+  summaryText: string | null | undefined;
+  smartSubject: string | null | undefined;
+}): number {
+  let score = 0;
+
+  if (typeof input.smartSubject === 'string' && input.smartSubject.length > 0) {
+    score += ANALYSIS_BONUSES.smartSubject;
+  }
+
+  if (
+    typeof input.summaryText === 'string' &&
+    input.summaryText.length > SUMMARY_TEXT_LONG_THRESHOLD
+  ) {
+    score += ANALYSIS_BONUSES.longSummaryText;
+  }
+
+  const parsed = SummaryJsonSchema.safeParse(input.summaryJSON);
+  if (!parsed.success) return Math.min(score, 100);
+  const j = parsed.data;
+
+  if (j.xSentiment?.direction) score += ANALYSIS_BONUSES.xSentiment;
+  if (Array.isArray(j.financialHighlights) && j.financialHighlights.length > 0)
+    score += ANALYSIS_BONUSES.financialHighlights;
+
+  const hasDealTerms = j.dealTerms != null && typeof j.dealTerms === 'object';
+  const hasTranches = Array.isArray(j.tranches) && j.tranches.length > 0;
+  if (hasDealTerms || hasTranches) score += ANALYSIS_BONUSES.dealTermsOrTranches;
+
+  if (Array.isArray(j.transactions) && j.transactions.length > 0)
+    score += ANALYSIS_BONUSES.transactions;
+
+  return Math.min(score, 100);
+}
+
+// ---------------------------------------------------------------------------
 
 /**
  * Materiality weights for onboarding scoring. Form-type → "intrinsic
@@ -82,7 +153,7 @@ export function calculateCompositeScore(input: {
   const materiality =
     MATERIALITY_WEIGHTS[input.filingType] ?? DEFAULT_MATERIALITY;
 
-  const analysisDepth = getAnalysisDepthScore({
+  const analysisDepth = analysisDepthScore({
     summaryJSON: input.summaryJSON,
     summaryText: input.summaryText,
     smartSubject: input.smartSubject,
