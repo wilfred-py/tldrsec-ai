@@ -236,7 +236,7 @@ export function Form144MinimalistTemplate({ filing }: Form144MinimalistTemplateP
       <FormPlusMaterialityBadgeRow
         filingType={filingType || 'Form 144'}
         signal={{
-          label: `${notable ? '!' : '\u2713'} ${signalLabel}`,
+          label: `${notable ? '!' : '✓'} ${signalLabel}`,
           colorKey: signalColorKey,
         }}
       />
