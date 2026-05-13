@@ -159,7 +159,7 @@ function getSignalConfig(isMaterial: boolean) {
       bgColor: '#F1F5F9',      // Slate 100
       borderColor: '#94A3B8',  // Slate 400
       textColor: '#475569',    // Slate 600
-      icon: '\u2713',
+      icon: '✓',
     };
   }
 }

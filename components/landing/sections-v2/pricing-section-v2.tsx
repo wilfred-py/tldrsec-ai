@@ -136,6 +136,15 @@ export function PricingSectionV2() {
       billing_period: billingInterval,
     });
 
+    // Also fire LANDING_CTA_CLICK so the campaign funnel (which filters by
+    // utm_campaign) can count pricing-section conversions consistently with
+    // hero/footer/cta clicks. PRICING_PLAN_SELECTED is the rich event;
+    // LANDING_CTA_CLICK is the funnel pivot.
+    trackEvent(EVENTS.LANDING_CTA_CLICK, {
+      cta_location: 'pricing',
+      cta_text: getCtaText(plans.find(p => p.key === planKey) ?? plans[0]),
+    });
+
     try {
       // Unauthenticated: redirect to sign-up with plan params
       if (!isSignedIn) {

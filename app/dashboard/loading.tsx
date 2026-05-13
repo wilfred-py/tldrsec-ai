@@ -1,4 +1,3 @@
-import { StatsSkeleton } from "@/components/dashboard/sections/stats-skeleton";
 import { ActivitySkeleton } from "@/components/dashboard/sections/activity-skeleton";
 import { UserSectionSkeleton } from "@/components/dashboard/sections/user-section-skeleton";
 import {
@@ -11,8 +10,8 @@ import {
 // Route-level loading boundary for /dashboard.
 //
 // Flashes briefly during route transitions BEFORE the page's first HTML chunk
-// arrives. Mirrors the new streaming shell shape (UserSection + Stats + Tabs)
-// so the transition from this fallback to the page's Suspense boundaries is
+// arrives. Mirrors the new streaming shell shape (UserSection + Tabs) so the
+// transition from this fallback to the page's Suspense boundaries is
 // seamless. Defaults to the same tab the page does (H3 fix from
 // streaming-perf-v2 review — prevents tab-snap on hydration).
 export default function DashboardLoading() {
@@ -21,8 +20,6 @@ export default function DashboardLoading() {
       <h1 className="sr-only">Dashboard</h1>
 
       <UserSectionSkeleton />
-
-      <StatsSkeleton />
 
       <Tabs defaultValue="activity" className="w-full">
         <TabsList className="mb-4 bg-[var(--brand-bg)] border border-[var(--brand-border)] rounded-lg p-1">

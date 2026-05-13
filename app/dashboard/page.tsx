@@ -3,10 +3,8 @@ import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { DashboardUserSection } from "@/components/dashboard/sections/dashboard-user-section";
 import { UserSectionSkeleton } from "@/components/dashboard/sections/user-section-skeleton";
-import { DashboardStatsSection } from "@/components/dashboard/sections/dashboard-stats-section";
 import { DashboardActivitySection } from "@/components/dashboard/sections/dashboard-activity-section";
 import { DashboardTickersTab } from "@/components/dashboard/sections/dashboard-tickers-tab";
-import { StatsSkeleton } from "@/components/dashboard/sections/stats-skeleton";
 import { ActivitySkeleton } from "@/components/dashboard/sections/activity-skeleton";
 import { TickersTabSkeleton } from "@/components/dashboard/sections/tickers-tab-skeleton";
 import { SectionErrorBoundary } from "@/components/dashboard/section-error-boundary";
@@ -21,10 +19,10 @@ interface DashboardPageProps {
 }
 
 // Streaming dashboard. Shell renders after only the cheap currentUser() +
-// searchParams awaits; all 4 data-bearing sections (user/onboarding, stats,
+// searchParams awaits; all 3 data-bearing sections (user/onboarding,
 // activity feed, tickers tab) stream in parallel via Suspense. They share
 // a single cache()-deduped getUserAndTickers(authProviderId) call so the
-// heavy user+tickers join runs ONCE per render despite 4 consumers.
+// heavy user+tickers join runs ONCE per render despite 3 consumers.
 //
 // Tabs default to "activity" unconditionally so the initial render matches
 // loading.tsx (no tab-snap on hydration — H3 fix from the streaming-perf-v2
@@ -56,13 +54,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             subscriptionSuccess={subscriptionSuccess}
             sessionId={sessionId}
           />
-        </Suspense>
-      </SectionErrorBoundary>
-
-      {/* Stats — streams independently */}
-      <SectionErrorBoundary sectionName="stats">
-        <Suspense fallback={<StatsSkeleton />}>
-          <DashboardStatsSection authProviderId={authProviderId} />
         </Suspense>
       </SectionErrorBoundary>
 

@@ -5,17 +5,17 @@
  * Resend's batch send. PostHog `email.opened` / `email.clicked` events
  * pivot on these tags, so any drift silently breaks campaign attribution.
  *
- * Required schema (per plan AC6 + the existing route at
- *   app/api/admin/campaign/send/route.ts:160):
+ * Required schema (per email-funnel-tracking design Review Notes 2A/3A/4A/6A
+ * + the route at app/api/admin/campaign/send/route.ts):
  *
  *   tags: [
- *     { name: 'campaign', value: `cohort${cohort}-email${emailNumber}` },
- *     { name: 'variant',  value: variant || 'none' },
+ *     { name: 'campaign',     value: `cohort${cohort}-email${emailNumber}` },  // legacy flat tag
+ *     { name: 'campaignId',   value: 'launch-2026-05' },
+ *     { name: 'cohortId',     value: 'c1' | 'c2' | 'c3' },
+ *     { name: 'emailId',      value: 'e1' | 'e2' | 'e3' },
+ *     { name: 'subscriberId', value: <UUID> },
+ *     { name: 'variant',      value: 'A' | 'B' | 'none' },
  *   ]
- *
- * Mirrors __tests__/email/resend-tag-schema.test.ts but for the campaign
- * route, which uses `new Resend(...).batch.send(...)` directly rather than
- * NotificationService.
  */
 
 const batchSendMock = jest.fn().mockResolvedValue({ data: { ids: ['e_1'] }, error: null });
@@ -45,20 +45,76 @@ jest.mock('@clerk/nextjs/server', () => ({
   currentUser: jest.fn().mockResolvedValue({ id: 'user_admin_test' }),
 }));
 
-// Supabase service client — returns a static cohort of subscribers.
-// Need ≥125 to populate cohort 3 (offsets 80–125 in the route's slicing).
-const supabaseSubscribers = Array.from({ length: 130 }, (_, i) => ({
-  email: `subscriber${i + 1}@example.com`,
+// Supabase service client — returns subscribers for whichever cohort_id is queried.
+// The route's chain is now: from().select().eq('cohort_id', X).is(..).is(..).is(..).order().
+const C1_SUBSCRIBERS = Array.from({ length: 40 }, (_, i) => ({
+  id: `00000000-0000-4000-8000-${String(1_000_000 + i).padStart(12, '0')}`,
+  email: `c1-subscriber${i + 1}@example.com`,
   subscribed_at: new Date(Date.now() - i * 86_400_000).toISOString(),
+  cohort_id: 'c1',
 }));
+const C2_SUBSCRIBERS = Array.from({ length: 40 }, (_, i) => ({
+  id: `00000000-0000-4000-8000-${String(2_000_000 + i).padStart(12, '0')}`,
+  email: `c2-subscriber${i + 1}@example.com`,
+  subscribed_at: new Date(Date.now() - (40 + i) * 86_400_000).toISOString(),
+  cohort_id: 'c2',
+}));
+const C3_SUBSCRIBERS = Array.from({ length: 44 }, (_, i) => ({
+  id: `00000000-0000-4000-8000-${String(3_000_000 + i).padStart(12, '0')}`,
+  email: `c3-subscriber${i + 1}@example.com`,
+  subscribed_at: new Date(Date.now() - (80 + i) * 86_400_000).toISOString(),
+  cohort_id: 'c3',
+}));
+
+function buildCohortBuilder(cohortId: string) {
+  // Match by cohort_id: which slice of mocks to return
+  const subscribers =
+    cohortId === 'c1' ? C1_SUBSCRIBERS :
+    cohortId === 'c2' ? C2_SUBSCRIBERS :
+    cohortId === 'c3' ? C3_SUBSCRIBERS : [];
+
+  // The chain we need to support: .eq().is().is().is().order()
+  const chain: any = {
+    is: jest.fn().mockReturnValue(undefined),  // filled below
+    order: jest.fn().mockResolvedValue({ data: subscribers, error: null }),
+  };
+  chain.is.mockImplementation(() => chain);
+  return chain;
+}
+
+// Idempotency log mock — every INSERT into campaign_sends succeeds with a fresh
+// row. Tests that need to assert on duplicate-blocking belong in
+// __tests__/api/admin/campaign/cohort-stability.test.ts; here we just need
+// the route to proceed past the idempotency gate so we can inspect the tags.
+const campaignSendsInsertMock = jest.fn().mockImplementation(() => ({
+  select: jest.fn().mockReturnValue({
+    single: jest.fn().mockResolvedValue({
+      data: { id: 'cs_test_1', status: 'pending', sent_count: 0, initiated_at: new Date().toISOString() },
+      error: null,
+    }),
+  }),
+}));
+const campaignSendsUpdateMock = jest.fn().mockReturnValue({
+  eq: jest.fn().mockResolvedValue({ data: null, error: null }),
+});
+
 jest.mock('@/lib/supabase/server-client', () => ({
   createSupabaseServiceClient: jest.fn().mockResolvedValue({
-    from: jest.fn().mockReturnValue({
-      select: jest.fn().mockReturnValue({
-        is: jest.fn().mockReturnValue({
-          order: jest.fn().mockResolvedValue({ data: supabaseSubscribers, error: null }),
-        }),
-      }),
+    from: jest.fn().mockImplementation((table: string) => {
+      if (table === 'newsletter_subscribers') {
+        return {
+          select: jest.fn().mockReturnValue({
+            eq: jest.fn().mockImplementation((_col: string, value: string) => buildCohortBuilder(value)),
+          }),
+        };
+      }
+      if (table === 'campaign_sends') {
+        return {
+          insert: campaignSendsInsertMock,
+          update: campaignSendsUpdateMock,
+        };
+      }
+      throw new Error(`Unmocked table: ${table}`);
     }),
   }),
 }));
@@ -87,8 +143,10 @@ function makePost(body: unknown): NextRequest {
   });
 }
 
-describe('Campaign Resend tag schema (AC6)', () => {
-  it('emits exactly two tags per email: { campaign, variant } with cohort+email values', async () => {
+type Tag = { name: string; value: string };
+
+describe('Campaign Resend tag schema (AC6 + funnel-tracking Review Notes)', () => {
+  it('emits the full 6-tag schema per email with correct cohort+email+subscriber values', async () => {
     const res = await POST(makePost({ cohort: 1, emailNumber: 1 }));
     expect(res.status).toBeGreaterThanOrEqual(200);
     expect(res.status).toBeLessThan(300);
@@ -98,18 +156,31 @@ describe('Campaign Resend tag schema (AC6)', () => {
     expect(Array.isArray(batch)).toBe(true);
     expect(batch.length).toBeGreaterThan(0);
 
-    for (const message of batch) {
-      expect(message.tags).toEqual([
-        { name: 'campaign', value: 'cohort1-email1' },
-        { name: 'variant', value: 'none' },
-      ]);
+    for (const message of batch as Array<{ tags: Tag[]; to: string }>) {
+      const tagMap = Object.fromEntries(message.tags.map(t => [t.name, t.value]));
+      expect(tagMap.campaign).toBe('cohort1-email1');
+      expect(tagMap.campaignId).toBe('launch-2026-05');
+      expect(tagMap.cohortId).toBe('c1');
+      expect(tagMap.emailId).toBe('e1');
+      expect(tagMap.variant).toBe('none');
+      // subscriberId is per-recipient and must be a UUID
+      expect(tagMap.subscriberId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      // Exactly the 6 tags we expect — no more, no less. Drift here breaks PostHog.
+      expect(message.tags.length).toBe(6);
     }
+  });
+
+  it('subscriberId tag is unique per recipient', async () => {
+    await POST(makePost({ cohort: 1, emailNumber: 1 }));
+    const [batch] = batchSendMock.mock.calls[0];
+    const subIds = (batch as Array<{ tags: Tag[] }>).map(m => m.tags.find(t => t.name === 'subscriberId')?.value);
+    expect(new Set(subIds).size).toBe(subIds.length);  // all unique
   });
 
   it('variant=A propagates into tag value', async () => {
     await POST(makePost({ cohort: 1, emailNumber: 1, variant: 'A' }));
     const [batch] = batchSendMock.mock.calls[0];
-    const variantTags = batch.map((m: { tags: Array<{ name: string; value: string }> }) =>
+    const variantTags = (batch as Array<{ tags: Tag[] }>).map(m =>
       m.tags.find(t => t.name === 'variant')?.value,
     );
     expect(new Set(variantTags)).toEqual(new Set(['A']));
@@ -118,36 +189,52 @@ describe('Campaign Resend tag schema (AC6)', () => {
   it('variant=B propagates into tag value', async () => {
     await POST(makePost({ cohort: 1, emailNumber: 1, variant: 'B' }));
     const [batch] = batchSendMock.mock.calls[0];
-    const variantTags = batch.map((m: { tags: Array<{ name: string; value: string }> }) =>
+    const variantTags = (batch as Array<{ tags: Tag[] }>).map(m =>
       m.tags.find(t => t.name === 'variant')?.value,
     );
     expect(new Set(variantTags)).toEqual(new Set(['B']));
   });
 
-  it('emailNumber 2 produces campaign=cohort{N}-email2', async () => {
+  it('cohort 2 + email 2 produces correct cohortId + emailId + legacy campaign tags', async () => {
     await POST(makePost({ cohort: 2, emailNumber: 2 }));
     const [batch] = batchSendMock.mock.calls[0];
-    for (const message of batch) {
-      const tag = message.tags.find((t: { name: string }) => t.name === 'campaign');
-      expect(tag).toEqual({ name: 'campaign', value: 'cohort2-email2' });
+    for (const message of batch as Array<{ tags: Tag[] }>) {
+      const tagMap = Object.fromEntries(message.tags.map(t => [t.name, t.value]));
+      expect(tagMap.campaign).toBe('cohort2-email2');
+      expect(tagMap.cohortId).toBe('c2');
+      expect(tagMap.emailId).toBe('e2');
     }
   });
 
-  it('emailNumber 3 produces campaign=cohort{N}-email3 (no filings fetched for static copy)', async () => {
+  it('cohort 3 + email 3 produces correct cohortId + emailId (no filings fetched for static copy)', async () => {
     await POST(makePost({ cohort: 3, emailNumber: 3 }));
     const [batch] = batchSendMock.mock.calls[0];
-    for (const message of batch) {
-      const tag = message.tags.find((t: { name: string }) => t.name === 'campaign');
-      expect(tag).toEqual({ name: 'campaign', value: 'cohort3-email3' });
+    for (const message of batch as Array<{ tags: Tag[] }>) {
+      const tagMap = Object.fromEntries(message.tags.map(t => [t.name, t.value]));
+      expect(tagMap.campaign).toBe('cohort3-email3');
+      expect(tagMap.cohortId).toBe('c3');
+      expect(tagMap.emailId).toBe('e3');
     }
   });
 
   it('every batched message also carries the List-Unsubscribe one-click headers (CAN-SPAM)', async () => {
     await POST(makePost({ cohort: 1, emailNumber: 1 }));
     const [batch] = batchSendMock.mock.calls[0];
-    for (const message of batch) {
+    for (const message of batch as Array<{ headers: Record<string, string> }>) {
       expect(message.headers['List-Unsubscribe']).toMatch(/^<https:\/\/tldrsec\.app\/unsubscribe\?token=/);
       expect(message.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+    }
+  });
+
+  it('email body links carry ?sub=<UUID> for landing-page identification', async () => {
+    await POST(makePost({ cohort: 1, emailNumber: 1 }));
+    const [batch] = batchSendMock.mock.calls[0];
+    for (const message of batch as Array<{ html: string; tags: Tag[] }>) {
+      const subId = message.tags.find(t => t.name === 'subscriberId')?.value;
+      expect(subId).toBeTruthy();
+      expect(message.html).toContain(`sub=${subId}`);
+      expect(message.html).toContain('utm_campaign=launch-2026-05');
+      expect(message.html).toContain('utm_content=e1');
     }
   });
 });
