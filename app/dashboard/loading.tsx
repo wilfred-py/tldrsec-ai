@@ -1,5 +1,6 @@
 import { StatsSkeleton } from "@/components/dashboard/sections/stats-skeleton";
 import { ActivitySkeleton } from "@/components/dashboard/sections/activity-skeleton";
+import { UserSectionSkeleton } from "@/components/dashboard/sections/user-section-skeleton";
 import {
   Tabs,
   TabsContent,
@@ -8,14 +9,18 @@ import {
 } from "@/components/ui/tabs";
 
 // Route-level loading boundary for /dashboard.
-// Mirrors the shell shape of app/dashboard/page.tsx and reuses the same
-// per-section skeletons the page's Suspense boundaries fall back to. Without
-// this, the previous loading.tsx rendered a fake-table mock that didn't match
-// the card-based UI — producing the visible "skeleton then MORE skeleton" wave.
+//
+// Flashes briefly during route transitions BEFORE the page's first HTML chunk
+// arrives. Mirrors the new streaming shell shape (UserSection + Stats + Tabs)
+// so the transition from this fallback to the page's Suspense boundaries is
+// seamless. Defaults to the same tab the page does (H3 fix from
+// streaming-perf-v2 review — prevents tab-snap on hydration).
 export default function DashboardLoading() {
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="sr-only">Dashboard</h1>
+
+      <UserSectionSkeleton />
 
       <StatsSkeleton />
 

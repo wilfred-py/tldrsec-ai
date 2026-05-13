@@ -1,17 +1,24 @@
 import { Clock } from "lucide-react";
 import { fetchDashboardStats } from "@/lib/db/dashboard-queries";
+import { getUserAndTickers } from "@/lib/db/get-user-and-tickers";
 import { CounterDisplay } from "@/components/landing/counter";
 
 interface DashboardStatsSectionProps {
-  tickerIds: string[];
+  authProviderId: string;
 }
 
 /**
  * Async server component that fetches summary stats independently.
  * Wrapped in Suspense by the dashboard page so the shell renders
  * before these queries resolve.
+ *
+ * Calls the cache()-deduped getUserAndTickers helper to derive tickerIds —
+ * the same call from <DashboardUserSection> / <DashboardActivitySection> /
+ * <DashboardTickersTab> dedupes into one DB query per render.
  */
-export async function DashboardStatsSection({ tickerIds }: DashboardStatsSectionProps) {
+export async function DashboardStatsSection({ authProviderId }: DashboardStatsSectionProps) {
+  const data = await getUserAndTickers(authProviderId);
+  const tickerIds = data?.tickerIds ?? [];
   const stats = await fetchDashboardStats(tickerIds);
   const { summaryCountTotal, totalTimeSavedMinutes } = stats;
 
