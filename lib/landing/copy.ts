@@ -16,17 +16,17 @@
 // ─── Homepage Hero ─────────────────────────────────────────────────────────
 
 /**
- * H1 is rendered with a gradient highlight on selected words.
+ * H1 is rendered with a single emphasized phrase.
  * `text` is the full plain-text version (used for tests, SEO, screen readers).
- * `parts` drives the JSX render — gradient parts get .brand-gradient-text.
+ * `parts` drives the JSX render — `gradient: true` parts get the editorial
+ * italic-accent treatment (.editorial-accent). Field name kept as `gradient`
+ * for back-compat with the existing render path; semantics are "emphasized."
  */
 export const HOMEPAGE_HERO_H1 = {
-  text: 'SEC filings, read in minutes instead of hours.',
+  text: 'Every filing. Summarized. Delivered.',
   parts: [
-    { text: 'SEC filings, read in ', gradient: false },
-    { text: 'minutes', gradient: true },
-    { text: ' instead of ', gradient: false },
-    { text: 'hours', gradient: true },
+    { text: 'Every filing. Summarized. ', gradient: false },
+    { text: 'Delivered', gradient: true },
     { text: '.', gradient: false },
   ],
 } as const;
@@ -35,7 +35,7 @@ export const HOMEPAGE_HERO_CONTROL = {
   eyebrow: 'For investors and analysts',
   h1: HOMEPAGE_HERO_H1,
   subhead:
-    'Summaries of every 10-K, 10-Q, 8-K, and Form 4 in your portfolio — delivered to your inbox minutes after filing.',
+    'Every SEC filing your portfolio companies submit, in your inbox minutes after it publishes.',
   trustMetrics: [
     { value: '10 min', label: 'filing-to-inbox' },
     { value: '99.9%', label: 'uptime' },
@@ -64,34 +64,17 @@ export const HOMEPAGE_HERO_CONTROL = {
   },
   widgetCaption: 'Click any email to preview',
   widgetHeader: 'SEC Filing Summaries',
-  widgetUpdatedDesktop: 'Updated weekly',
-  widgetUpdatedMobile: 'Weekly',
 } as const;
 
 /**
  * Variant arm of the landing-hero PostHog experiment (`landing-hero-copy-v2`).
  *
- * Form-4 / insider-buying wedge framing. Concrete and unique among peers
- * (Quartr, AlphaSense, Stratosphere, Daloopa, Public, Koyfin, Tegus all use
- * generic "analyst-grade" framing). Pairs the wedge ("insiders buy") with
- * breadth ("every filing"). Drops the filing-type enumeration (decision 6A
- * — product supports 30+ filing types, the 4-code list under-sells).
+ * Retired: both arms now render the control copy. The export is retained so
+ * `getHeroCopy('variant')`, the PostHog flag config, and existing test imports
+ * keep resolving without churn. Re-introduce a distinct variant by replacing
+ * this alias with a new copy bundle.
  */
-export const HOMEPAGE_HERO_VARIANT = {
-  ...HOMEPAGE_HERO_CONTROL,
-  h1: {
-    text: 'Know when insiders buy. Understand every filing your portfolio companies publish.',
-    parts: [
-      { text: 'Know when ', gradient: false },
-      { text: 'insiders buy', gradient: true },
-      { text: '. Understand ', gradient: false },
-      { text: 'every filing', gradient: true },
-      { text: ' your portfolio companies publish.', gradient: false },
-    ],
-  },
-  subhead:
-    'AI summaries on annual reports, quarterlies, insider trades, and material events — minutes after they hit EDGAR.',
-} as const;
+export const HOMEPAGE_HERO_VARIANT = HOMEPAGE_HERO_CONTROL;
 
 /**
  * Backwards-compatible alias: most call sites still import HOMEPAGE_HERO and
