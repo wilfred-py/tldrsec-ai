@@ -3,8 +3,6 @@
  */
 import { FilingTypeRegistry } from '../../lib/parsers/filing-type-registry';
 import { createFilingParser, detectFilingType } from '../../lib/parsers/filing-parser-factory';
-// Make sure the registry is initialized
-import '../../lib/parsers/filing-types';
 describe('Filing Type Registry', () => {
     test('should register all supported filing types', () => {
         const allTypes = FilingTypeRegistry.getAllTypes();

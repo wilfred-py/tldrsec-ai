@@ -157,3 +157,88 @@ describe('getSecFilingViewerUrl — empty URL fallback', () => {
     expect(getSecFilingViewerUrl('')).toBe(SEARCH_FALLBACK);
   });
 });
+
+// ─── buildCampaignUrl ──────────────────────────────────────────────────────
+
+import { buildCampaignUrl } from '../../lib/email/url-utils';
+
+const TEST_SUB_ID = '550e8400-e29b-41d4-a716-446655440000';
+
+describe('buildCampaignUrl', () => {
+  it('returns landing-page URL with all UTM params and ?sub=<uuid> for default path', () => {
+    const url = buildCampaignUrl({ subscriberId: TEST_SUB_ID, emailId: 'e1' });
+    const parsed = new URL(url);
+    expect(parsed.origin).toBe('https://tldrsec.app');
+    expect(parsed.pathname).toBe('/');
+    expect(parsed.searchParams.get('sub')).toBe(TEST_SUB_ID);
+    expect(parsed.searchParams.get('utm_source')).toBe('email');
+    expect(parsed.searchParams.get('utm_medium')).toBe('newsletter');
+    expect(parsed.searchParams.get('utm_campaign')).toBe('launch-2026-05');
+    expect(parsed.searchParams.get('utm_content')).toBe('e1');
+  });
+
+  it('honors a non-default path with leading slash', () => {
+    const url = buildCampaignUrl({ subscriberId: TEST_SUB_ID, emailId: 'e2', path: '/sign-up' });
+    expect(new URL(url).pathname).toBe('/sign-up');
+  });
+
+  it('normalizes a path missing leading slash', () => {
+    const url = buildCampaignUrl({ subscriberId: TEST_SUB_ID, emailId: 'e2', path: 'sign-up' });
+    expect(new URL(url).pathname).toBe('/sign-up');
+  });
+
+  it('appends extraParams without overwriting UTMs', () => {
+    const url = buildCampaignUrl({
+      subscriberId: TEST_SUB_ID,
+      emailId: 'e3',
+      path: '/sign-up',
+      extraParams: { plan: 'pro' },
+    });
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('plan')).toBe('pro');
+    expect(parsed.searchParams.get('utm_content')).toBe('e3');
+    expect(parsed.searchParams.get('sub')).toBe(TEST_SUB_ID);
+  });
+
+  it('skips empty extraParam values rather than emitting blank params', () => {
+    const url = buildCampaignUrl({
+      subscriberId: TEST_SUB_ID,
+      emailId: 'e1',
+      extraParams: { plan: '', referrer: 'twitter' },
+    });
+    const parsed = new URL(url);
+    expect(parsed.searchParams.has('plan')).toBe(false);
+    expect(parsed.searchParams.get('referrer')).toBe('twitter');
+  });
+
+  it('uses NEXT_PUBLIC_APP_URL when set, falls back to tldrsec.app otherwise', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://staging.tldrsec.app';
+    const url = buildCampaignUrl({ subscriberId: TEST_SUB_ID, emailId: 'e1' });
+    expect(new URL(url).origin).toBe('https://staging.tldrsec.app');
+  });
+
+  it('strips trailing slash from base url to avoid `//path`', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://tldrsec.app/';
+    const url = buildCampaignUrl({ subscriberId: TEST_SUB_ID, emailId: 'e1', path: '/sign-up' });
+    expect(url).toContain('https://tldrsec.app/sign-up?');
+    expect(url).not.toContain('//sign-up');
+  });
+
+  it('honors campaignId override', () => {
+    const url = buildCampaignUrl({
+      subscriberId: TEST_SUB_ID,
+      emailId: 'e1',
+      campaignId: 'launch-2026-q3',
+    });
+    expect(new URL(url).searchParams.get('utm_campaign')).toBe('launch-2026-q3');
+  });
+
+  it('honors baseUrl override (test seam)', () => {
+    const url = buildCampaignUrl({
+      subscriberId: TEST_SUB_ID,
+      emailId: 'e1',
+      baseUrl: 'http://localhost:3000',
+    });
+    expect(new URL(url).origin).toBe('http://localhost:3000');
+  });
+});

@@ -829,11 +829,11 @@ export function Form4MinimalistTemplate({ filing }: Form4MinimalistTemplateProps
         <span style={{ color: '#111827' }}>
           <span style={{ color: '#6B7280' }}>{previousStake}</span>
           {/* NBSPs instead of span padding — Outlook Word renderer drops padding on inline spans */}
-          <span>{'\u00A0\u00A0→\u00A0\u00A0'}</span>
+          <span>{'  →  '}</span>
           <span>{newStake}</span>
           {pctDisplay && Number.isFinite(pctNum) && pctNum !== 0 && (
             <>
-              {'\u00A0'}
+              {' '}
               <span style={{ color: pctColor }}>({pctDisplay})</span>
             </>
           )}

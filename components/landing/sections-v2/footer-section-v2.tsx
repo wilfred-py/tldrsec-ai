@@ -1,13 +1,19 @@
+'use client';
+
 import Link from 'next/link';
 import { Logo } from '@/components/ui/logo';
+import { useAnalytics } from '@/lib/hooks/use-analytics';
+import { EVENTS } from '@/lib/analytics/events';
 
 /**
- * Product navigation links
+ * Product navigation links. `track` controls whether the click fires
+ * LANDING_CTA_CLICK — Sign Up + Pricing both count as funnel actions;
+ * Sign In is for returning users and isn't a conversion event.
  */
-const productLinks = [
-  { label: 'Pricing', href: '#pricing' },
-  { label: 'Sign Up', href: '/sign-up' },
-  { label: 'Sign In', href: '/sign-in' },
+const productLinks: Array<{ label: string; href: string; track: boolean }> = [
+  { label: 'Pricing', href: '#pricing', track: true },
+  { label: 'Sign Up', href: '/sign-up', track: true },
+  { label: 'Sign In', href: '/sign-in', track: false },
 ];
 
 /**
@@ -30,6 +36,13 @@ const legalLinks = [
  */
 export function FooterSectionV2() {
   const currentYear = new Date().getFullYear();
+  const { trackEvent } = useAnalytics();
+  const handleLinkClick = (label: string) => {
+    trackEvent(EVENTS.LANDING_CTA_CLICK, {
+      cta_location: 'footer',
+      cta_text: label,
+    });
+  };
 
   return (
     <footer className="py-12 bg-white">
@@ -57,6 +70,7 @@ export function FooterSectionV2() {
                   <Link
                     href={link.href}
                     className="brand-caption hover:text-[var(--brand-primary)] transition-colors"
+                    onClick={link.track ? () => handleLinkClick(link.label) : undefined}
                   >
                     {link.label}
                   </Link>

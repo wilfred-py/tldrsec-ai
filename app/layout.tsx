@@ -1,9 +1,11 @@
 import './globals.css';
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google';
 import { ClerkProviderWrapper } from '@/components/auth/clerk-provider-wrapper';
 import { Toaster } from '@/components/ui/sonner';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
+import { SubscriberIdentifier } from '@/components/analytics/subscriber-identifier';
 import { MouseFollowEffect } from '@/components/landing/mouse-follow-effect';
 import { JsonLd } from '@/components/structured-data';
 import { AuthProvider } from '@/lib/context/auth-context';
@@ -78,6 +80,13 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} antialiased`}
         >
           <PostHogProvider>
+            {/* Newsletter campaign attribution. Reads ?sub=<uuid> from URL,
+                writes cookie+localStorage synchronously, identifies in PostHog.
+                Suspense boundary required because useSearchParams suspends
+                until the client router hydrates. */}
+            <Suspense fallback={null}>
+              <SubscriberIdentifier />
+            </Suspense>
             {isBuildTime ? (
               // During build time, render children without AuthProvider
               <>

@@ -25,9 +25,6 @@ import {
   extractFinancialMetrics
 } from './content-extraction-strategy';
 
-// Initialize all filing types
-import './filing-types';
-
 // Create a logger for the factory
 const logger = new Logger({}, 'filing-parser-factory');
 

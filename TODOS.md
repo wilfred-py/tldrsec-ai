@@ -114,15 +114,13 @@ initial ship but worth doing later.
   entirely; collective platform-wide counter now lives on landing-page hero
   (Stripe-GDP-counter analog). Closes the original CEO category-mistake
   critique — marketing pattern is now on a marketing surface.
-- **A/B test "minutes saved" against a forward-looking metric** ("next 10-Q
-  in 4d", "3 filings in your watchlist this week"). CEO review flagged
-  minutes-saved as a retrospective ego stat that doesn't drive return visits.
-- **Add PostHog instrumentation on dashboard stat hover/visibility** to
-  measure whether the counter actually changes user behavior (CEO
-  recommendation: measure before optimizing further).
-- **Add formula tooltip explaining 250 WPM assumption** — the initial
-  `(est.)` suffix is shallow; deeper disclosure of the
-  `(input - output) * 0.75 / 250` derivation lives behind a "?" affordance.
+- ~~**A/B test "minutes saved" against a forward-looking metric.**~~ ✅
+  Superseded 2026-05-12 (v0.0.30.1): counter removed from dashboard
+  entirely; no surface left to A/B test.
+- ~~**Add PostHog instrumentation on dashboard stat hover/visibility.**~~ ✅
+  Superseded 2026-05-12 (v0.0.30.1): counter removed; instrumentation moot.
+- ~~**Add formula tooltip explaining 250 WPM assumption.**~~ ✅
+  Superseded 2026-05-12 (v0.0.30.1): counter removed; tooltip moot.
 
 ## P2 — Grok 4.3 migration follow-ups (deferred from /autoplan #wilfred-py/grok-4-3-upgrade)
 
