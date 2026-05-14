@@ -73,7 +73,7 @@ jest.mock('../../lib/error-handling/retry', () => ({
 }));
 
 import { generateAISummaryWithRetry } from '../../services/filing/summaryGenerationService';
-import { parseFormContentEnhanced } from '../../lib/parsers/enhanced-form-parser';
+import { parseFormContentEnhanced } from '../../lib/parsers/form-parser';
 import { openRouterClient } from '../../lib/ai/openrouter-client';
 
 describe('AI Summarization Pipeline Integration', () => {

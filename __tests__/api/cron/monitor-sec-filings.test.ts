@@ -16,7 +16,8 @@ jest.mock('../../../lib/network/enhanced-fetch', () => ({
   enhancedFetch: jest.fn()
 }));
 
-jest.mock('../../../lib/parsers/enhanced-form-parser', () => ({
+jest.mock('../../../lib/parsers/form-parser', () => ({
+  ...jest.requireActual('../../../lib/parsers/form-parser'),
   parseFormContentEnhanced: jest.fn()
 }));
 
@@ -72,7 +73,7 @@ import {
   cleanupOldMonitoringData
 } from '../../../lib/sec-edgar/ticker-monitoring';
 import { enhancedFetch } from '../../../lib/network/enhanced-fetch';
-import { parseFormContentEnhanced } from '../../../lib/parsers/enhanced-form-parser';
+import { parseFormContentEnhanced } from '../../../lib/parsers/form-parser';
 import { getPrismaClient } from '../../../lib/db/prisma';
 import { sendFilingSummaryEmail } from '../../../lib/email/summary-service';
 import { generateAISummaryWithRetry } from '../../../services/filing/summaryGenerationService';

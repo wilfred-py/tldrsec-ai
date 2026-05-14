@@ -6,7 +6,7 @@
  */
 
 import { enhancedFetch } from '../../../lib/network/enhanced-fetch';
-import { parseFormContentEnhanced } from '../../../lib/parsers/enhanced-form-parser';
+import { parseFormContentEnhanced } from '../../../lib/parsers/form-parser';
 import { JSDOM } from 'jsdom';
 import * as cheerio from 'cheerio';
 import { logger } from '../../../lib/logging';
