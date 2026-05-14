@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.31.0] - 2026-05-14
+
+### Fixed
+- **Filing preferences save was silently failing for every onboarded user.** Toggling switches on `/dashboard/settings` and clicking Save returned a generic error toast (or appeared to spin and do nothing) instead of persisting. Root cause: `handleGetPreferences` and `handlePatchPreferences` in `app/api/user/route.ts` passed Clerk's user id (`user_xxx`) directly to `prisma.user.findUnique({ where: { id: clerkId } })`, but `User.id` is a generated UUID; the Clerk id lives in `User.authProviderId`. Every save threw "User not found" inside `PreferenceService`. Fix: new `resolveDbUserId()` helper resolves Clerk id → DB user id via `findFirst({ OR: [{id},{authProviderId}], deletedAt: null })`, matching the pattern already used by `handleGetSubscription`. Returns 404 instead of leaking the resolution failure as a 500.
+- **Billing portal returned a misleading "No billing information found" 404 for the same user class.** `handlePostBillingPortal` had the identical bug: `prisma.userSubscription.findUnique({ where: { userId: clerkId } })` queries a foreign key to `User.id` (UUID), so onboarded users with active Stripe subscriptions got a "create a subscription first" error. Same `resolveDbUserId()` fix applied. The two 404 paths are now distinct ("Account not fully provisioned yet" vs "No billing customer yet") so production triage can tell provisioning races apart from missing Stripe records.
+
+### Added
+- **Server-side `logger.warn` on Clerk-authed-but-not-provisioned 404s** in both `/api/user?type=preferences` and `/api/user?type=billing-portal`. Surfaces the "Clerk session valid, DB row missing" funnel-drop as a visible incident instead of a silent retry loop on the user's end.
+- **Soft-delete safety filter** in the new `resolveDbUserId()` helper. Excludes `deletedAt IS NOT NULL` users so a stale Clerk session for a deleted account can no longer read or write preferences. `deleteScheduledFor` users are intentionally still allowed — they may want to lower email frequency before the purge runs.
+- **15 regression tests** (`__tests__/api/user/preferences.test.ts` rewritten, `__tests__/api/user/billing-portal.test.ts` new) covering: normal onboarded user, legacy `id===clerkId` user, soft-deleted user, missing DB row, no Clerk auth, malformed JSON body. Tests explicitly assert `PreferenceService.*` is called with the DB id, never the Clerk id — exactly the regression class that broke this in the route consolidation.
+
 ## [0.0.30.1] - 2026-05-12
 
 ### Removed
