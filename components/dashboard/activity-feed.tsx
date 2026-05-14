@@ -58,7 +58,14 @@ function formatFilingType(type: string): string {
   }
 }
 
-/** Filing badge colors matching the landing page gmail-inbox-hero */
+/**
+ * Filing-type color coding for the dashboard activity feed.
+ *
+ * Intentionally diverges from the landing-page gmail-inbox-hero (which uses
+ * monochrome hairline chips to back the "every filing" breadth promise).
+ * The dashboard is a power-user surface where filing-type color is a useful
+ * at-a-glance shortcut, so we keep the colored palette here.
+ */
 function getFilingBadgeColor(filingType: string): string {
   const upper = filingType.toUpperCase();
 

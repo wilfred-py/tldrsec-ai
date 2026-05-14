@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.31.0] - 2026-05-13
+
+### Changed
+- **Landing hero v3 — editorial rewrite.** The above-the-fold hero now reads as a magazine cover instead of a SaaS template. Headline is "Every filing. Summarized. Delivered." in Instrument Serif, with quiet typographic emphasis on the final word (italic, slightly heavier, near-black ink — no color shift). Subhead drops the 10-K / 10-Q / 8-K / Form 4 enumeration that was underselling the actual coverage; new copy is "Every SEC filing your portfolio companies submit, in your inbox minutes after it publishes." Replaces the blue-purple mesh gradient with a warm bone background, swaps the gradient CTA for a solid-ink button (brand-blue on hover), and unifies the inbox-widget filing chips to a single monochrome treatment. The dashboard activity feed keeps its colored badges by design — that's the power-user surface where color is a useful at-a-glance shortcut.
+- **Inbox widget chrome.** Drops the literal Gmail traffic-light dots and the "Updated weekly" footer. Replaces them with a small monospaced "tldrsec.com / inbox" header label. Row states use stone neutrals instead of blue tints. The widget shadow is `shadow-sm` instead of `shadow-2xl`, and the max width is capped at 1100px so the centered copy block above doesn't feel dwarfed.
+- **PostHog hero-copy experiment variant retired.** `HOMEPAGE_HERO_VARIANT` is now an alias of `HOMEPAGE_HERO_CONTROL`, so both arms render identical copy. Test T14 pins the alias state to catch accidental re-divergence. Re-introduce a distinct variant by replacing this alias with a new copy bundle when the next experiment ships.
+
+### Added
+- **Instrument Serif via `next/font/google`.** Available project-wide as `--font-serif`. Used by the new `.brand-hero-display-serif` headline utility.
+- **Editorial palette tokens.** `--editorial-bg`, `--editorial-ink`, `--editorial-ink-muted`, `--editorial-rule` live in `app/globals.css` alongside the existing brand palette. New utility classes: `.brand-hero-display-serif`, `.editorial-accent`, `.brand-button-ink`.
+- **`editorialBgStyle` export in `lib/animations/landing-animations.ts`.** Solid warm-bone background that replaces the multi-layered mesh gradient on the hero section. The original `meshGradientStyle` export is retained for any other consumers.
+
 ## [0.0.30.1] - 2026-05-12
 
 ### Removed
