@@ -224,9 +224,9 @@ describe('GmailInboxHero', () => {
 
   // ────────────────────────────────────────────────────────────────────────
   // PostHog hero-copy experiment variant tests (decision 12A)
-  // Both arms render identical copy in step 4 of landing-copy-rework. Step 5
-  // will diverge the variant arm; these tests will then catch arm-specific
-  // regressions.
+  // The variant arm is currently retired (aliased to control). T14 pins that
+  // retirement state so an accidental re-divergence is caught; restore the
+  // arm-specific assertions when a new variant copy bundle ships.
   // ────────────────────────────────────────────────────────────────────────
 
   // T13: variant="control" renders the canonical hero copy.
@@ -240,14 +240,13 @@ describe('GmailInboxHero', () => {
     ).toBeInTheDocument();
   });
 
-  // T14: variant="variant" renders the Form-4 / insider-buying wedge arm.
-  it('renders variant hero copy (Form-4 wedge framing) when variant="variant"', () => {
+  // T14: variant="variant" renders the same copy as control (variant retired).
+  it('renders control hero copy when variant="variant" (variant arm retired)', () => {
     render(<GmailInboxHero variant="variant" />);
     const h1 = screen.getByRole('heading', { level: 1 });
     expect(h1).toHaveTextContent(HOMEPAGE_HERO_VARIANT.h1.text);
     expect(screen.getByText(HOMEPAGE_HERO_VARIANT.subhead)).toBeInTheDocument();
-    // Variant arm must NOT render the control H1 (catches accidental re-aliasing).
-    expect(h1).not.toHaveTextContent(HOMEPAGE_HERO.h1.text);
+    expect(HOMEPAGE_HERO_VARIANT).toBe(HOMEPAGE_HERO);
   });
 
   // T15: missing/undefined variant prop falls back to control without crashing.

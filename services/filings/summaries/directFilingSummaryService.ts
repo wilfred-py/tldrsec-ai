@@ -9,7 +9,7 @@ import { FilingType } from '../../../types/sec/filing';
 import { FilingSummaryResult } from '../../filing/types';
 import { DirectClaudeClient } from '../../../lib/ai/directClaudeClient';
 import { fetchEnhancedDocumentContent } from '../extractors/enhancedDocumentScraper';
-import { parseFormContentEnhanced } from '../../../lib/parsers/enhanced-form-parser';
+import { parseFormContentEnhanced } from '../../../lib/parsers/form-parser';
 import * as secService from '../../secService';
 import { findExistingSummary, storeSummary } from '../database/filingDatabase';
 import { generateFallbackSummary, generateFallbackKeyPoints } from './fallbackSummaryGenerator';

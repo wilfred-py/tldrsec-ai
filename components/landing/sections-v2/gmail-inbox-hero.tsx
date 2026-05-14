@@ -8,8 +8,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
 import {
   ArrowRight,
-  CheckCircle2,
-  Mail,
   Star,
   Archive,
   Trash2,
@@ -17,14 +15,13 @@ import {
   RefreshCw,
   X,
   Zap,
-  Clock,
   BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
   staggerContainer,
   staggerItem,
-  meshGradientStyle,
+  editorialBgStyle,
 } from '@/lib/animations/landing-animations';
 import {
   curatedSummaries,
@@ -55,27 +52,13 @@ interface GmailInboxHeroProps {
 }
 
 /**
- * Get badge color based on filing type
+ * Filing-type chip styling — editorial monochrome.
+ * One uniform treatment for all filing types: hairline border, near-black
+ * mono caps text, no fill. The filing-type code carries the meaning; the
+ * chip stays out of the way.
  */
-function getFilingBadgeColor(filingType: string) {
-  switch (filingType) {
-    case '10-K':
-      return 'bg-purple-100 text-purple-700 border-purple-200';
-    case '10-Q':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case '8-K':
-      return 'bg-orange-100 text-orange-700 border-orange-200';
-    case 'Form 4':
-    case '144':
-      return 'bg-green-100 text-green-700 border-green-200';
-    case 'DEFA14A':
-      return 'bg-red-100 text-red-700 border-red-200';
-    case 'FWP':
-      return 'bg-cyan-100 text-cyan-700 border-cyan-200';
-    default:
-      return 'bg-gray-100 text-gray-700 border-gray-200';
-  }
-}
+const FILING_BADGE_CLASS =
+  'bg-transparent border border-[var(--editorial-rule)] text-[color:var(--editorial-ink)] font-[var(--font-geist-mono)] uppercase tracking-[0.05em] hover:bg-transparent';
 
 /**
  * Get sentiment color
@@ -191,13 +174,17 @@ function EmailRow({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onSelect}
-      style={{ height: `${EMAIL_ROW_HEIGHT}px`, minHeight: `${EMAIL_ROW_HEIGHT}px` }}
-      className={`w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-4 border-b border-gray-100 cursor-pointer transition-colors duration-150 flex-shrink-0 overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 ${
+      style={{
+        height: `${EMAIL_ROW_HEIGHT}px`,
+        minHeight: `${EMAIL_ROW_HEIGHT}px`,
+        borderBottomColor: 'var(--editorial-rule)',
+      }}
+      className={`w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-4 border-b cursor-pointer transition-colors duration-150 flex-shrink-0 overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--editorial-ink)] focus-visible:ring-offset-2 ${
         isSelected
-          ? 'bg-blue-100 border-l-4 border-l-blue-500'
+          ? 'bg-stone-100 border-l-2 border-l-black'
           : isUnread
-          ? 'bg-blue-50/40'
-          : 'bg-white hover:bg-gray-50'
+          ? 'bg-stone-50'
+          : 'bg-white hover:bg-stone-50/60'
       }`}
     >
       {/* Checkbox area - responsive width */}
@@ -205,8 +192,10 @@ function EmailRow({
         <motion.div
           animate={{ scale: isHovered ? 1.1 : 1 }}
           onClick={onToggleCheck}
-          className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer ${
-            isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300 hover:border-gray-400'
+          className={`w-4 h-4 rounded-sm border flex items-center justify-center cursor-pointer ${
+            isChecked
+              ? 'bg-[color:var(--editorial-ink)] border-[color:var(--editorial-ink)]'
+              : 'border-[color:var(--editorial-rule)] hover:border-[color:var(--editorial-ink-muted)]'
           }`}
         >
           {isChecked && (
@@ -226,34 +215,52 @@ function EmailRow({
         </motion.span>
       </div>
 
-      {/* Unread indicator - hidden on mobile to save space */}
+      {/* Unread indicator — near-black dot, editorial */}
       <div className="hidden sm:flex w-3 flex-shrink-0 items-center justify-center">
-        {isUnread && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+        {isUnread && (
+          <div
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: 'var(--editorial-ink)' }}
+          />
+        )}
       </div>
 
-      {/* Ticker - responsive width */}
+      {/* Ticker - responsive width, monospace for tabular feel */}
       <div className="w-12 sm:w-14 flex-shrink-0">
-        <span className={`font-semibold text-xs sm:text-sm ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
+        <span
+          className="font-[var(--font-geist-mono)] font-medium text-xs sm:text-sm uppercase"
+          style={{
+            color: isUnread ? 'var(--editorial-ink)' : 'var(--editorial-ink-muted)',
+          }}
+        >
           {email.ticker}
         </span>
       </div>
 
       {/* Filing Type Badge - responsive, hidden on very small screens */}
       <div className="hidden xs:block w-14 sm:w-16 flex-shrink-0">
-        <Badge className={`text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 ${getFilingBadgeColor(email.filingType)}`}>
+        <Badge className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0 rounded-sm ${FILING_BADGE_CLASS}`}>
           {email.filingType}
         </Badge>
       </div>
 
       {/* Subject & Preview - flex grow takes remaining space */}
       <div className="flex-1 min-w-0 overflow-hidden">
-        <span className={`text-xs sm:text-sm truncate block ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+        <span
+          className={`text-xs sm:text-sm truncate block ${isUnread ? 'font-medium' : ''}`}
+          style={{
+            color: isUnread ? 'var(--editorial-ink)' : 'var(--editorial-ink-muted)',
+          }}
+        >
           {email.headline}
         </span>
       </div>
 
-      {/* Time - hidden on mobile */}
-      <div className="flex-shrink-0 text-[10px] sm:text-xs text-gray-400 w-16 sm:w-20 text-right hidden sm:block">
+      {/* Time - hidden on mobile, monospace */}
+      <div
+        className="flex-shrink-0 font-[var(--font-geist-mono)] text-[10px] sm:text-xs w-16 sm:w-20 text-right hidden sm:block"
+        style={{ color: 'var(--editorial-ink-muted)' }}
+      >
         {deliveryTimestamp
           ? formatSecondsAgo(Math.floor((currentTime - deliveryTimestamp) / 1000))
           : email.timeAgo}
@@ -281,21 +288,28 @@ function EmailDetailPanel({
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--brand-primary-light, #e0edff)' }}
+            style={{ backgroundColor: '#F5F4F0' }}
           >
-            <email.icon className="w-5 h-5 text-blue-600" />
+            <email.icon className="w-5 h-5 text-[color:var(--editorial-ink)]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-gray-900">{email.ticker}</span>
-              <Badge className={`text-xs ${getFilingBadgeColor(email.filingType)}`}>
+              <span
+                className="font-[var(--font-geist-mono)] font-semibold uppercase"
+                style={{ color: 'var(--editorial-ink)' }}
+              >
+                {email.ticker}
+              </span>
+              <Badge className={`text-[10px] px-2 py-0 rounded-sm ${FILING_BADGE_CLASS}`}>
                 {email.filingType}
               </Badge>
               <span className={`text-xs font-medium ${getSentimentColor(email.sentiment)}`}>
                 {email.sentiment.charAt(0).toUpperCase() + email.sentiment.slice(1)}
               </span>
             </div>
-            <p className="text-sm text-gray-500">{email.companyName}</p>
+            <p className="text-sm" style={{ color: 'var(--editorial-ink-muted)' }}>
+              {email.companyName}
+            </p>
           </div>
         </div>
         <button
@@ -312,13 +326,23 @@ function EmailDetailPanel({
         {/* Headline */}
         <h3 className="text-lg font-semibold text-gray-900 mb-3">{email.headline}</h3>
 
-        {/* Key Takeaway */}
-        <div className="bg-blue-50 rounded-lg p-4 mb-4">
+        {/* Key Takeaway — editorial: stone fill, near-black ink */}
+        <div
+          className="rounded-lg p-4 mb-4"
+          style={{ backgroundColor: '#F5F4F0' }}
+        >
           <div className="flex items-center gap-2 mb-2">
-            <Zap className="w-4 h-4 text-blue-600" />
-            <span className="text-sm font-semibold text-blue-900">Key Takeaway</span>
+            <Zap className="w-4 h-4" style={{ color: 'var(--editorial-ink)' }} />
+            <span
+              className="text-xs font-semibold uppercase tracking-[0.08em]"
+              style={{ color: 'var(--editorial-ink)' }}
+            >
+              Key Takeaway
+            </span>
           </div>
-          <p className="text-sm text-blue-800">{email.keyTakeaway}</p>
+          <p className="text-sm" style={{ color: 'var(--editorial-ink)' }}>
+            {email.keyTakeaway}
+          </p>
         </div>
 
         {/* Summary */}
@@ -362,7 +386,7 @@ function EmailDetailPanel({
             : 'This is a real AI-generated summary. Sign up to receive summaries for your portfolio.'}
         </p>
         <Link href={isOnboarded ? '/dashboard' : '/sign-up'}>
-          <Button className="w-full brand-button-gradient">
+          <Button className="w-full brand-button-ink">
             {isOnboarded ? 'Go to Dashboard' : 'Get Summaries Like This'}
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
@@ -658,7 +682,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
       ref={combinedRef}
       id="hero"
       className={`relative min-h-[100vh] flex flex-col items-center justify-center overflow-hidden pt-32 pb-12 lg:pt-40 lg:pb-8 ${className}`}
-      style={meshGradientStyle}
+      style={editorialBgStyle}
     >
       <div className="container mx-auto px-4 relative z-10">
         <div className="flex flex-col items-center">
@@ -681,10 +705,10 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                 className="mb-5 text-center text-[13px]"
               >
                 <span aria-hidden="true">
-                  <span className="font-bold text-[var(--brand-secondary)]">
+                  <span className="font-semibold text-[color:var(--editorial-ink)]">
                     Reading time saved across all investors:
                   </span>{' '}
-                  <span className="text-[var(--brand-text-muted)]">
+                  <span className="text-[color:var(--editorial-ink-muted)]">
                     <MinutesSavedCounter
                       anchorMinutes={globalStats.totalMinutes}
                       ratePerSecond={globalStats.ratePerSecond}
@@ -696,17 +720,17 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
             ) : (
               <motion.p
                 variants={staggerItem}
-                className="mb-5 text-center text-[13px] font-semibold uppercase tracking-[0.12em]"
-                style={{ color: 'var(--brand-primary)' }}
+                className="mb-5 text-center text-[12px] font-semibold uppercase tracking-[0.16em]"
+                style={{ color: 'var(--editorial-ink-muted)' }}
               >
                 {heroCopy.eyebrow}
               </motion.p>
             )}
 
-            <motion.h1 variants={staggerItem} className="brand-hero-display mb-5 text-center text-black lg:!text-[3.5rem]">
+            <motion.h1 variants={staggerItem} className="brand-hero-display-serif mb-6 text-center">
               {heroCopy.h1.parts.map((part, i) =>
                 part.gradient ? (
-                  <span key={i} className="brand-gradient-text">{part.text}</span>
+                  <span key={i} className="editorial-accent">{part.text}</span>
                 ) : (
                   <span key={i}>{part.text}</span>
                 )
@@ -726,16 +750,16 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                   <Skeleton className="h-11 w-48 rounded-lg" />
                 ) : isSignedIn ? (
                   <Link href="/onboarding">
-                    <Button className="brand-button-gradient">
+                    <Button className="brand-button-ink">
                       {heroCopy.ctaButton.incompleteOnboarding}
-                      <ArrowRight className="w-5 h-5 ml-2" />
+                      <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </Link>
                 ) : (
                   <Link href="/sign-up">
-                    <Button className="brand-button-gradient">
+                    <Button className="brand-button-ink">
                       {heroCopy.ctaButton.unauth}
-                      <ArrowRight className="w-5 h-5 ml-2" />
+                      <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </Link>
                 )}
@@ -748,13 +772,28 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
 
             <motion.div
               variants={staggerItem}
-              className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2 sm:gap-5 mb-24"
+              className="flex flex-row items-stretch justify-center mb-20 mx-auto"
             >
-              {trustMetrics.map((metric) => (
-                <div key={metric.label} className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[var(--brand-success)]" />
-                  <span className="text-xs font-semibold" style={{ color: 'var(--brand-secondary)' }}>{metric.value}</span>
-                  <span className="text-xs" style={{ color: 'var(--brand-text-muted)' }}>{metric.label}</span>
+              {trustMetrics.map((metric, idx) => (
+                <div
+                  key={metric.label}
+                  className={`flex flex-col items-center px-6 sm:px-10 ${
+                    idx > 0 ? 'border-l' : ''
+                  }`}
+                  style={idx > 0 ? { borderColor: 'var(--editorial-rule)' } : undefined}
+                >
+                  <span
+                    className="font-[var(--font-geist-mono)] text-base sm:text-lg font-medium tabular-nums"
+                    style={{ color: 'var(--editorial-ink)' }}
+                  >
+                    {metric.value}
+                  </span>
+                  <span
+                    className="text-[10px] sm:text-[11px] uppercase tracking-[0.12em] mt-1"
+                    style={{ color: 'var(--editorial-ink-muted)' }}
+                  >
+                    {metric.label}
+                  </span>
                 </div>
               ))}
             </motion.div>
@@ -763,8 +802,8 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
           {/* SR-only heading for accessibility */}
           <h2 className="sr-only">Product demo inbox</h2>
 
-          {/* Gmail Inbox Widget — centered, responsive */}
-          <div className="w-full px-0 sm:px-4 md:px-0 md:max-w-[min(90vw,1200px)] md:mx-auto">
+          {/* Inbox Widget — editorial chrome, centered, capped width */}
+          <div className="w-full px-0 sm:px-4 md:px-0 md:max-w-[min(90vw,1100px)] md:mx-auto">
             <motion.div
               ref={containerRef}
               initial={{ opacity: 0, y: 30 }}
@@ -773,45 +812,67 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
               className="relative"
             >
               <motion.div
-                className="bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-200 relative"
+                className="bg-white rounded-lg shadow-sm overflow-hidden relative"
                 style={{
                   width: '100%',
-                  maxWidth: 'min(98vw, 2000px)',
+                  maxWidth: '1100px',
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: 'var(--editorial-rule)',
                 }}
               >
-                {/* Gmail Header - compact on mobile */}
-                <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200">
-                  <div className="flex gap-1 sm:gap-1.5">
-                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-400" />
-                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-yellow-400" />
-                    <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-400" />
+                {/* Widget header — editorial: small mono label + indicator dot + mono "new" pill */}
+                <div
+                  className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2.5 sm:py-3 border-b"
+                  style={{ borderColor: 'var(--editorial-rule)', backgroundColor: '#FAFAF7' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: 'var(--editorial-ink)' }}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className="font-[var(--font-geist-mono)] text-[11px] sm:text-xs uppercase tracking-[0.08em]"
+                      style={{ color: 'var(--editorial-ink-muted)' }}
+                    >
+                      tldrsec.com / inbox
+                    </span>
                   </div>
-                  <div className="flex-grow flex items-center justify-center gap-1 sm:gap-2 min-w-0">
-                    <Mail className="w-3 h-3 sm:w-4 sm:h-4 text-neutral-600 flex-shrink-0" />
-                    <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">{heroCopy.widgetHeader}</span>
-                  </div>
+                  <div className="flex-grow" />
                   {unreadCount > 0 && (
-                    <Badge className="bg-red-500 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 flex-shrink-0">
+                    <span
+                      className="font-[var(--font-geist-mono)] text-[10px] sm:text-[11px] uppercase tracking-[0.08em] px-2 py-0.5 rounded"
+                      style={{
+                        color: 'var(--editorial-ink)',
+                        borderWidth: '1px',
+                        borderStyle: 'solid',
+                        borderColor: 'var(--editorial-rule)',
+                      }}
+                    >
                       {unreadCount} new
-                    </Badge>
+                    </span>
                   )}
                 </div>
 
-                {/* Toolbar - compact on mobile */}
-                <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gray-50 border-b border-gray-100">
-                  {/* Master checkbox for select all/deselect all */}
+                {/* Toolbar — editorial: muted icons, mono pagination counter */}
+                <div
+                  className="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 border-b"
+                  style={{ borderColor: 'var(--editorial-rule)', backgroundColor: '#FAFAF7' }}
+                >
+                  {/* Master checkbox */}
                   <button
                     onClick={handleSelectAll}
-                    className="p-1 sm:p-1.5 rounded hover:bg-gray-200 transition-colors flex items-center justify-center"
+                    className="p-1 sm:p-1.5 rounded hover:bg-stone-200/60 transition-colors flex items-center justify-center"
                     title={allChecked ? 'Deselect all' : 'Select all'}
                   >
                     <div
-                      className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer ${
+                      className={`w-4 h-4 rounded-sm border flex items-center justify-center cursor-pointer ${
                         allChecked
-                          ? 'bg-blue-500 border-blue-500'
+                          ? 'bg-[color:var(--editorial-ink)] border-[color:var(--editorial-ink)]'
                           : someChecked
-                          ? 'bg-blue-200 border-blue-500'
-                          : 'border-gray-300 hover:border-gray-400'
+                          ? 'bg-stone-300 border-[color:var(--editorial-ink-muted)]'
+                          : 'border-[color:var(--editorial-rule)] hover:border-[color:var(--editorial-ink-muted)]'
                       }`}
                     >
                       {allChecked && (
@@ -820,7 +881,7 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                         </svg>
                       )}
                       {someChecked && !allChecked && (
-                        <div className="w-2 h-0.5 bg-blue-500 rounded" />
+                        <div className="w-2 h-0.5 bg-[color:var(--editorial-ink)] rounded" />
                       )}
                     </div>
                   </button>
@@ -829,23 +890,31 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                     onClick={handleRefresh}
                     animate={{ rotate: isRefreshing ? 360 : 0 }}
                     transition={{ duration: 0.8 }}
-                    className="p-1 sm:p-1.5 rounded hover:bg-gray-200 transition-colors"
+                    className="p-1 sm:p-1.5 rounded hover:bg-stone-200/60 transition-colors"
                     title="Refresh"
                   >
-                    <RefreshCw className="w-4 h-4 text-gray-500" />
+                    <RefreshCw className="w-4 h-4" style={{ color: 'var(--editorial-ink-muted)' }} />
                   </motion.button>
-                  <button className="hidden sm:block p-1.5 rounded hover:bg-gray-200 transition-colors" title="Archive">
-                    <Archive className="w-4 h-4 text-gray-500" />
+                  <button className="hidden sm:block p-1.5 rounded hover:bg-stone-200/60 transition-colors" title="Archive">
+                    <Archive className="w-4 h-4" style={{ color: 'var(--editorial-ink-muted)' }} />
                   </button>
-                  <button className="hidden sm:block p-1.5 rounded hover:bg-gray-200 transition-colors" title="Delete">
-                    <Trash2 className="w-4 h-4 text-gray-500" />
+                  <button className="hidden sm:block p-1.5 rounded hover:bg-stone-200/60 transition-colors" title="Delete">
+                    <Trash2 className="w-4 h-4" style={{ color: 'var(--editorial-ink-muted)' }} />
                   </button>
-                  <div className="hidden sm:block h-5 w-px bg-gray-300 mx-1" />
-                  <button className="p-1 sm:p-1.5 rounded hover:bg-gray-200 transition-colors" title="More options">
-                    <MoreVertical className="w-4 h-4 text-gray-500" />
+                  <div
+                    className="hidden sm:block h-5 w-px mx-1"
+                    style={{ backgroundColor: 'var(--editorial-rule)' }}
+                  />
+                  <button className="p-1 sm:p-1.5 rounded hover:bg-stone-200/60 transition-colors" title="More options">
+                    <MoreVertical className="w-4 h-4" style={{ color: 'var(--editorial-ink-muted)' }} />
                   </button>
                   <div className="flex-grow" />
-                  <span className="text-[10px] sm:text-xs text-gray-400">1-{displayedEmails.length} of {curatedSummaries.length}</span>
+                  <span
+                    className="font-[var(--font-geist-mono)] text-[10px] sm:text-[11px]"
+                    style={{ color: 'var(--editorial-ink-muted)' }}
+                  >
+                    1-{displayedEmails.length} of {curatedSummaries.length}
+                  </span>
                 </div>
 
                 {/* Email List & Detail Overlay */}
@@ -966,16 +1035,17 @@ export const GmailInboxHero = memo<GmailInboxHeroProps>(({ className = '', heroR
                   </AnimatePresence>
                 </div>
 
-                {/* Footer - compact on mobile */}
-                <div className="px-2 sm:px-4 py-2 sm:py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
-                  <span className="text-[10px] sm:text-xs text-gray-500 truncate">
+                {/* Footer — editorial: muted caption, hairline top border */}
+                <div
+                  className="px-3 sm:px-5 py-2.5 sm:py-3 border-t flex items-center gap-2"
+                  style={{ borderColor: 'var(--editorial-rule)', backgroundColor: '#FAFAF7' }}
+                >
+                  <span
+                    className="text-[10px] sm:text-xs truncate"
+                    style={{ color: 'var(--editorial-ink-muted)' }}
+                  >
                     {heroCopy.widgetCaption}
                   </span>
-                  <div className="flex items-center gap-1 text-[10px] sm:text-xs text-gray-400 flex-shrink-0">
-                    <Clock className="w-3 h-3" />
-                    <span className="hidden sm:inline">{heroCopy.widgetUpdatedDesktop}</span>
-                    <span className="sm:hidden">{heroCopy.widgetUpdatedMobile}</span>
-                  </div>
                 </div>
               </motion.div>
             </motion.div>
