@@ -1,6 +1,10 @@
 import { FilingType } from '../sec-edgar/types';
 import { FormTypeMetadata, getFormMetadata } from '../sec-edgar/form-registry';
 import * as cheerio from 'cheerio';
+import { extractEnhancedFilingContent, formatForSummarization, detectFilingType } from './sec-filing-integration';
+import { logger } from '../logging';
+
+const enhancedLogger = logger.child('form-parser:enhanced');
 
 /**
  * Interface for parsed content from SEC filings
@@ -546,4 +550,110 @@ function getImportantSectionsForFilingType(filingType: FilingType, sectionNames:
   
   // Default to returning all section names
   return sectionNames;
+}
+
+/**
+ * Enhanced parseFormContent: handles URL-based extraction and inline XBRL.
+ * Callers that have a URL or expect inline-XBRL filings reach for this entry
+ * point; everyone else uses {@link parseFormContent} directly.
+ *
+ * Falls back to {@link parseFormContent} when:
+ *   - no URL is supplied and the content is not inline XBRL, or
+ *   - any enhanced path throws.
+ */
+export async function parseFormContentEnhanced(
+  content: string,
+  filingType: FilingType,
+  url?: string
+): Promise<ParsedContent> {
+  try {
+    if (url) {
+      enhancedLogger.debug(`Using enhanced extractor for URL: ${url}`);
+      const extractionResult = await extractEnhancedFilingContent(url, { debug: true });
+
+      const typedResult = extractionResult as {
+        success: boolean;
+        content: string;
+        metadata: {
+          filingType?: string;
+          extractionMethod?: string;
+        };
+      };
+
+      if (typedResult.success && typedResult.content) {
+        enhancedLogger.info(`Successfully extracted content from ${url} using enhanced extractor`);
+
+        const formattedContent = formatForSummarization(typedResult.content, {
+          maxLength: 100000,
+          includeBoilerplate: false
+        });
+
+        const detectedFilingType = filingType ||
+          (typedResult.metadata?.filingType as FilingType) ||
+          detectFilingType(url, formattedContent) as FilingType;
+
+        const parsedContent = parseFormContent(formattedContent, detectedFilingType);
+
+        parsedContent.metadata = {
+          ...parsedContent.metadata,
+          enhancedExtraction: true,
+          extractionMethod: typedResult.metadata?.extractionMethod,
+          originalUrl: url
+        };
+
+        return parsedContent;
+      }
+
+      enhancedLogger.warn(`Enhanced extraction failed for ${url}, falling back to standard parser`);
+    }
+
+    if (content.includes('xmlns:ix="http://www.xbrl.org/2013/inlineXBRL"') ||
+        content.includes('<ix:header') ||
+        content.includes('<ix:hidden')) {
+      enhancedLogger.info('Content appears to be inline XBRL, using enhanced processing');
+
+      try {
+        const cleanedContent = content
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+          .replace(/<ix:header[^>]*>[\s\S]*?<\/ix:header>/gi, '')
+          .replace(/<ix:hidden[^>]*>[\s\S]*?<\/ix:hidden>/gi, '')
+          .replace(/<ix:[^>]*>/g, '')
+          .replace(/<\/ix:[^>]*>/g, '');
+
+        const parsedContent = parseFormContent(cleanedContent, filingType);
+
+        parsedContent.metadata = {
+          ...parsedContent.metadata,
+          enhancedExtraction: true,
+          extractionMethod: 'inline-xbrl-cleanup',
+          isInlineXbrl: true
+        };
+
+        return parsedContent;
+      } catch (error) {
+        const typedError = error as Error;
+        enhancedLogger.error(`Error processing inline XBRL content: ${typedError.message}`);
+        throw error;
+      }
+    }
+
+    enhancedLogger.debug(`Using standard parser for content`);
+    return parseFormContent(content, filingType);
+  } catch (error) {
+    const typedError = error as Error;
+    enhancedLogger.error(`Error in enhanced form parser: ${typedError.message}`);
+    return parseFormContent(content, filingType);
+  }
+}
+
+/**
+ * Enhanced extractImportantContent. Kept for symmetry with
+ * parseFormContentEnhanced; currently delegates to extractImportantContent.
+ */
+export function extractImportantContentEnhanced(
+  parsedContent: ParsedContent,
+  maxLength: number = 10000
+): string {
+  return extractImportantContent(parsedContent, maxLength);
 }

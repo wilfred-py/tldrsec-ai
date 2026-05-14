@@ -8,7 +8,7 @@ jest.mock('../../lib/db/prisma');
 jest.mock('../../lib/email/index');
 jest.mock('../../lib/email/templates');
 jest.mock('../../lib/network/enhanced-fetch');
-jest.mock('../../lib/parsers/enhanced-form-parser');
+jest.mock('../../lib/parsers/form-parser');
 jest.mock('../../services/filing/summaryGenerationService');
 jest.mock('../../lib/logging');
 jest.mock('@clerk/nextjs/server', () => ({
@@ -21,7 +21,7 @@ import { getPrismaClient } from '../../lib/db/prisma';
 import { sendFilingSummaryEmail } from '../../lib/email/summary-service';
 import { sendEmail } from '../../lib/email/index';
 import { enhancedFetch } from '../../lib/network/enhanced-fetch';
-import { parseFormContentEnhanced } from '../../lib/parsers/enhanced-form-parser';
+import { parseFormContentEnhanced } from '../../lib/parsers/form-parser';
 import { generateAISummaryWithRetry } from '../../services/filing/summaryGenerationService';
 
 const mockSendEmail = sendEmail as jest.MockedFunction<typeof sendEmail>;
