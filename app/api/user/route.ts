@@ -123,18 +123,45 @@ export async function PUT(request: NextRequest) {
 // Preferences sub-handlers
 // ===========================================================================
 
+async function resolveDbUserId(clerkId: string): Promise<string | null> {
+  // Excludes soft-deleted (deletedAt) users so a stale Clerk session can't
+  // touch a deleted account. Intentionally does NOT exclude `deleteScheduledFor`
+  // users — they may still need to adjust preferences (e.g. lower email frequency)
+  // before the purge runs.
+  const dbUser = await prisma.user.findFirst({
+    where: {
+      OR: [{ id: clerkId }, { authProviderId: clerkId }],
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+  return dbUser?.id ?? null;
+}
+
 async function handleGetPreferences() {
   try {
-    const user = await currentUser();
+    const { userId: clerkId } = await auth();
 
-    if (!user) {
+    if (!clerkId) {
       return NextResponse.json({
         success: false,
         message: 'Unauthorized'
       }, { status: 401 });
     }
 
-    const preferences = await PreferenceService.getUserPreferences(user.id);
+    const dbUserId = await resolveDbUserId(clerkId);
+    if (!dbUserId) {
+      // Authenticated at Clerk but no DB row — provisioning race (webhook
+      // hasn't fired) or soft-deleted account. Surface to logs so prod
+      // incidents are visible; the client still gets a clean 404.
+      logger.warn('Preferences GET: authenticated Clerk user has no DB row', { clerkId });
+      return NextResponse.json({
+        success: false,
+        message: 'User not found'
+      }, { status: 404 });
+    }
+
+    const preferences = await PreferenceService.getUserPreferences(dbUserId);
 
     return NextResponse.json({
       success: true,
@@ -152,9 +179,9 @@ async function handleGetPreferences() {
 
 async function handlePatchPreferences(request: NextRequest) {
   try {
-    const user = await currentUser();
+    const { userId: clerkId } = await auth();
 
-    if (!user) {
+    if (!clerkId) {
       return NextResponse.json({
         success: false,
         message: 'Unauthorized'
@@ -171,7 +198,16 @@ async function handlePatchPreferences(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const result = await PreferenceService.updateUserPreferences(user.id, updates);
+    const dbUserId = await resolveDbUserId(clerkId);
+    if (!dbUserId) {
+      logger.warn('Preferences PATCH: authenticated Clerk user has no DB row', { clerkId });
+      return NextResponse.json({
+        success: false,
+        message: 'User not found'
+      }, { status: 404 });
+    }
+
+    const result = await PreferenceService.updateUserPreferences(dbUserId, updates);
 
     return NextResponse.json(result, {
       status: result.success ? 200 : 400
@@ -854,8 +890,8 @@ async function handlePutSubscription(request: NextRequest) {
 
 async function handlePostBillingPortal() {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const { userId: clerkId } = await auth();
+    if (!clerkId) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
@@ -869,8 +905,22 @@ async function handlePostBillingPortal() {
       );
     }
 
+    // UserSubscription.userId is FK to User.id (UUID), not the Clerk id.
+    // Resolve to the DB id first — same pattern as preferences and subscription handlers.
+    const dbUserId = await resolveDbUserId(clerkId);
+    if (!dbUserId) {
+      // Distinguish "user not provisioned" from "user provisioned but no Stripe
+      // customer yet" (the existing branch below). Different root cause, different
+      // triage path — don't conflate in either the response or the logs.
+      logger.warn('Billing portal: authenticated Clerk user has no DB row', { clerkId });
+      return NextResponse.json(
+        { error: 'Account not fully provisioned yet. Please try again in a moment.' },
+        { status: 404 }
+      );
+    }
+
     const userSubscription = await prisma.userSubscription.findUnique({
-      where: { userId },
+      where: { userId: dbUserId },
       select: {
         stripeCustomerId: true,
         isActive: true,
