@@ -1,16 +1,19 @@
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 
-// Layout intentionally has NO force-dynamic. force-dynamic at the layout level
-// cascaded the directive to every /dashboard/** child page, which combined
-// with Next 15's default staleTimes.dynamic=0 meant back-navigation re-rendered
-// the dashboard from scratch every time (~5s wait).
+// REQUIRED: DashboardShell renders <MinimalHeader> which calls Clerk's
+// useUser() hook. Without ClerkProvider at build time (env vars missing in CI),
+// static prerendering of any /dashboard/** page fails with:
+//   "useUser can only be used within the <ClerkProvider /> component"
 //
-// Sub-pages that need request-time render carry force-dynamic themselves; pure
-// client sub-pages (usage, email-logs) static-prerender as empty shells. With
-// experimental.staleTimes set in next.config.js, back-nav within 10s hits the
-// Router Cache and renders instantly.
+// We tried removing this to "restore Router Cache" but that was wrong: the
+// Router Cache fix is `experimental.staleTimes` in next.config.js (sets
+// dynamic-route TTL to 10s), which works regardless of whether the layout is
+// build-time-static or request-time-rendered. force-dynamic on the layout
+// just shifts rendering from build to request — it does NOT bypass the
+// client-side Router Cache. Back-nav within 10s still hits the cache.
 //
 // See: streaming-perf-v2 Subtask 2 + CLAUDE.md item #18.
+export const dynamic = "force-dynamic";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
