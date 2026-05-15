@@ -12,7 +12,7 @@ import { logger } from '../../lib/logging';
 import { SummaryGenerationResult, SECFiling, Company } from './types';
 import { normalizeFormType } from './formTypeService';
 import { generateSecureCorrelationId } from '../../lib/security/secure-random';
-import { cleanHtmlContent } from '../../lib/parsers/filing-extractor-utils';
+import { cleanHtmlContent } from '../../lib/parsers/filing-extractor';
 
 const TrancheSchema = z.object({
   amountDisplay: z.string().min(1).max(64),

@@ -1,33 +1,446 @@
 /**
  * SEC Filing Content Extractor
- * 
- * Handles downloading and preprocessing SEC filings for AI analysis
+ *
+ * Handles downloading and preprocessing SEC filings for AI analysis.
+ *
+ * The deep Filing intake module: a single interface (`extractFilingContent`)
+ * fronts URL fetching, directory-listing traversal, form-type-specific
+ * dispatch, HTML / XML cleaning, and a worker-pool fallback. A standalone
+ * `cleanHtmlContent` export is provided for callers that need just the
+ * cleaner without orchestration (used by token-saving preprocessors).
  */
 
 import { SECFilingType } from '../ai/prompts/prompt-types';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import * as cheerio from 'cheerio';
+import { Worker } from 'worker_threads';
+import path from 'path';
 import { FilingType } from '../sec-edgar/types';
 import { SECErrorCode, SECEdgarError } from '../sec-edgar/types';
 import axios from 'axios';
 import { generateSecureOperationId } from '../security/secure-random';
-import {
-  cleanHtmlContent as cleanHtml,
-  cleanHtmlContentAsync as cleanHtmlAsync,
-  extractXmlContent as extractXml,
-  extractXmlContentAsync as extractXmlAsync,
-  isDirectoryListing as isDirListing,
-  extractDocumentLinks as extractDocLinks,
-  resolveUrl as resolveUrlPath,
-  SEC_BASE_URL,
-  MAX_CONTENT_SIZE,
-  PATTERNS,
-  PRIORITY_EXTENSIONS
-} from './filing-extractor-utils';
 
 // Component logger
 const componentLogger = logger.child('filing-extractor');
+
+// ---------------------------------------------------------------------------
+// Private constants
+// ---------------------------------------------------------------------------
+
+const SEC_BASE_URL = 'https://www.sec.gov';
+const MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB
+
+const PATTERNS = {
+  DIRECTORY_LISTING: /<title>Index of /i,
+  XML_STYLESHEET: /<\?xml-stylesheet/i,
+  HTML_DOCUMENT: /<html|<!DOCTYPE html/i,
+  XML_DOCUMENT: /<\?xml|<xml/i,
+  DOCUMENT_LINK: /href="([^"]+\.(htm|html|xml|txt))"/gi,
+  IMAGE_FILE: /\.(jpg|jpeg|png|gif|svg|ico|bmp|tiff|webp)$/i,
+  FORM4_XML: /<ownershipDocument/i,
+  FORM144_XML: /<intentToSell/i
+};
+
+const PRIORITY_EXTENSIONS = ['.htm', '.html', '.xml', '.txt'];
+
+// ---------------------------------------------------------------------------
+// Private internal helpers (formerly filing-extractor-utils.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Worker pool for CPU-intensive parsing operations.
+ */
+class WorkerPool {
+  private workers: Worker[] = [];
+  private maxWorkers: number;
+  private taskQueue: Array<{
+    task: any,
+    resolve: (value: any) => void,
+    reject: (reason: any) => void
+  }> = [];
+  private availableWorkers: Worker[] = [];
+
+  constructor(maxWorkers = 4) {
+    this.maxWorkers = maxWorkers;
+  }
+
+  async process<T>(task: any): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.taskQueue.push({ task, resolve, reject });
+      this.processQueue();
+    });
+  }
+
+  private processQueue() {
+    if (this.taskQueue.length === 0) return;
+
+    if (this.availableWorkers.length > 0) {
+      const worker = this.availableWorkers.pop()!;
+      const { task, resolve, reject } = this.taskQueue.shift()!;
+
+      worker.once('message', (result) => {
+        this.availableWorkers.push(worker);
+        resolve(result);
+        this.processQueue();
+      });
+
+      worker.once('error', (err) => {
+        this.availableWorkers.push(worker);
+        reject(err);
+        this.processQueue();
+      });
+
+      worker.postMessage(task);
+    } else if (this.workers.length < this.maxWorkers) {
+      const worker = new Worker(path.join(__dirname, 'parser-worker.js'));
+      this.workers.push(worker);
+
+      const { task, resolve, reject } = this.taskQueue.shift()!;
+
+      worker.once('message', (result) => {
+        this.availableWorkers.push(worker);
+        resolve(result);
+        this.processQueue();
+      });
+
+      worker.once('error', (err) => {
+        this.availableWorkers.push(worker);
+        reject(err);
+        this.processQueue();
+      });
+
+      worker.postMessage(task);
+    }
+  }
+
+  terminate() {
+    for (const worker of this.workers) {
+      worker.terminate();
+    }
+    this.workers = [];
+    this.availableWorkers = [];
+  }
+}
+
+const workerPool = new WorkerPool();
+
+/**
+ * Clean HTML content by stripping scripts, styles, comments, and other
+ * non-content elements. Preserves table structure (pipe-delimited rows),
+ * list structure (bulleted), and headings (markdown-style).
+ *
+ * Exported because callers outside the filing-extraction pipeline use the
+ * cleaner directly (e.g. token-saving preprocessors).
+ */
+export function cleanHtmlContent(html: string, options: { preserveFormatting?: boolean } = {}): string {
+  if (!html) return '';
+
+  try {
+    const $ = cheerio.load(html);
+
+    // Remove scripts, styles, and comments
+    $('script, style, noscript, iframe, object, embed').remove();
+
+    $('*').contents().each(function() {
+      if (this.type === 'comment') {
+        $(this).remove();
+      }
+    });
+
+    const bodyContent = $('body').length ? $('body') : $.root();
+
+    // Handle tables specially to preserve structure
+    bodyContent.find('table').each(function() {
+      const $table = $(this);
+      const rows: string[] = [];
+
+      $table.find('tr').each(function() {
+        const cells: string[] = [];
+        $(this).find('td, th').each(function() {
+          cells.push($(this).text().trim());
+        });
+        if (cells.length > 0) {
+          rows.push(cells.join(' | '));
+        }
+      });
+
+      if (rows.length > 0) {
+        $table.replaceWith(rows.join('\n'));
+      }
+    });
+
+    // Handle lists to preserve structure
+    bodyContent.find('ul, ol').each(function() {
+      const $list = $(this);
+      const items: string[] = [];
+
+      $list.find('li').each(function() {
+        items.push('• ' + $(this).text().trim());
+      });
+
+      if (items.length > 0) {
+        $list.replaceWith(items.join('\n'));
+      }
+    });
+
+    if (!options.preserveFormatting) {
+      bodyContent.find('div, p, br, hr').each(function() {
+        $(this).replaceWith('\n' + $(this).text() + '\n');
+      });
+    }
+
+    bodyContent.find('h1, h2, h3, h4, h5, h6').each(function() {
+      const level = this.name.charAt(1);
+      const prefix = '#'.repeat(parseInt(level));
+      $(this).replaceWith('\n' + prefix + ' ' + $(this).text() + '\n');
+    });
+
+    let text = bodyContent.text();
+    text = text.replace(/\s+/g, ' ').trim();
+    text = text.replace(/\.\s+([A-Z])/g, '.\n\n$1');
+
+    return text;
+  } catch (error) {
+    componentLogger.error(`Error cleaning HTML: ${error instanceof Error ? error.message : String(error)}`);
+
+    // Basic fallback if cheerio fails
+    return html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+}
+
+/**
+ * Async clean HTML content (worker-pool offloaded). Falls back to sync
+ * implementation on worker failure.
+ */
+async function cleanHtmlContentAsync(html: string, options: { preserveFormatting?: boolean } = {}): Promise<string> {
+  try {
+    return await workerPool.process({
+      type: 'cleanHtml',
+      html,
+      options
+    });
+  } catch (error) {
+    componentLogger.error(`Error in async HTML cleaning: ${error instanceof Error ? error.message : String(error)}`);
+    return cleanHtmlContent(html, options);
+  }
+}
+
+/**
+ * Extract content from XML document synchronously.
+ */
+function extractXmlContent(xml: string, rootElement?: string): string {
+  if (!xml) return '';
+
+  try {
+    const $ = cheerio.load(xml, {
+      xmlMode: true
+    });
+
+    const root = rootElement ? $(rootElement).first() : $.root();
+
+    if (rootElement && !root.length) {
+      componentLogger.warn(`Root element "${rootElement}" not found in XML`);
+    }
+
+    let result = '';
+
+    function extractTextFromNode(node: cheerio.Element) {
+      const $node = $(node);
+
+      if (node.type === 'directive' || node.type === 'comment') {
+        return;
+      }
+
+      const nodeName = node.name?.toLowerCase();
+
+      if (['style', 'script', 'noscript'].includes(nodeName)) {
+        return;
+      }
+
+      if (node.type === 'text') {
+        const text = $(node).text().trim();
+        if (text) {
+          result += text + ' ';
+        }
+        return;
+      }
+
+      if (['p', 'div', 'br', 'tr', 'li'].includes(nodeName)) {
+        result += '\n';
+      }
+
+      if (nodeName && nodeName.match(/^h[1-6]$/)) {
+        const level = nodeName.charAt(1);
+        result += '\n' + '#'.repeat(parseInt(level)) + ' ';
+      }
+
+      $node.contents().each((_, child) => {
+        extractTextFromNode(child);
+      });
+
+      if (['p', 'div', 'tr', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(nodeName)) {
+        result += '\n';
+      }
+    }
+
+    root.contents().each((_, child) => {
+      extractTextFromNode(child);
+    });
+
+    result = result.replace(/\s+/g, ' ').trim();
+    result = result.replace(/\.\s+([A-Z])/g, '.\n\n$1');
+
+    return result;
+  } catch (error) {
+    componentLogger.error(`Error extracting XML: ${error instanceof Error ? error.message : String(error)}`);
+
+    return xml
+      .replace(/<\?[^>]+\?>/g, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+}
+
+/**
+ * Async XML extraction (worker-pool offloaded). Falls back to sync on worker failure.
+ */
+async function extractXmlContentAsync(xml: string, rootElement?: string): Promise<string> {
+  try {
+    return await workerPool.process({
+      type: 'extractXml',
+      xml,
+      rootElement
+    });
+  } catch (error) {
+    componentLogger.error(`Error in async XML extraction: ${error instanceof Error ? error.message : String(error)}`);
+    return extractXmlContent(xml, rootElement);
+  }
+}
+
+/**
+ * Heuristic check whether content is an EDGAR directory listing page rather
+ * than a filing document.
+ */
+function isDirectoryListing(content: string): boolean {
+  if (PATTERNS.DIRECTORY_LISTING.test(content)) {
+    return true;
+  }
+
+  try {
+    const $ = cheerio.load(content);
+
+    const hasDirectoryTable = $('table').find('th, td').text().match(/Name.*Last modified.*Size/i) !== null;
+
+    const links = $('a');
+    let directoryLinkCount = 0;
+
+    links.each((_, link) => {
+      const href = $(link).attr('href');
+      if (href && (href.endsWith('/') || href.match(/\.(html?|xml|txt|pdf)$/i))) {
+        directoryLinkCount++;
+      }
+    });
+
+    return hasDirectoryTable || (links.length > 5 && directoryLinkCount > links.length * 0.7);
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Pull document links out of a directory listing, sorted by priority extension.
+ */
+function extractDocumentLinks(content: string): string[] {
+  const links: string[] = [];
+
+  try {
+    const $ = cheerio.load(content);
+
+    $('a').each((_, link) => {
+      const href = $(link).attr('href');
+
+      if (!href || href === '../' || href === './') {
+        return;
+      }
+
+      if (PATTERNS.IMAGE_FILE.test(href)) {
+        return;
+      }
+
+      if (href.match(/\.(htm|html|xml|txt)$/i)) {
+        links.push(href);
+      }
+    });
+
+    return links.sort((a, b) => {
+      const aExt = path.extname(a).toLowerCase();
+      const bExt = path.extname(b).toLowerCase();
+
+      const aIndex = PRIORITY_EXTENSIONS.indexOf(aExt);
+      const bIndex = PRIORITY_EXTENSIONS.indexOf(bExt);
+
+      if (aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex;
+      } else if (aIndex !== -1) {
+        return -1;
+      } else if (bIndex !== -1) {
+        return 1;
+      }
+
+      return a.localeCompare(b);
+    });
+  } catch (error) {
+    componentLogger.error(`Error extracting document links: ${error instanceof Error ? error.message : String(error)}`);
+
+    const matches = [...content.matchAll(PATTERNS.DOCUMENT_LINK)];
+    return matches.map(match => match[1]).filter(link => !PATTERNS.IMAGE_FILE.test(link));
+  }
+}
+
+/**
+ * Resolve a relative URL against a base URL.
+ */
+function resolveUrl(relativeUrl: string, baseUrl: string = SEC_BASE_URL): string {
+  try {
+    if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+      return relativeUrl;
+    }
+
+    if (relativeUrl.startsWith('/')) {
+      const url = new URL(baseUrl);
+      return `${url.protocol}//${url.host}${relativeUrl}`;
+    } else {
+      if (!baseUrl.endsWith('/')) {
+        baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+      }
+      return baseUrl + relativeUrl;
+    }
+  } catch (error) {
+    componentLogger.error(`Error resolving URL: ${error instanceof Error ? error.message : String(error)}`);
+
+    if (relativeUrl.startsWith('/')) {
+      return `${baseUrl.replace(/\/$/, '')}${relativeUrl}`;
+    } else {
+      return `${baseUrl.replace(/\/[^/]*$/, '/')}${relativeUrl}`;
+    }
+  }
+}
+
+// Internal aliases (preserve call-site names from the previous split).
+const cleanHtml = cleanHtmlContent;
+const cleanHtmlAsync = cleanHtmlContentAsync;
+const extractXml = extractXmlContent;
+const extractXmlAsync = extractXmlContentAsync;
+const isDirListing = isDirectoryListing;
+const extractDocLinks = extractDocumentLinks;
+const resolveUrlPath = resolveUrl;
 
 /**
  * Fetch content from URL
