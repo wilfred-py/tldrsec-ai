@@ -1,6 +1,5 @@
 import { currentUser } from '@clerk/nextjs/server';
 import { logger } from '@/lib/logging';
-import { logSummaryAccess } from '@/lib/auth/audit-logger';
 
 jest.mock('@clerk/nextjs/server', () => ({
   currentUser: jest.fn()
@@ -27,10 +26,6 @@ jest.mock('@/lib/logging', () => ({
   }
 }));
 
-jest.mock('@/lib/auth/audit-logger', () => ({
-  logSummaryAccess: jest.fn()
-}));
-
 // Import after mocks
 import {
   checkSummaryAccess,
@@ -41,7 +36,6 @@ import {
 
 const mockedCurrentUser = currentUser as jest.Mock;
 const mockedFindUnique = _g.__mockFindUnique as jest.Mock;
-const mockedLogSummaryAccess = logSummaryAccess as jest.Mock;
 const mockedLogger = logger as { warn: jest.Mock; error: jest.Mock; info: jest.Mock };
 
 describe('Access Control', () => {
@@ -86,11 +80,17 @@ describe('Access Control', () => {
         { summaryId: mockSummaryId }
       );
 
-      expect(mockedLogSummaryAccess).toHaveBeenCalledWith(
-        null,
-        mockSummaryId,
-        false,
-        { reason: 'unauthenticated' }
+      // Audit trail emits a security audit event at warn level for the
+      // unauthenticated denial — assert through the deepened module's
+      // observable interface (the logger), not a deleted internal helper.
+      expect(mockedLogger.warn).toHaveBeenCalledWith(
+        'Security audit event',
+        expect.objectContaining({
+          eventType: 'summary_access_denied',
+          userId: 'anonymous',
+          resourceId: mockSummaryId,
+          reason: 'unauthenticated',
+        })
       );
     });
 
@@ -106,11 +106,14 @@ describe('Access Control', () => {
         { summaryId: mockSummaryId }
       );
 
-      expect(mockedLogSummaryAccess).toHaveBeenCalledWith(
-        mockUser.id,
-        mockSummaryId,
-        false,
-        { reason: 'not_found' }
+      expect(mockedLogger.warn).toHaveBeenCalledWith(
+        'Security audit event',
+        expect.objectContaining({
+          eventType: 'summary_access_denied',
+          userId: mockUser.id,
+          resourceId: mockSummaryId,
+          reason: 'not_found',
+        })
       );
     });
 
@@ -124,15 +127,16 @@ describe('Access Control', () => {
       expect(result).toHaveProperty('ticker');
       expect(result.ticker).toHaveProperty('symbol', 'AAPL');
       expect(result).toHaveProperty('filingType', '10-K');
-      expect(mockedLogSummaryAccess).toHaveBeenCalledWith(
-        mockUser.id,
-        mockSummaryId,
-        true,
-        {
+      expect(mockedLogger.info).toHaveBeenCalledWith(
+        'Audit event',
+        expect.objectContaining({
+          eventType: 'summary_view',
+          userId: mockUser.id,
+          resourceId: mockSummaryId,
           tickerSymbol: mockSummary.ticker.symbol,
           filingType: mockSummary.filingType,
-          accessLevel: AccessLevel.VIEW
-        }
+          accessLevel: AccessLevel.VIEW,
+        })
       );
     });
 
@@ -152,6 +156,16 @@ describe('Access Control', () => {
 
       await expect(checkSummaryAccess(mockSummaryId))
         .rejects.toThrow(ResourceNotFoundError);
+
+      expect(mockedLogger.warn).toHaveBeenCalledWith(
+        'Security audit event',
+        expect.objectContaining({
+          eventType: 'summary_access_denied',
+          userId: mockUser.id,
+          resourceId: mockSummaryId,
+          reason: 'orphaned_ticker',
+        })
+      );
     });
 
     it('should handle unexpected errors gracefully', async () => {
