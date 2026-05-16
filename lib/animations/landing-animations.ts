@@ -178,6 +178,15 @@ export const meshGradientStyle = {
 };
 
 /**
+ * Editorial background style (landing hero v3) — solid warm bone.
+ * Replaces the multi-layered mesh gradient with a single flat color so the
+ * serif display headline and inbox widget can breathe.
+ */
+export const editorialBgStyle = {
+  background: 'var(--editorial-bg, #F8F6F2)',
+};
+
+/**
  * Animated mesh gradient (subtle movement)
  * For background animations with subtle position changes
  */

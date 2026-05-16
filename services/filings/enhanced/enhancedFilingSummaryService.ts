@@ -1,6 +1,6 @@
 import { FilingType } from '../../../types/sec/filing';
 import { FilingSummaryResult } from '../../filing/types';
-import { parseFormContentEnhanced } from '../../../lib/parsers/enhanced-form-parser';
+import { parseFormContentEnhanced } from '../../../lib/parsers/form-parser';
 import { estimateTokenCount } from '../../../lib/ai/token-counter';
 import { logger } from '../../../lib/logging';
 import * as secService from '../../secService';

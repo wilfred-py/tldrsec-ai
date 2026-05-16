@@ -8,11 +8,67 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { Logger } from '@/lib/logging';
-import { withRetry } from './parser-recovery';
-import { withErrorHandling, RecoveryStrategy, ParserErrorCategory } from './parser-error-handler';
+import { withErrorHandling, RecoveryStrategy, ParserErrorCategory, ParserError } from './parser-error-handler';
 
 // Create a logger for the HTML parser
 const logger = new Logger({}, 'html-parser');
+
+// Network-fetch retry constants — exponential backoff, capped at 30s.
+// Inlined from the deleted parser-recovery module: withRetry was its only
+// public function and parseHTMLFromUrl was its only caller.
+const FETCH_INITIAL_DELAY_MS = 1000;
+const FETCH_MAX_DELAY_MS = 30000;
+const FETCH_BACKOFF_FACTOR = 2;
+const FETCH_MAX_RETRIES = 3;
+const RETRYABLE_FETCH_CATEGORIES: ReadonlySet<ParserErrorCategory> = new Set([
+  ParserErrorCategory.NETWORK,
+  ParserErrorCategory.RESOURCE,
+  ParserErrorCategory.PARSING,
+]);
+
+function isRetryableFetchError(error: Error): boolean {
+  if (error instanceof ParserError) {
+    if (error.shouldRetry()) return true;
+    return RETRYABLE_FETCH_CATEGORIES.has(error.info.category);
+  }
+  const m = error.message.toLowerCase();
+  return (
+    m.includes('timeout') ||
+    m.includes('network') ||
+    m.includes('connection') ||
+    m.includes('econnrefused') ||
+    m.includes('econnreset')
+  );
+}
+
+async function fetchHtmlWithRetry(url: string): Promise<string> {
+  let lastError: Error = new Error('Unknown error');
+  for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delayMs = Math.min(
+        FETCH_INITIAL_DELAY_MS * Math.pow(FETCH_BACKOFF_FACTOR, attempt - 1),
+        FETCH_MAX_DELAY_MS,
+      );
+      logger.warn(`Retry #${attempt} after ${delayMs}ms due to: ${lastError.message}`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    try {
+      logger.debug(`Fetching HTML content from ${url}`);
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'TLDRSec-AI/1.0 (https://tldrsec.app; support@tldrsec.app)',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (!isRetryableFetchError(lastError) || attempt >= FETCH_MAX_RETRIES) {
+        throw lastError;
+      }
+    }
+  }
+  throw lastError;
+}
 
 /**
  * Types of filing sections that are commonly found in SEC filings
@@ -77,23 +133,7 @@ export async function parseHTMLFromUrl(
 ): Promise<FilingSection[]> {
   // Use withErrorHandling to catch and classify all errors in a structured way
   return withErrorHandling(async () => {
-    // Use withRetry to handle transient network errors
-    const html = await withRetry(async () => {
-      logger.debug(`Fetching HTML content from ${url}`);
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'TLDRSec-AI/1.0 (https://tldrsec.app; support@tldrsec.app)'
-        }
-      });
-      return response.data;
-    }, {
-      maxRetries: 3,
-      retryableCategories: [ParserErrorCategory.NETWORK],
-      onRetry: (error, attempt, delayMs) => {
-        logger.warn(`Retry #${attempt} after ${delayMs}ms due to: ${error.message}`);
-      }
-    });
-    // Parse the HTML content
+    const html = await fetchHtmlWithRetry(url);
     return parseHTML(html, options);
   }, {
     defaultCategory: ParserErrorCategory.NETWORK,

@@ -1,7 +1,6 @@
 import { currentUser } from '@clerk/nextjs/server';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { logger } from '@/lib/logging';
-import { logSummaryAccess } from './audit-logger';
 import type { Summary, Ticker } from '@prisma/client';
 
 // Access level enum for permission checking
@@ -26,6 +25,35 @@ export class ResourceNotFoundError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ResourceNotFoundError';
+  }
+}
+
+// Audit event names emitted from this module. Inlined from the deleted
+// audit-logger module: only Summary access events were ever emitted, so the
+// 9-member AuditEventType enum that lived alongside them was dead surface.
+const AUDIT_EVENT_SUMMARY_VIEW = 'summary_view';
+const AUDIT_EVENT_SUMMARY_ACCESS_DENIED = 'summary_access_denied';
+
+function logSummaryAccess(
+  userId: string | null,
+  summaryId: string,
+  wasSuccessful: boolean,
+  metadata: Record<string, unknown> = {}
+): void {
+  const eventType = wasSuccessful
+    ? AUDIT_EVENT_SUMMARY_VIEW
+    : AUDIT_EVENT_SUMMARY_ACCESS_DENIED;
+  const payload = {
+    eventType,
+    timestamp: new Date().toISOString(),
+    userId: userId || 'anonymous',
+    resourceId: summaryId,
+    ...metadata,
+  };
+  if (wasSuccessful) {
+    logger.info('Audit event', payload);
+  } else {
+    logger.warn('Security audit event', payload);
   }
 }
 

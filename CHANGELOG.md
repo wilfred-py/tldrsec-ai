@@ -2,11 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.30.2] - 2026-05-16
+## [0.0.31.2] - 2026-05-16
 
 ### Added
 - **`/grill-with-docs` Claude Code skill** at `.claude/skills/grill-with-docs/SKILL.md`. Interactive plan stress-test that sits between `/office-hours` and `/autoplan`: walks the design tree one question at a time, challenges fuzzy or conflicting terminology against the repo's domain glossary, cross-references claims with the actual code, and updates `CONTEXT.md` inline as terms get resolved. Offers an ADR only when the change is hard to reverse, surprising without context, and the result of a real trade-off. Adapted from Matt Pocock's open-source skill ([source](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs)) to reference the repo's existing `CONTEXT.md` and `docs/adr/README.md` formats instead of bundling Pocock's CONTEXT/ADR format files, so the autonomous architecture review routine and this skill write the same shape of entry.
 - **Skill routing entry in `CLAUDE.md`.** One line in the Skill routing section so `/grill-with-docs` is the recognized hop between idea-shaping and execution-planning.
+
+## [0.0.31.1] - 2026-05-15
+
+### Fixed
+- **Filing preferences save was silently failing for every onboarded user.** Toggling switches on `/dashboard/settings` and clicking Save returned a generic error toast (or appeared to spin and do nothing) instead of persisting. Root cause: `handleGetPreferences` and `handlePatchPreferences` in `app/api/user/route.ts` passed Clerk's user id (`user_xxx`) directly to `prisma.user.findUnique({ where: { id: clerkId } })`, but `User.id` is a generated UUID; the Clerk id lives in `User.authProviderId`. Every save threw "User not found" inside `PreferenceService`. Fix: new `resolveDbUserId()` helper resolves Clerk id → DB user id via `findFirst({ OR: [{id},{authProviderId}], deletedAt: null })`, matching the pattern already used by `handleGetSubscription`. Returns 404 instead of leaking the resolution failure as a 500.
+- **Billing portal returned a misleading "No billing information found" 404 for the same user class.** `handlePostBillingPortal` had the identical bug: `prisma.userSubscription.findUnique({ where: { userId: clerkId } })` queries a foreign key to `User.id` (UUID), so onboarded users with active Stripe subscriptions got a "create a subscription first" error. Same `resolveDbUserId()` fix applied. The two 404 paths are now distinct ("Account not fully provisioned yet" vs "No billing customer yet") so production triage can tell provisioning races apart from missing Stripe records.
+
+### Added
+- **Server-side `logger.warn` on Clerk-authed-but-not-provisioned 404s** in both `/api/user?type=preferences` and `/api/user?type=billing-portal`. Surfaces the "Clerk session valid, DB row missing" funnel-drop as a visible incident instead of a silent retry loop on the user's end.
+- **Soft-delete safety filter** in the new `resolveDbUserId()` helper. Excludes `deletedAt IS NOT NULL` users so a stale Clerk session for a deleted account can no longer read or write preferences. `deleteScheduledFor` users are intentionally still allowed — they may want to lower email frequency before the purge runs.
+- **15 regression tests** (`__tests__/api/user/preferences.test.ts` rewritten, `__tests__/api/user/billing-portal.test.ts` new) covering: normal onboarded user, legacy `id===clerkId` user, soft-deleted user, missing DB row, no Clerk auth, malformed JSON body. Tests explicitly assert `PreferenceService.*` is called with the DB id, never the Clerk id — exactly the regression class that broke this in the route consolidation.
+
+## [0.0.31.0] - 2026-05-13
+
+### Changed
+- **Landing hero v3 — editorial rewrite.** The above-the-fold hero now reads as a magazine cover instead of a SaaS template. Headline is "Every filing. Summarized. Delivered." in Instrument Serif, with quiet typographic emphasis on the final word (italic, slightly heavier, near-black ink — no color shift). Subhead drops the 10-K / 10-Q / 8-K / Form 4 enumeration that was underselling the actual coverage; new copy is "Every SEC filing your portfolio companies submit, in your inbox minutes after it publishes." Replaces the blue-purple mesh gradient with a warm bone background, swaps the gradient CTA for a solid-ink button (brand-blue on hover), and unifies the inbox-widget filing chips to a single monochrome treatment. The dashboard activity feed keeps its colored badges by design — that's the power-user surface where color is a useful at-a-glance shortcut.
+- **Inbox widget chrome.** Drops the literal Gmail traffic-light dots and the "Updated weekly" footer. Replaces them with a small monospaced "tldrsec.com / inbox" header label. Row states use stone neutrals instead of blue tints. The widget shadow is `shadow-sm` instead of `shadow-2xl`, and the max width is capped at 1100px so the centered copy block above doesn't feel dwarfed.
+- **PostHog hero-copy experiment variant retired.** `HOMEPAGE_HERO_VARIANT` is now an alias of `HOMEPAGE_HERO_CONTROL`, so both arms render identical copy. Test T14 pins the alias state to catch accidental re-divergence. Re-introduce a distinct variant by replacing this alias with a new copy bundle when the next experiment ships.
+
+### Added
+- **Instrument Serif via `next/font/google`.** Available project-wide as `--font-serif`. Used by the new `.brand-hero-display-serif` headline utility.
+- **Editorial palette tokens.** `--editorial-bg`, `--editorial-ink`, `--editorial-ink-muted`, `--editorial-rule` live in `app/globals.css` alongside the existing brand palette. New utility classes: `.brand-hero-display-serif`, `.editorial-accent`, `.brand-button-ink`.
+- **`editorialBgStyle` export in `lib/animations/landing-animations.ts`.** Solid warm-bone background that replaces the multi-layered mesh gradient on the hero section. The original `meshGradientStyle` export is retained for any other consumers.
 
 ## [0.0.30.1] - 2026-05-12
 

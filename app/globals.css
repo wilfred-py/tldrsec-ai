@@ -59,6 +59,12 @@
   --brand-accent: #8B5CF6;            /* Purple accent */
   --brand-gradient-start: #0079F2;    /* Gradient start */
   --brand-gradient-end: #8B5CF6;      /* Gradient end */
+
+  /* Editorial palette (landing hero v3) */
+  --editorial-bg: #F8F6F2;            /* Warm bone */
+  --editorial-ink: #0A0A0A;           /* Near-black, used for emphasized word */
+  --editorial-ink-muted: #6B7280;     /* Eyebrow / labels */
+  --editorial-rule: #E5E5E5;          /* Hairline dividers */
 }
 
 .dark {
@@ -230,6 +236,25 @@
     margin-inline: auto;
   }
 
+  /* Editorial serif display — landing hero v3. Instrument Serif, regular weight,
+     tight leading, brand-secondary navy ink (cohesion with body headings).
+     Pairs with .editorial-accent on a single emphasized phrase (italic,
+     slightly heavier, darker ink — emphasis via weight + value, no hue shift). */
+  .brand-hero-display-serif {
+    font-family: var(--font-serif), ui-serif, Georgia, 'Times New Roman', serif;
+    @apply text-[3rem] sm:text-[4rem] lg:text-[5.5rem] font-normal leading-[1.05];
+    letter-spacing: -0.02em;
+    color: var(--brand-secondary);
+    max-width: 18ch;
+    margin-inline: auto;
+  }
+
+  .editorial-accent {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--editorial-ink);
+  }
+
   .brand-heading {
     @apply text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight;
     color: var(--brand-secondary);
@@ -324,6 +349,25 @@
   }
 
   .brand-button-gradient:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* Ink button — landing hero v3 editorial CTA. Solid near-black at rest,
+     brand-blue on hover so interaction shifts to the existing brand affordance
+     used elsewhere on the page. No gradient, no shadow. */
+  .brand-button-ink {
+    @apply h-11 px-7 text-sm font-semibold rounded-lg text-white;
+    background-color: var(--editorial-ink);
+    color: white !important;
+    transition: background-color 0.15s ease;
+  }
+
+  .brand-button-ink:hover:not(:disabled) {
+    background-color: var(--brand-primary);
+  }
+
+  .brand-button-ink:disabled {
     opacity: 0.5;
     pointer-events: none;
   }
