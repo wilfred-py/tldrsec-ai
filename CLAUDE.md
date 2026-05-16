@@ -123,6 +123,7 @@ Apply these steps IN ORDER to every task:
 15. **Don't use `{ not: null }` on required Prisma fields** - Check `prisma/schema.prisma` first
 16. **SVG elements need explicit pixel dimensions** - Use `width={px} height={px} viewBox` with React state
 17. **Verify correct dev server port in worktrees** - Check `lsof -Pi :3000 -sTCP:LISTEN` and `:3001`
+18. **Next.js config lives in `next.config.js`, NOT `next.config.ts`** - A prior `next.config.ts` existed without an export statement and was silently dead. Its features (removeConsole, security headers, DEPLOYMENT_PLATFORM env) have been merged into `next.config.js`. Do not re-introduce `next.config.ts`.
 
 ### Recurring Manual Tasks
 

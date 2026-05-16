@@ -28,6 +28,10 @@ import { useUser } from '@clerk/nextjs';
 import { SUBSCRIPTION_PLANS } from '@/lib/stripe/plans';
 import type { UserSubscription } from '@/lib/types/subscription';
 
+// useSearchParams() requires either a Suspense boundary or a dynamic page.
+// Moved from app/dashboard/layout.tsx (streaming-perf-v2 Subtask 2).
+export const dynamic = "force-dynamic";
+
 export default function BillingPage() {
   const { user } = useUser();
   const router = useRouter();
