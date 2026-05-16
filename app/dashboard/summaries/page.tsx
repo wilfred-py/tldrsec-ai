@@ -7,6 +7,10 @@ import { SectionErrorBoundary } from "@/components/dashboard/section-error-bound
 import { getPrismaClient } from "@/lib/db/prisma";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Calls currentUser() (Clerk server) — needs request-time render. Moved from
+// app/dashboard/layout.tsx (streaming-perf-v2 Subtask 2).
+export const dynamic = "force-dynamic";
+
 async function SummariesData() {
   const user = await currentUser();
   if (!user) redirect("/sign-in");

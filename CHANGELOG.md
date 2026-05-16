@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.32.0] - 2026-05-13
+
+### Changed
+- **Dashboard and summary pages now stream.** Clicking into a summary used to show 3-4 seconds of skeleton cards before any real content appeared; navigating back to the dashboard took ~5 seconds. Both routes now render their shell (breadcrumb, header, navigation) in ~50ms while the heavy data fetches stream in via React Suspense. Back-nav within 10 seconds hits the Router Cache and returns instantly. Suspense boundaries gain `aria-live="polite"` + `role="status"` so screen readers announce streamed content arrival.
+
+### Fixed
+- **Production was running without security headers.** `next.config.ts` existed but had no `export default`, leaving Next.js to load `next.config.js` instead. The `.ts` file's intended features — `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection`, `Referrer-Policy: strict-origin-when-cross-origin` on `/api/*`; `Cache-Control: no-store` on `/api/cron/*`; production `console.log` stripping via `compiler.removeConsole`; the `DEPLOYMENT_PLATFORM` env — were all silently dead. Merged everything into the canonical `next.config.js` and deleted `next.config.ts`. Documented in `CLAUDE.md` item #18 to prevent regression.
+- **Editing or removing a ticker no longer leaves stale dashboard data.** `app/api/user/tickers/[id]/route.ts` PATCH and DELETE now call `revalidatePath('/dashboard')` (POST already did), so any change to the user's ticker list invalidates the Router Cache immediately instead of waiting up to 10 seconds.
+
+### Added
+- **Router Cache TTLs (`experimental.staleTimes`).** Set `dynamic: 10, static: 180` in `next.config.js`. Back-navigation to dynamic dashboard pages within 10 seconds now serves cached HTML while Next revalidates in the background. 10s (not 30s) accommodates the SEC filing cadence — filings cluster at market open/close, so a longer window would feel stale during earnings.
+- **Per-page `force-dynamic` on dashboard routes.** Belt-and-suspenders defense in depth on the 4 sub-pages that need it (root, settings, summaries, billing). The layout retains `force-dynamic` (required — `DashboardShell` renders `<MinimalHeader>` which calls Clerk's `useUser()`, blowing up during static prerender without `ClerkProvider`). Router Cache for back-nav comes from `staleTimes`, which works regardless of whether the layout is build-time or request-time rendered.
+
 ## [0.0.31.1] - 2026-05-15
 
 ### Fixed

@@ -1,21 +1,32 @@
 import { Suspense } from "react";
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getPrismaClient } from "@/lib/db/prisma";
-import { mapTickersToCompanies } from "@/lib/db/dashboard-queries";
-import { THREE_TIER_LIMITS } from "@/lib/subscription/three-tier-limits";
-import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
-import { PostOnboardingHeroCard } from "@/components/dashboard/post-onboarding-hero-card";
-import { TickersPanel } from "@/components/dashboard/tickers-panel";
+import { DashboardUserSection } from "@/components/dashboard/sections/dashboard-user-section";
+import { UserSectionSkeleton } from "@/components/dashboard/sections/user-section-skeleton";
 import { DashboardActivitySection } from "@/components/dashboard/sections/dashboard-activity-section";
+import { DashboardTickersTab } from "@/components/dashboard/sections/dashboard-tickers-tab";
 import { ActivitySkeleton } from "@/components/dashboard/sections/activity-skeleton";
+import { TickersTabSkeleton } from "@/components/dashboard/sections/tickers-tab-skeleton";
 import { SectionErrorBoundary } from "@/components/dashboard/section-error-boundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+// Calls currentUser() (Clerk server) at render time — incompatible with
+// static prerender at build. See streaming-perf-v2 Subtask 2.
+export const dynamic = "force-dynamic";
 
 interface DashboardPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+// Streaming dashboard. Shell renders after only the cheap currentUser() +
+// searchParams awaits; all 3 data-bearing sections (user/onboarding,
+// activity feed, tickers tab) stream in parallel via Suspense. They share
+// a single cache()-deduped getUserAndTickers(authProviderId) call so the
+// heavy user+tickers join runs ONCE per render despite 3 consumers.
+//
+// Tabs default to "activity" unconditionally so the initial render matches
+// loading.tsx (no tab-snap on hydration — H3 fix from the streaming-perf-v2
+// adversarial review).
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const user = await currentUser();
 
@@ -26,116 +37,28 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const params = await searchParams;
   const subscriptionSuccess = params.subscription_success === "true";
   const sessionId = typeof params.session_id === "string" ? params.session_id : undefined;
-
-  // Minimal server-side fetch: auth + user with tickers only.
-  // Stats and activity sections stream independently via Suspense.
-  let tickerIds: string[] = [];
-  let initialCompanies: ReturnType<typeof mapTickersToCompanies> = [];
-  let tutorialCompleted = false;
-  let subscriptionTier: "FREE" | "PRO" | "MAX" = "FREE";
-  let isFirstVisit = false;
-  let firstSummary: import('@/components/dashboard/post-onboarding-hero-card').FirstSummaryHeroSummary | null = null;
-  let dbUserId: string | null = null;
-  let onboardingFirstSummaryId: string | null = null;
-
   const email = user.emailAddresses?.[0]?.emailAddress;
-  if (email) {
-    try {
-      const prisma = getPrismaClient();
-      const dbUser = await prisma.user.findUnique({
-        where: { email },
-        include: {
-          tickers: {
-            include: {
-              _count: { select: { summaries: true } },
-              summaries: {
-                take: 1,
-                select: { id: true, filingDate: true },
-                orderBy: { filingDate: "desc" },
-              },
-            },
-          },
-        },
-      });
-
-      if (dbUser) {
-        tutorialCompleted = dbUser.tutorialCompletedAt != null;
-        subscriptionTier = (dbUser.subscriptionTier as "FREE" | "PRO" | "MAX") || "FREE";
-        tickerIds = dbUser.tickers.map((t) => t.id);
-        initialCompanies = mapTickersToCompanies(dbUser.tickers);
-        isFirstVisit = !tutorialCompleted;
-        dbUserId = dbUser.id;
-        onboardingFirstSummaryId = dbUser.onboardingFirstSummaryId;
-      }
-    } catch (error) {
-      console.error("Failed to prefetch user:", error);
-      // Page still renders — Suspense sections will show skeletons,
-      // TickersPanel falls back to client-side fetch
-    }
-  }
-
-  const tickerLimit = THREE_TIER_LIMITS[subscriptionTier];
-
-  // Load the chosen first-summary pick for hero card render. Two cases:
-  //   1. onboardingFirstSummaryId already set (email send already chose) →
-  //      load that exact summary so card + email show the same pick.
-  //   2. Not set yet (action's after() may still be running) → render the
-  //      original inbox-CTA variant; the next dashboard load picks up the
-  //      summary once the after() write lands.
-  if (isFirstVisit && dbUserId && onboardingFirstSummaryId) {
-    try {
-      const prisma = getPrismaClient();
-      const chosen = await prisma.summary.findUnique({
-        where: { id: onboardingFirstSummaryId },
-        select: {
-          id: true,
-          filingType: true,
-          filingDate: true,
-          summaryText: true,
-          importance: true,
-          ticker: { select: { symbol: true, companyName: true } },
-        },
-      });
-      if (chosen) {
-        const { extractHeadline } = await import('@/lib/onboarding/extract-headline');
-        const headline = extractHeadline(chosen.summaryText);
-        firstSummary = {
-          id: chosen.id,
-          ticker: chosen.ticker.symbol,
-          companyName: chosen.ticker.companyName,
-          filingType: chosen.filingType,
-          filingDate: chosen.filingDate.toISOString(),
-          headline,
-          importance: chosen.importance,
-        };
-      }
-    } catch (err) {
-      console.error('Failed to load first-summary pick:', err);
-    }
-  }
+  const authProviderId = user.id;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="sr-only">Dashboard</h1>
 
-      <DashboardOnboarding
-        tutorialCompleted={tutorialCompleted}
-        subscriptionSuccess={subscriptionSuccess}
-        sessionId={sessionId}
-        subscriptionTier={subscriptionTier}
-      />
+      {/* Onboarding banner + first-visit hero card — streams independently */}
+      <SectionErrorBoundary sectionName="account">
+        <Suspense fallback={<UserSectionSkeleton />}>
+          <DashboardUserSection
+            authProviderId={authProviderId}
+            email={email}
+            firstName={user.firstName}
+            subscriptionSuccess={subscriptionSuccess}
+            sessionId={sessionId}
+          />
+        </Suspense>
+      </SectionErrorBoundary>
 
-      {isFirstVisit && initialCompanies.length > 0 && email && (
-        <PostOnboardingHeroCard
-          tickers={initialCompanies.map((c) => ({ symbol: c.symbol, name: c.name }))}
-          userEmail={email}
-          firstName={user.firstName ?? undefined}
-          summary={firstSummary}
-        />
-      )}
-
-      {/* Tabs: Activity feed (streamed) / Tickers (immediate) */}
-      <Tabs defaultValue={isFirstVisit ? "tickers" : "activity"} className="w-full">
+      {/* Tabs: Emails (activity feed) / Tickers — both stream */}
+      <Tabs defaultValue="activity" className="w-full">
         <TabsList className="mb-4 bg-[var(--brand-bg)] border border-[var(--brand-border)] rounded-lg p-1">
           <TabsTrigger
             value="activity"
@@ -152,25 +75,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </TabsList>
 
         {/* forceMount keeps both tabs in the DOM so the streamed Suspense
-            content hydrates correctly regardless of which tab is active.
-            data-[state=inactive]:hidden hides the inactive tab via CSS. */}
+            content hydrates correctly regardless of which tab is active. */}
         <TabsContent value="activity" forceMount className="data-[state=inactive]:hidden">
           <SectionErrorBoundary sectionName="activity feed">
             <Suspense fallback={<ActivitySkeleton />}>
-              <DashboardActivitySection
-                tickerIds={tickerIds}
-                hasCompanies={tickerIds.length > 0}
-              />
+              <DashboardActivitySection authProviderId={authProviderId} />
             </Suspense>
           </SectionErrorBoundary>
         </TabsContent>
 
         <TabsContent value="tickers" forceMount className="data-[state=inactive]:hidden">
-          <TickersPanel
-            initialCompanies={initialCompanies}
-            subscriptionTier={subscriptionTier}
-            tickerLimit={tickerLimit}
-          />
+          <SectionErrorBoundary sectionName="tickers">
+            <Suspense fallback={<TickersTabSkeleton />}>
+              <DashboardTickersTab authProviderId={authProviderId} />
+            </Suspense>
+          </SectionErrorBoundary>
         </TabsContent>
       </Tabs>
     </div>

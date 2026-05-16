@@ -1,3 +1,8 @@
+// CANONICAL Next.js config for this project. Do NOT add next.config.ts —
+// a prior next.config.ts existed without an export statement, leaving it
+// silently dead while developers assumed its features (removeConsole,
+// security headers, DEPLOYMENT_PLATFORM env) were active. Those features
+// have been merged here. Documented in CLAUDE.md.
 const nextConfig = {
   eslint: {
     // Warning: This allows production builds to successfully complete even if
@@ -9,6 +14,17 @@ const nextConfig = {
     // your project has type errors.
     ignoreBuildErrors: true,
   },
+  // Strip console.log in production (keep error/warn). Merged from the
+  // previously-dead next.config.ts.
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
+  // Platform detection for monitoring. Merged from the previously-dead next.config.ts.
+  env: {
+    DEPLOYMENT_PLATFORM: 'VERCEL',
+  },
   // SWC minification is enabled by default in Next.js 15
   // swcMinify: true, // Not needed - enabled by default
   experimental: {
@@ -16,6 +32,36 @@ const nextConfig = {
     optimizePackageImports: ['@clerk/nextjs', 'lucide-react'],
     // Enable Edge Runtime compatibility
     esmExternals: true,
+    // Router Cache TTLs (Next 15+). Default is 0/300; dynamic=0 means back-nav
+    // re-renders dynamic pages from scratch every time — that's the ~5s wait
+    // users hit going back to /dashboard from a summary. 10s covers the typical
+    // "click summary, read, go back" flow without staling SEC filing data,
+    // which clusters at market open/close (30s would feel stale during earnings).
+    // After 10s, Next revalidates in the background while serving cached HTML.
+    staleTimes: {
+      dynamic: 10,
+      static: 180,
+    },
+  },
+  // Security + cache-control headers. Merged from the previously-dead next.config.ts.
+  async headers() {
+    return [
+      {
+        source: '/api/(.*)',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-XSS-Protection', value: '1; mode=block' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+      {
+        source: '/api/cron/(.*)',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate' },
+        ],
+      },
+    ];
   },
   // Generate static pages where possible to avoid database dependencies during build
   generateBuildId: async () => {

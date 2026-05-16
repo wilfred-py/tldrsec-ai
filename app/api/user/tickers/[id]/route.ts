@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { getDefaultTickerPreferences } from '@/lib/user/preference-sync';
@@ -78,6 +79,10 @@ export async function PATCH(
       where: { id: tickerId },
       data: { preferences: updatedPreferences },
     });
+
+    // Invalidate Router Cache so back-nav to /dashboard reflects the change
+    // immediately instead of waiting for the staleTimes.dynamic=10s window.
+    revalidatePath('/dashboard');
 
     return NextResponse.json({
       success: true,
@@ -160,6 +165,10 @@ export async function DELETE(
         id: tickerId
       }
     });
+
+    // Invalidate Router Cache so back-nav to /dashboard reflects the deletion
+    // immediately instead of waiting for the staleTimes.dynamic=10s window.
+    revalidatePath('/dashboard');
 
     // Return success
     return NextResponse.json({ success: true });
