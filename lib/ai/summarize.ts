@@ -38,7 +38,30 @@ import {
   hasUsableFinancialHighlights,
   requiresFinancialContent,
 } from './parsers/financial-content-gate';
-import { ProcessingStatus } from './processing-status';
+// Single source of truth for `Summary.processingStatus` values written by this
+// module. Casing intentionally preserved as it appears in the DB today
+// (mixed-case legacy; do not normalize without a backfill).
+const ProcessingStatus = {
+  PROCESSING: 'PROCESSING',
+  COMPLETED: 'COMPLETED',
+  /** Parser produced a partial result; isPartialResult=true is also set. */
+  COMPLETED_WITH_WARNINGS: 'COMPLETED_WITH_WARNINGS',
+  /** Model output truncated by max_tokens before the JSON closed. */
+  OUTPUT_TRUNCATED: 'OUTPUT_TRUNCATED',
+  /**
+   * Pre-LLM content gate rejected the prepared excerpt for a 10-Q / 10-K /
+   * 20-F / 6-K filing — the parser fed us only XBRL headers / namespace
+   * boilerplate without an actual income statement. Per product contract
+   * these filings always contain financials, so this is a parser-side
+   * failure, not an AI-side one. The owning job is retried with backoff
+   * (cron-cycle intervals via JobQueue.retryCount/maxRetries) on the
+   * theory that EDGAR may finish processing the document body shortly
+   * after acceptance. Email is suppressed throughout.
+   */
+  INSUFFICIENT_CONTENT: 'INSUFFICIENT_CONTENT',
+  /** Hard failure (API error, validation crash, etc.). */
+  FAILED: 'FAILED',
+} as const;
 
 /**
  * Validates if a parsed response has all required fields for its filing type
@@ -1130,8 +1153,8 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         // value like "$NaN" / "N/A". Belt-and-suspenders with the pre-LLM
         // gate — catches cases where the excerpt LOOKED financial enough
         // to pass pre-gate but the AI couldn't extract usable numbers.
-        // Marks as COMPLETED_WITH_WARNINGS so isSuppressedFromEmail() skips
-        // the send.
+        // Marks as COMPLETED_WITH_WARNINGS so the downstream email gate
+        // (read by the cron summary handler) skips the send.
         if (requiresFinancialContent(filingRecordFromDB.formType)) {
           const postGate = hasUsableFinancialHighlights(parsedResult.data);
           if (!postGate.ok) {
