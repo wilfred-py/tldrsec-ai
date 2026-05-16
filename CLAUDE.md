@@ -195,6 +195,7 @@ Key routing rules:
 - Design system, brand → invoke design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
+- Stress-test plan against domain language, sharpen terminology (between /office-hours and /autoplan) → invoke grill-with-docs
 - Sync knowledge to vault after shipping → invoke wiki-sync
 - Ingest source into vault wiki → invoke wiki-ingest
 - Audit vault wiki health → invoke wiki-lint
