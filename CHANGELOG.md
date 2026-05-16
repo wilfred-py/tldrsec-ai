@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.30.2] - 2026-05-16
+
+### Added
+- **`/grill-with-docs` Claude Code skill** at `.claude/skills/grill-with-docs/SKILL.md`. Interactive plan stress-test that sits between `/office-hours` and `/autoplan`: walks the design tree one question at a time, challenges fuzzy or conflicting terminology against the repo's domain glossary, cross-references claims with the actual code, and updates `CONTEXT.md` inline as terms get resolved. Offers an ADR only when the change is hard to reverse, surprising without context, and the result of a real trade-off. Adapted from Matt Pocock's open-source skill ([source](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs)) to reference the repo's existing `CONTEXT.md` and `docs/adr/README.md` formats instead of bundling Pocock's CONTEXT/ADR format files, so the autonomous architecture review routine and this skill write the same shape of entry.
+- **Skill routing entry in `CLAUDE.md`.** One line in the Skill routing section so `/grill-with-docs` is the recognized hop between idea-shaping and execution-planning.
+
 ## [0.0.30.1] - 2026-05-12
 
 ### Removed
