@@ -16,7 +16,7 @@ import { summarizeFilingWithValidation } from '../../ai/summarize-with-validatio
 import { sendFilingSummaryEmail } from '../../email/summary-service';
 import type { FetchJobPayload } from './fetch-handler';
 import { verifyFilingContent, type FilingMetadata } from '../../validation/filing-content-verifier';
-import { shouldProcessFiling } from '../../filing/filing-type-preferences-mapper';
+import { FilingPreferences } from '../../api/types';
 import { TrialService } from '../../auth/trial-service';
 import { parseResponse } from '../../ai/parsers/response-parser';
 import { CURRENT_FORM4_SCHEMA_VERSION } from '../../email/form4-field-normalizer';
@@ -24,6 +24,55 @@ import { isMaxEligible } from '../../auth/tier-eligibility';
 import type { SECFilingType } from '../../ai/prompts/prompt-types';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
+
+// Map of SEC filing-type strings (as they appear on filings, with the various
+// punctuation/casing variants the SEC and our parsers emit) to keys on the
+// user's FilingPreferences object. Used by shouldProcessFiling below to gate
+// summary creation against a ticker's per-form-type opt-ins.
+const FILING_TYPE_TO_PREFERENCE_KEY: Record<string, keyof FilingPreferences> = {
+  '10-K': 'tenK', '10K': 'tenK',
+  '20-F': 'twentyF', '20F': 'twentyF',
+  '40-F': 'fortyF', '40F': 'fortyF',
+  '10-Q': 'tenQ', '10Q': 'tenQ',
+  '6-K': 'sixK', '6K': 'sixK',
+  '8-K': 'eightK', '8K': 'eightK',
+  '3': 'form3', 'FORM 3': 'form3',
+  '4': 'form4', 'FORM 4': 'form4',
+  '5': 'form5', 'FORM 5': 'form5',
+  '144': 'form144', 'FORM 144': 'form144',
+  'SC 13D': 'sc13D', 'SC13D': 'sc13D',
+  'SC 13G': 'sc13G', 'SC13G': 'sc13G',
+  '13F-HR': 'thirteenF', '13F': 'thirteenF',
+  'DEF 14A': 'def14A', 'DEF14A': 'def14A', 'DEFA14A': 'def14A',
+  'PRE 14A': 'pre14A', 'PRE14A': 'pre14A', 'PREA14A': 'pre14A',
+  'S-1': 'sOne', 'S1': 'sOne',
+  'S-3': 'sThree', 'S3': 'sThree',
+  '424B2': 'fourTwoFourB2',
+  '424B3': 'fourTwoFourB3',
+  'FWP': 'fwp',
+  'SCHEDULE': 'schedule', 'SCHEDULE 13D': 'schedule', 'SCHEDULE 13G': 'schedule', 'SCHEDULE 14A': 'schedule',
+};
+
+// Decide whether a Filing should be summarized for a user given that user's
+// per-ticker FilingPreferences. Falls back to the core 10-K / 10-Q / 8-K set
+// when no preferences are recorded, and respects the `other` opt-in for
+// filing types that aren't explicitly mapped above. Unknown form types with
+// `other` not set explicitly default to false.
+function shouldProcessFiling(
+  filingType: string,
+  preferences: FilingPreferences | null | undefined
+): boolean {
+  const normalizedType = filingType.toUpperCase().trim();
+  if (!preferences) {
+    const defaultTypes = ['10-K', '10Q', '10-Q', '8-K', '8K', 'tenK', 'tenQ', 'eightK'];
+    return defaultTypes.includes(normalizedType);
+  }
+  const prefKey = FILING_TYPE_TO_PREFERENCE_KEY[normalizedType];
+  if (prefKey && prefKey in preferences) {
+    return preferences[prefKey] === true;
+  }
+  return preferences.other === true;
+}
 
 export interface SummarizeJobPayload extends FetchJobPayload {
   cacheId: string;
@@ -220,7 +269,7 @@ export async function handleSummarizeCached(
 
     // CRITICAL FIX: Check user preferences before creating summary
     // This prevents prospectus emails from bypassing filtering in async pipeline
-    const tickerPreferences = userTicker.preferences as Record<string, unknown>;
+    const tickerPreferences = userTicker.preferences as FilingPreferences | null;
     if (!shouldProcessFiling(filing.formType, tickerPreferences)) {
       summarizeLogger.info(`[${executionId}] Skipping due to user preferences`, {
         userId,

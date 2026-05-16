@@ -82,10 +82,6 @@ jest.mock('../../../lib/validation/filing-content-verifier', () => ({
   }),
 }));
 
-jest.mock('../../../lib/filing/filing-type-preferences-mapper', () => ({
-  shouldProcessFiling: jest.fn().mockReturnValue(true),
-}));
-
 jest.mock('../../../lib/ai/parsers/response-parser', () => ({
   parseResponse: jest.fn(),
 }));
@@ -121,6 +117,21 @@ const mockSummarizeFiling = summarizeFiling as jest.Mock;
 const mockSendEmail = sendFilingSummaryEmail as jest.Mock;
 
 // --- Test data ---
+
+// Permissive FilingPreferences fixture: every per-form opt-in set to true.
+// Used by the ticker.findFirst mock so the handler's inlined
+// shouldProcessFiling does not skip whatever form type a test exercises.
+const ALL_FILING_TYPES_ENABLED = {
+  tenK: true, tenQ: true, eightK: true,
+  form4: true, form3: true, form5: true, form144: true,
+  twentyF: true, fortyF: true, sixK: true,
+  sc13D: true, sc13G: true, thirteenF: true,
+  def14A: true, pre14A: true,
+  sOne: true, sThree: true,
+  fourTwoFourB2: true, fourTwoFourB3: true,
+  fwp: true, schedule: true,
+  other: true,
+};
 
 const basePayload: SummarizeJobPayload = {
   userId: 'test-user-id',
@@ -204,7 +215,7 @@ function setupBaseMocks() {
 
   mockPrisma.ticker.findFirst.mockResolvedValue({
     id: 'test-ticker-id',
-    preferences: null,
+    preferences: ALL_FILING_TYPES_ENABLED,
   });
 
   // No existing summary, no shared summary
