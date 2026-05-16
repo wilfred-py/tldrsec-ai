@@ -67,10 +67,6 @@ jest.mock('../../../lib/email/summary-service', () => ({
   sendFilingSummaryEmail: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../../../lib/filing/filing-type-preferences-mapper', () => ({
-  shouldProcessFiling: jest.fn().mockReturnValue(true),
-}));
-
 jest.mock('../../../lib/auth/trial-service', () => ({
   TrialService: {
     checkTrialStatus: jest.fn().mockResolvedValue({
@@ -103,6 +99,20 @@ import {
   handleSummarizeCached,
   SummarizeJobPayload,
 } from '../../../lib/cron/handlers/summarize-cached-handler';
+
+// Permissive FilingPreferences fixture so the handler's inlined
+// shouldProcessFiling does not skip whatever form type a test exercises.
+const ALL_FILING_TYPES_ENABLED = {
+  tenK: true, tenQ: true, eightK: true,
+  form4: true, form3: true, form5: true, form144: true,
+  twentyF: true, fortyF: true, sixK: true,
+  sc13D: true, sc13G: true, thirteenF: true,
+  def14A: true, pre14A: true,
+  sOne: true, sThree: true,
+  fourTwoFourB2: true, fourTwoFourB3: true,
+  fwp: true, schedule: true,
+  other: true,
+};
 
 const basePayload: SummarizeJobPayload = {
   userId: 'user-tier-ctx',
@@ -156,7 +166,7 @@ const setupCommonMocks = () => {
   });
   mockPrisma.ticker.findFirst.mockResolvedValue({
     id: 'ticker-id',
-    preferences: null,
+    preferences: ALL_FILING_TYPES_ENABLED,
   });
   mockPrisma.summary.findFirst.mockResolvedValue(null);
   mockPrisma.summary.create.mockResolvedValue({ id: 'created-summary-id' });
