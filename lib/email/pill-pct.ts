@@ -78,10 +78,15 @@ function buildPillSpan(sign: string | undefined, num: string, _unit: string): st
  * - Digits with optional decimal
  * - Required unit: `%`, `pp`, `pts`, `point(s)`
  *
- * Word boundary at the unit end keeps "pp" matches from eating "pp" inside
- * larger tokens like "appraisal".
+ * v13 bug fix: the previous version used `\b` after the unit to prevent
+ * matches inside larger words like "happen". But `%` is a NON-word
+ * character, so `\b` after `%` followed by a space (also non-word) never
+ * fires — meaning EVERY `%` token in prose was silently failing to
+ * match. Replaced with a negative lookahead that only rejects a
+ * following alphabetic, so the unit can still be followed by spaces,
+ * punctuation, or end-of-string.
  */
-const PCT_TOKEN = /([+\-−])?(\d+(?:\.\d+)?)\s*(%|pp|pts?|points?)\b/g;
+const PCT_TOKEN = /([+\-−])?(\d+(?:\.\d+)?)\s*(%|pp|pts?|points?)(?![a-zA-Z])/g;
 
 /**
  * Replace percentage tokens inside text-content segments of an HTML string
