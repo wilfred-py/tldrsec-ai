@@ -96,3 +96,46 @@ export function PillDelta({ value, size = 'normal' }: { value: string | number; 
     </span>
   );
 }
+
+/**
+ * MetricPill — neutral-tone chip for the Previous (grey) and Latest
+ * (white) scorecard value columns. Carries the chip aesthetic to the
+ * non-delta columns so every cell in the scorecard reads as a styled
+ * pill, not raw text. The YoY/QoQ columns still use `PillDelta` for
+ * the colored (green/red) deltas — this component is JUST the prior /
+ * current value wrappers.
+ *
+ *   tone="prior"   → muted grey bg + grey text (Previous column)
+ *   tone="latest"  → white bg + 1px border + ink text (Latest column)
+ */
+export function MetricPill({ value, tone }: { value: string | number; tone: 'prior' | 'latest' }) {
+  const isPrior = tone === 'prior';
+  const styles = isPrior
+    ? {
+      backgroundColor: '#F3F4F6',
+      color: '#6B7280',
+      border: '1px solid #F3F4F6',
+    }
+    : {
+      backgroundColor: '#FFFFFF',
+      color: '#111827',
+      border: '1px solid #E5E7EB',
+    };
+  return (
+    <span style={{
+      display: 'inline-block' as const,
+      ...styles,
+      padding: '3px 8px',
+      borderRadius: '4px',
+      fontWeight: isPrior ? 500 : 700,
+      fontFamily: MONO_FONT,
+      fontVariantNumeric: 'tabular-nums' as const,
+      fontSize: '11px',
+      letterSpacing: '0.2px',
+      lineHeight: '1.2',
+      whiteSpace: 'nowrap' as const,
+    }}>
+      {String(value)}
+    </span>
+  );
+}

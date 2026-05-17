@@ -49,16 +49,20 @@ function buildPillSpan(sign: string | undefined, num: string, _unit: string): st
   const displaySign = isNeg ? '−' : isPos ? '+' : '';
   const display = `${displaySign}${num}%`;
 
+  // v9: match the visual weight of scorecard pills so inline-prose chips
+  // read as proper highlights (not subtle inline annotations). 12px font
+  // + 3px 8px padding = ~17px height chip, large enough to be skimmable
+  // inside 14-15px body text.
   return (
     '<span style="' +
     'display:inline-block;' +
-    `padding:1px 6px;` +
-    'border-radius:3px;' +
+    `padding:2px 8px;` +
+    'border-radius:4px;' +
     `background-color:${bg};` +
     `color:${fg};` +
     'font-weight:700;' +
     `font-family:${MONO_FONT.replace(/"/g, "'")};` +
-    'font-size:11px;' +
+    'font-size:12px;' +
     'letter-spacing:0.2px;' +
     'font-variant-numeric:tabular-nums;' +
     'white-space:nowrap;' +

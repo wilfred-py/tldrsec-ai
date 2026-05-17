@@ -5,7 +5,7 @@ import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadge
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { XSentimentBlock } from './sections/XSentimentBlock';
-import { PillDelta } from './sections/PillDelta';
+import { PillDelta, MetricPill } from './sections/PillDelta';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import {
   extractMaterialitySignal,
@@ -532,9 +532,13 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                           <tr key={idx} style={{ backgroundColor: rowBg }}>
                             <td style={fin.cellMetric}>{row.label}</td>
                             <td style={fin.cellPrior}>
-                              {row.priorValue ? formatValue(row.priorValue) : <span style={fin.dash}>—</span>}
+                              {row.priorValue
+                                ? <MetricPill value={formatValue(row.priorValue)} tone="prior" />
+                                : <span style={fin.dash}>—</span>}
                             </td>
-                            <td style={fin.cellValue}>{formatValue(row.value)}</td>
+                            <td style={fin.cellValue}>
+                              <MetricPill value={formatValue(row.value)} tone="latest" />
+                            </td>
                             <td style={fin.cellDelta}>
                               {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
                             </td>
@@ -563,6 +567,15 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
               </td>
             </tr>
           )}
+
+          {/* X (Twitter) sentiment — now sits ABOVE What to Watch per
+              v11 polish. Sentiment context informs what risks to watch
+              for, so the order reads: data → market chatter → risks. */}
+          <tr>
+            <td>
+              <XSentimentBlock rawData={summaryData} formType="10-Q" />
+            </td>
+          </tr>
 
           {/* Watch for — black bar header + numbered list */}
           {watchFor.length > 0 && (
@@ -655,12 +668,10 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
         </tbody>
       </table>
 
-      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-      <XSentimentBlock rawData={summaryData} formType="10-Q" />
-
       {/* Why it matters — moved to the END of the body content per
-          autoplan PR1-polish D3=A. Sits after X sentiment and just before
-          the View-Filing action button. When the rewritten WIM prompt fires
+          autoplan PR1-polish D3=A. Sits after the body content and just
+          before the View-Filing action button. X-sentiment now lives
+          inside the body table above (above What-to-Watch). When the rewritten WIM prompt fires
           (flag on, 10-Q), the model produces a real interpretive sentence
           that synthesizes the data + sentiment context above. When it
           doesn't, the pill-chip fallback shows YoY/QoQ for the top

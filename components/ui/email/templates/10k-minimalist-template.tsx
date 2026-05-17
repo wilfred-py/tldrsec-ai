@@ -5,7 +5,7 @@ import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadge
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { XSentimentBlock } from './sections/XSentimentBlock';
-import { PillDelta } from './sections/PillDelta';
+import { PillDelta, MetricPill } from './sections/PillDelta';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import {
   extractMaterialitySignal,
@@ -425,9 +425,13 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                           <tr key={idx} style={{ backgroundColor: rowBg }}>
                             <td style={fin.cellMetric}>{row.label}</td>
                             <td style={fin.cellPrior}>
-                              {row.priorValue ? formatValue(row.priorValue) : <span style={fin.dash}>—</span>}
+                              {row.priorValue
+                                ? <MetricPill value={formatValue(row.priorValue)} tone="prior" />
+                                : <span style={fin.dash}>—</span>}
                             </td>
-                            <td style={fin.cellValue}>{formatValue(row.value)}</td>
+                            <td style={fin.cellValue}>
+                              <MetricPill value={formatValue(row.value)} tone="latest" />
+                            </td>
                             <td style={fin.cellDeltaLast}>
                               {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
                             </td>
@@ -475,13 +479,64 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                   const rawPcts = segments.map((_, idx) =>
                     total > 0 ? (weights[idx] / total) * 100 : 100 / segments.length,
                   );
-                  const MIN_DISPLAY_PCT = 7;
-                  const floored = rawPcts.map(p => Math.max(p, MIN_DISPLAY_PCT));
-                  const flooredTotal = floored.reduce((a, b) => a + b, 0);
-                  const displayPcts = floored.map(p => (p / flooredTotal) * 100);
+                  // v9: square-root scaling for bar widths. Linear-floor
+                  // (the v7 approach) gave 7%, 1%, 1% segments visually
+                  // identical bar widths after normalization. Sqrt compresses
+                  // big values and lifts small ones, so a single-digit
+                  // segment stays visually smaller than a two-digit segment
+                  // while still being wide enough to fit its inline % label.
+                  // Example NVDA (90, 7, 1, 1) → display (66.3, 18.5, 7.6, 7.6).
+                  // The label text is still the RAW share — only visual
+                  // width is adjusted.
+                  const sqrtWeights = rawPcts.map(p => Math.sqrt(p));
+                  const sqrtTotal = sqrtWeights.reduce((a, b) => a + b, 0);
+                  const displayPcts = sqrtTotal > 0
+                    ? sqrtWeights.map(w => (w / sqrtTotal) * 100)
+                    : rawPcts;
                   return (
                     <>
                       <div style={{ ...EmailStyles.watchForHeader, marginBottom: '10px' }}>Segment mix:</div>
+
+                      {/* Alternative view: single horizontal stacked-segment
+                          bar (pie-chart-like share visualization, email-safe
+                          via nested tables — no SVG, no conic-gradient).
+                          Each colored block is sized by raw share %, with
+                          its label inside if wide enough; the legend
+                          below carries name + revenue + growth. */}
+                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '14px' }}>
+                        <tbody>
+                          <tr>
+                            {segments.map((s, idx) => {
+                              const rawPct = rawPcts[idx];
+                              const colors = palette[idx % palette.length];
+                              return (
+                                <td
+                                  key={idx}
+                                  width={`${Math.max(2, Math.round(rawPct))}%`}
+                                  style={{
+                                    height: '22px',
+                                    backgroundColor: colors.bg,
+                                    borderRight: idx < segments.length - 1 ? '1px solid #FFFFFF' : 'none',
+                                    fontSize: '10px',
+                                    color: colors.fg,
+                                    fontWeight: 700,
+                                    fontFamily: MONO_FONT,
+                                    textAlign: 'center' as const,
+                                    whiteSpace: 'nowrap' as const,
+                                    overflow: 'hidden' as const,
+                                  }}
+                                >
+                                  {rawPct >= 5 ? `${rawPct.toFixed(0)}%` : ''}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      {/* Per-row bar chart (sqrt-scaled so single-digit
+                          segments stay visually smaller than two-digit
+                          ones but big enough to fit their % label). */}
                       <table width="100%" cellPadding="0" cellSpacing="0">
                         <tbody>
                           {segments.map((s, idx) => {
@@ -562,6 +617,16 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
               </td>
             </tr>
           )}
+
+          {/* X (Twitter) sentiment — now sits ABOVE What to Watch per
+              v11 polish. The sentiment context informs what risks to
+              watch for, so the order reads naturally: data → market
+              chatter → forward-looking risks. */}
+          <tr>
+            <td>
+              <XSentimentBlock rawData={summaryData} formType="10-K" />
+            </td>
+          </tr>
 
           {/* Watch for — full-width black "What to Watch" bar + numbered
               list, matching 10-Q's structure. */}
@@ -649,9 +714,6 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
           <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
         </tbody>
       </table>
-
-      {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
-      <XSentimentBlock rawData={summaryData} formType="10-K" />
 
       {/* Why it matters — moved to the END of the body content per
           autoplan PR1-polish D3=A. The story above sets the picture; this
