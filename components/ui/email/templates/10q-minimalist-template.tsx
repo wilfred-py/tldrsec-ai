@@ -141,6 +141,24 @@ const fin = {
 } as const;
 
 /**
+ * Decide whether the consolidated "What to Watch" section should render.
+ * The section combines X-sentiment + filing-derived numbered risks under
+ * one black bar — should appear when EITHER signal has content.
+ */
+function shouldRenderWatchSection({
+  summaryData,
+  watchFor,
+}: {
+  summaryData: FilingTemplateData['summaryData'] | undefined;
+  watchFor: string[];
+}): boolean {
+  if (watchFor.length > 0) return true;
+  const xs = (summaryData as Record<string, unknown> | undefined)?.xSentiment as
+    { direction?: string } | undefined;
+  return !!(xs && typeof xs.direction === 'string' && xs.direction.length > 0);
+}
+
+/**
  * Normalize the "Latest" column value to two decimal places so the scorecard
  * reads with consistent precision: `$611M` → `$611.00M`, `$3.59` → `$3.59`,
  * `51.43%` → `51.43%`, `$1.2B` → `$1.20B`. Anything we can't parse (e.g.
@@ -568,19 +586,12 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
             </tr>
           )}
 
-          {/* X (Twitter) sentiment — now sits ABOVE What to Watch per
-              v11 polish. Sentiment context informs what risks to watch
-              for, so the order reads: data → market chatter → risks. */}
-          <tr>
-            <td>
-              <XSentimentBlock rawData={summaryData} formType="10-Q" />
-            </td>
-          </tr>
-
-          {/* Watch for — black bar header + numbered list */}
-          {watchFor.length > 0 && (
+          {/* "What to Watch" — consolidated forward-signals section per
+              v11 polish. X-sentiment (market chatter) + filing-derived
+              numbered risks under ONE black bar. Renders if either has
+              content. */}
+          {shouldRenderWatchSection({ summaryData, watchFor }) && (
             <>
-              {/* Spacer above the black bar (margin doesn't work on td) */}
               <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
               <tr>
                 <td style={{
@@ -598,37 +609,46 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                   </span>
                 </td>
               </tr>
+              {/* X-sentiment sub-block (market chatter) renders first */}
               <tr>
-                <td style={{ padding: '6px 15px 8px' }}>
-                  <table width="100%" cellPadding="0" cellSpacing="0">
-                    <tbody>
-                      {watchFor.map((item, idx) => (
-                        <tr key={idx}>
-                          <td style={{
-                            padding: '8px 0',
-                            borderBottom: idx < watchFor.length - 1 ? '1px solid #F0F0F0' : 'none',
-                            fontSize: '14px',
-                            color: EmailColors.text.body,
-                            lineHeight: '1.5',
-                            verticalAlign: 'top' as const,
-                          }}>
-                            <span style={{
-                              fontFamily: MONO_FONT,
-                              color: EmailColors.text.muted,
-                              fontWeight: 700,
-                              marginRight: '10px',
-                              fontSize: '12px',
-                            }}>
-                              {String(idx + 1).padStart(2, '0')}
-                            </span>
-                            {item}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <td>
+                  <XSentimentBlock rawData={summaryData} formType="10-Q" />
                 </td>
               </tr>
+              {/* Numbered risk list (filing-derived) renders below */}
+              {watchFor.length > 0 && (
+                <tr>
+                  <td style={{ padding: '6px 15px 8px' }}>
+                    <table width="100%" cellPadding="0" cellSpacing="0">
+                      <tbody>
+                        {watchFor.map((item, idx) => (
+                          <tr key={idx}>
+                            <td style={{
+                              padding: '8px 0',
+                              borderBottom: idx < watchFor.length - 1 ? '1px solid #F0F0F0' : 'none',
+                              fontSize: '14px',
+                              color: EmailColors.text.body,
+                              lineHeight: '1.5',
+                              verticalAlign: 'top' as const,
+                            }}>
+                              <span style={{
+                                fontFamily: MONO_FONT,
+                                color: EmailColors.text.muted,
+                                fontWeight: 700,
+                                marginRight: '10px',
+                                fontSize: '12px',
+                              }}>
+                                {String(idx + 1).padStart(2, '0')}
+                              </span>
+                              {item}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              )}
             </>
           )}
 

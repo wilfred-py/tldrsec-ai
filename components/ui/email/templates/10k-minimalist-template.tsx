@@ -104,6 +104,27 @@ const fin = {
 } as const;
 
 /**
+ * Decide whether the consolidated "What to Watch" section should render.
+ * The section combines X-sentiment + filing-derived numbered risks under
+ * one black bar — it should appear whenever EITHER signal source has
+ * content. Inspecting xSentiment via the same `direction` field the
+ * XSentimentBlock guards on, to avoid rendering an empty section header
+ * when neither signal is populated.
+ */
+function shouldRenderWatchSection({
+  summaryData,
+  watchForItems,
+}: {
+  summaryData: FilingTemplateData['summaryData'] | undefined;
+  watchForItems: string[];
+}): boolean {
+  if (watchForItems.length > 0) return true;
+  const xs = (summaryData as Record<string, unknown> | undefined)?.xSentiment as
+    { direction?: string } | undefined;
+  return !!(xs && typeof xs.direction === 'string' && xs.direction.length > 0);
+}
+
+/**
  * Normalize value to 2dp for visual consistency: `$215.94B`, `71.10%`,
  * `$4.90`. Anything unparseable (e.g. "N/A", "—") passes through.
  * Mirrors 10q-minimalist-template's formatValue.
@@ -468,110 +489,137 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                   };
                   const weights = segments.map(s => parseNum(s.revenue));
                   const total = weights.reduce((a, b) => a + b, 0);
+                  // Palette: each entry has the segment's accent color (fg),
+                  // its CURRENT-year bar background (bg), and a LIGHTER
+                  // background (bgLight) for the prior-year underlay bar.
+                  // bgLight is bg mixed ~50% toward white so the prior bar
+                  // reads as "secondary" without losing the segment's color
+                  // identity.
                   const palette = [
-                    { bg: '#FEF3C7', fg: '#92400E' }, // amber
-                    { bg: '#EEF2FF', fg: '#4338CA' }, // indigo
-                    { bg: '#F1F5F9', fg: '#475569' }, // slate
-                    { bg: '#EDE9FE', fg: '#5B21B6' }, // violet
-                    { bg: '#EBF8FF', fg: '#1E40AF' }, // blue
-                    { bg: '#F5F3FF', fg: '#6D28D9' }, // purple
+                    { bg: '#FEF3C7', bgLight: '#FEF9E3', fg: '#92400E' }, // amber
+                    { bg: '#EEF2FF', bgLight: '#F6F8FF', fg: '#4338CA' }, // indigo
+                    { bg: '#F1F5F9', bgLight: '#F8FAFC', fg: '#475569' }, // slate
+                    { bg: '#EDE9FE', bgLight: '#F6F4FF', fg: '#5B21B6' }, // violet
+                    { bg: '#EBF8FF', bgLight: '#F5FCFF', fg: '#1E40AF' }, // blue
+                    { bg: '#F5F3FF', bgLight: '#FAF9FF', fg: '#6D28D9' }, // purple
                   ];
                   const rawPcts = segments.map((_, idx) =>
                     total > 0 ? (weights[idx] / total) * 100 : 100 / segments.length,
                   );
-                  // v9: square-root scaling for bar widths. Linear-floor
-                  // (the v7 approach) gave 7%, 1%, 1% segments visually
-                  // identical bar widths after normalization. Sqrt compresses
-                  // big values and lifts small ones, so a single-digit
-                  // segment stays visually smaller than a two-digit segment
-                  // while still being wide enough to fit its inline % label.
-                  // Example NVDA (90, 7, 1, 1) → display (66.3, 18.5, 7.6, 7.6).
-                  // The label text is still the RAW share — only visual
-                  // width is adjusted.
-                  const sqrtWeights = rawPcts.map(p => Math.sqrt(p));
-                  const sqrtTotal = sqrtWeights.reduce((a, b) => a + b, 0);
-                  const displayPcts = sqrtTotal > 0
-                    ? sqrtWeights.map(w => (w / sqrtTotal) * 100)
-                    : rawPcts;
+
+                  // Derive prior-year revenue per segment from current + YoY
+                  // growth: prior = current / (1 + growth/100). When growth
+                  // is missing or unparseable, prior defaults to current
+                  // (renders as a same-width prior bar — visually a no-op).
+                  const parseGrowth = (g: string | number | undefined): number => {
+                    if (g === undefined || g === null) return 0;
+                    const s = String(g).trim();
+                    const m = s.match(/^([+-]?\d+(?:\.\d+)?)\s*%?$/);
+                    if (!m) return 0;
+                    const n = parseFloat(m[1]);
+                    return isNaN(n) ? 0 : n;
+                  };
+                  const priorWeights = segments.map((s, idx) => {
+                    const growth = parseGrowth(s.growth);
+                    if (growth === -100) return 0;
+                    return weights[idx] / (1 + growth / 100);
+                  });
+
+                  // Bar widths use sqrt of absolute revenue relative to the
+                  // largest current segment. This (a) keeps single-digit
+                  // segments visually meaningfully smaller than two-digit
+                  // ones, (b) shows real growth/degrowth between the prior
+                  // and current bar — the gap between the two bar widths
+                  // IS the YoY jump in visible form.
+                  const maxRev = Math.max(...weights, ...priorWeights);
+                  const sqrtCurrentDisplay = weights.map(w =>
+                    maxRev > 0 ? (Math.sqrt(w) / Math.sqrt(maxRev)) * 100 : 0,
+                  );
+                  const sqrtPriorDisplay = priorWeights.map(w =>
+                    maxRev > 0 ? (Math.sqrt(w) / Math.sqrt(maxRev)) * 100 : 0,
+                  );
+                  // Floor at 4% so even tiny segments still show a visible
+                  // bar fragment.
+                  const displayPcts = sqrtCurrentDisplay.map(d => Math.max(d, 4));
+                  const displayPctsPrior = sqrtPriorDisplay.map(d => Math.max(d, 4));
                   return (
                     <>
                       <div style={{ ...EmailStyles.watchForHeader, marginBottom: '10px' }}>Segment mix:</div>
 
-                      {/* Alternative view: single horizontal stacked-segment
-                          bar (pie-chart-like share visualization, email-safe
-                          via nested tables — no SVG, no conic-gradient).
-                          Each colored block is sized by raw share %, with
-                          its label inside if wide enough; the legend
-                          below carries name + revenue + growth. */}
-                      <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '14px' }}>
-                        <tbody>
-                          <tr>
-                            {segments.map((s, idx) => {
-                              const rawPct = rawPcts[idx];
-                              const colors = palette[idx % palette.length];
-                              return (
-                                <td
-                                  key={idx}
-                                  width={`${Math.max(2, Math.round(rawPct))}%`}
-                                  style={{
-                                    height: '22px',
-                                    backgroundColor: colors.bg,
-                                    borderRight: idx < segments.length - 1 ? '1px solid #FFFFFF' : 'none',
-                                    fontSize: '10px',
-                                    color: colors.fg,
-                                    fontWeight: 700,
-                                    fontFamily: MONO_FONT,
-                                    textAlign: 'center' as const,
-                                    whiteSpace: 'nowrap' as const,
-                                    overflow: 'hidden' as const,
-                                  }}
-                                >
-                                  {rawPct >= 5 ? `${rawPct.toFixed(0)}%` : ''}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        </tbody>
-                      </table>
-
-                      {/* Per-row bar chart (sqrt-scaled so single-digit
-                          segments stay visually smaller than two-digit
-                          ones but big enough to fit their % label). */}
+                      {/* Per-row segment chart. Each row has TWO stacked
+                          bars: the current-year bar on top (accent border +
+                          full color) and a lighter prior-year bar
+                          underneath. The visible gap between the two bars
+                          is the YoY revenue jump rendered visually — wider
+                          top bar = growth, narrower top bar = shrinkage.
+                          Bar widths use sqrt(abs revenue) / sqrt(max
+                          current revenue) so single-digit segments still
+                          read meaningfully smaller than two-digit ones,
+                          while preserving real growth/degrowth visibility. */}
                       <table width="100%" cellPadding="0" cellSpacing="0">
                         <tbody>
                           {segments.map((s, idx) => {
                             const rawPct = rawPcts[idx];
-                            const displayPct = displayPcts[idx];
+                            const currentDisplay = displayPcts[idx];
+                            const priorDisplay = displayPctsPrior[idx];
                             const colors = palette[idx % palette.length];
                             const pctText = `${rawPct.toFixed(0)}%`;
                             return (
                               <tr key={idx}>
                                 <td style={{
-                                  padding: '4px 0',
+                                  padding: '6px 0',
                                   fontSize: '13px',
                                   color: '#374151',
                                   whiteSpace: 'nowrap' as const,
                                   paddingRight: '12px',
                                   width: '120px',
+                                  verticalAlign: 'middle' as const,
                                 }}>
                                   {s.name}
                                 </td>
-                                <td style={{ padding: '4px 0' }}>
+                                <td style={{ padding: '6px 0' }}>
+                                  {/* Stacked dual-bar group: top = current
+                                      year, bottom = prior year (lighter).
+                                      Outer table holds the two rows; the
+                                      right-hand value/pill column spans
+                                      both rows so the labels sit beside
+                                      the bar pair as a unit. */}
                                   <table width="100%" cellPadding="0" cellSpacing="0">
                                     <tbody>
                                       <tr>
-                                        <td width={`${Math.max(2, Math.round(displayPct))}%`} style={{
-                                          height: '16px',
-                                          backgroundColor: colors.bg,
-                                          borderLeft: `3px solid ${colors.fg}`,
-                                          fontSize: '11px',
-                                          color: colors.fg,
-                                          fontWeight: 600,
-                                          fontFamily: MONO_FONT,
-                                          paddingLeft: '6px',
-                                          whiteSpace: 'nowrap' as const,
-                                        }}>
-                                          {pctText}
+                                        <td style={{ width: '70%', verticalAlign: 'middle' as const }}>
+                                          <table width="100%" cellPadding="0" cellSpacing="0">
+                                            <tbody>
+                                              <tr>
+                                                <td width={`${Math.max(2, Math.round(currentDisplay))}%`} style={{
+                                                  height: '14px',
+                                                  backgroundColor: colors.bg,
+                                                  borderLeft: `3px solid ${colors.fg}`,
+                                                  fontSize: '11px',
+                                                  color: colors.fg,
+                                                  fontWeight: 600,
+                                                  fontFamily: MONO_FONT,
+                                                  paddingLeft: '6px',
+                                                  whiteSpace: 'nowrap' as const,
+                                                }}>
+                                                  {pctText}
+                                                </td>
+                                                <td style={{ width: 'auto' }}></td>
+                                              </tr>
+                                              <tr>
+                                                <td width={`${Math.max(2, Math.round(priorDisplay))}%`} style={{
+                                                  height: '8px',
+                                                  backgroundColor: colors.bgLight,
+                                                  borderLeft: `3px solid ${colors.bg}`,
+                                                  fontSize: 0,
+                                                  lineHeight: '8px',
+                                                }}>
+                                                  &nbsp;
+                                                </td>
+                                                <td style={{ width: 'auto' }}></td>
+                                              </tr>
+                                            </tbody>
+                                          </table>
                                         </td>
                                         <td style={{
                                           paddingLeft: '10px',
@@ -580,6 +628,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                                           color: '#111827',
                                           fontFamily: MONO_FONT,
                                           fontVariantNumeric: 'tabular-nums' as const,
+                                          verticalAlign: 'middle' as const,
                                         }}>
                                           {String(s.revenue)}
                                         </td>
@@ -587,6 +636,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                                           textAlign: 'right' as const,
                                           whiteSpace: 'nowrap' as const,
                                           paddingLeft: '8px',
+                                          verticalAlign: 'middle' as const,
                                         }}>
                                           {s.growth && <PillDelta value={s.growth} size="small" />}
                                         </td>
@@ -618,19 +668,14 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
             </tr>
           )}
 
-          {/* X (Twitter) sentiment — now sits ABOVE What to Watch per
-              v11 polish. The sentiment context informs what risks to
-              watch for, so the order reads naturally: data → market
-              chatter → forward-looking risks. */}
-          <tr>
-            <td>
-              <XSentimentBlock rawData={summaryData} formType="10-K" />
-            </td>
-          </tr>
-
-          {/* Watch for — full-width black "What to Watch" bar + numbered
-              list, matching 10-Q's structure. */}
-          {watchForItems.length > 0 && (
+          {/* "What to Watch" — consolidated forward-signals section per
+              v11 polish. The X-sentiment block (market chatter) and the
+              filing-derived numbered risk list now sit under ONE black
+              bar header. Reads as a single "what's coming next" block:
+              the market's view first, then the filing's stated risks.
+              Section renders if either X-sentiment OR numbered risks
+              are present. */}
+          {(shouldRenderWatchSection({ summaryData, watchForItems })) && (
             <>
               <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
               <tr>
@@ -646,37 +691,46 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                   </span>
                 </td>
               </tr>
+              {/* X-sentiment sub-block (market chatter) renders first */}
               <tr>
-                <td style={{ padding: '6px 15px 8px' }}>
-                  <table width="100%" cellPadding="0" cellSpacing="0">
-                    <tbody>
-                      {watchForItems.map((risk, idx) => (
-                        <tr key={idx}>
-                          <td style={{
-                            padding: '8px 0',
-                            borderBottom: idx < watchForItems.length - 1 ? '1px solid #F0F0F0' : 'none',
-                            fontSize: '14px',
-                            color: EmailColors.text.body,
-                            lineHeight: '1.5',
-                            verticalAlign: 'top' as const,
-                          }}>
-                            <span style={{
-                              fontFamily: MONO_FONT,
-                              color: EmailColors.text.muted,
-                              fontWeight: 700,
-                              marginRight: '10px',
-                              fontSize: '12px',
-                            }}>
-                              {String(idx + 1).padStart(2, '0')}
-                            </span>
-                            <span dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(escapeHtmlMinimal(risk)) }} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <td>
+                  <XSentimentBlock rawData={summaryData} formType="10-K" />
                 </td>
               </tr>
+              {/* Numbered risk list (filing-derived) renders below */}
+              {watchForItems.length > 0 && (
+                <tr>
+                  <td style={{ padding: '6px 15px 8px' }}>
+                    <table width="100%" cellPadding="0" cellSpacing="0">
+                      <tbody>
+                        {watchForItems.map((risk, idx) => (
+                          <tr key={idx}>
+                            <td style={{
+                              padding: '8px 0',
+                              borderBottom: idx < watchForItems.length - 1 ? '1px solid #F0F0F0' : 'none',
+                              fontSize: '14px',
+                              color: EmailColors.text.body,
+                              lineHeight: '1.5',
+                              verticalAlign: 'top' as const,
+                            }}>
+                              <span style={{
+                                fontFamily: MONO_FONT,
+                                color: EmailColors.text.muted,
+                                fontWeight: 700,
+                                marginRight: '10px',
+                                fontSize: '12px',
+                              }}>
+                                {String(idx + 1).padStart(2, '0')}
+                              </span>
+                              <span dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(escapeHtmlMinimal(risk)) }} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              )}
             </>
           )}
 
