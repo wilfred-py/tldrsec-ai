@@ -23,3 +23,6 @@ A user's saved interest in a [Filing] type or ticker. Drives which [Summary] pay
 
 ### Onboarding
 The first-run flow that turns a new signup into an engaged subscriber: ticker selection, preview email, account creation, first cached [Summary] delivery.
+
+### Historical Context
+Prompt prefix attached to a new [Summary] generation that quotes the three most recent prior [Summary] rows for the same ticker. Gives the model continuity ("vs the prior 10-Q...") and pattern detection. Bounded at 1500 chars per prior summary to keep the prompt budget predictable. Inlined into the summarize module — it is private prompt-build state, not a standalone seam.

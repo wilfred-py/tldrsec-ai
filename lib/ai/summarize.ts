@@ -15,7 +15,6 @@ import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
-import { getHistoricalSummaries, buildContextEnrichedPrompt } from './historical-context';
 import { getEnrichmentContext } from './web-search-context';
 import {
   isWhyItMattersEnabled,
@@ -474,6 +473,51 @@ function truncateDocumentContent(content: string, maxTokens: number): string {
 // Component logger
 const componentLogger = logger.child('claude-summarizer');
 
+// Historical-context enrichment (Phase 3 of SEC Summary Quality Improvements).
+// Retrieves recent [Summary] rows for a ticker and weaves them into the prompt
+// so the model can reference prior filings for continuity and pattern detection.
+// Inlined into summarize because the surrounding logic owns the prompt build
+// and there is only one caller — the enrichment block below.
+const MAX_HISTORICAL_SUMMARIES = 3;
+const MAX_HISTORICAL_SUMMARY_LENGTH = 1500;
+
+interface HistoricalSummary {
+  filingType: string;
+  filingDate: Date;
+  summaryText: string;
+}
+
+async function fetchHistoricalSummaries(
+  tickerSymbol: string,
+  currentFilingDate: string,
+): Promise<HistoricalSummary[]> {
+  return prisma.summary.findMany({
+    where: {
+      ticker: { symbol: tickerSymbol },
+      filingDate: { lt: new Date(currentFilingDate) },
+    },
+    select: {
+      filingType: true,
+      filingDate: true,
+      summaryText: true,
+    },
+    orderBy: { filingDate: 'desc' },
+    take: MAX_HISTORICAL_SUMMARIES,
+  });
+}
+
+function buildHistoricalContextSection(summaries: HistoricalSummary[]): string {
+  return summaries
+    .map((s) => {
+      const truncated = s.summaryText.length > MAX_HISTORICAL_SUMMARY_LENGTH
+        ? s.summaryText.substring(0, MAX_HISTORICAL_SUMMARY_LENGTH) + '...'
+        : s.summaryText;
+      const dateStr = s.filingDate.toISOString().split('T')[0];
+      return `### Previous ${s.filingType} (${dateStr})\n${truncated}`;
+    })
+    .join('\n\n');
+}
+
 /**
  * Get the appropriate prompt for a filing type with context
  * Phase 4: Uses unified-prompts for bulletproof JSON output
@@ -840,9 +884,18 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
 
     if (tickerSymbol && tickerSymbol !== 'UNKNOWN') {
       try {
-        const historicalSummaries = await getHistoricalSummaries(tickerSymbol, filingDateStr);
+        const historicalSummaries = await fetchHistoricalSummaries(tickerSymbol, filingDateStr);
         if (historicalSummaries.length > 0) {
-          enrichedContent = buildContextEnrichedPrompt(processedContent, historicalSummaries);
+          const contextSection = buildHistoricalContextSection(historicalSummaries);
+          enrichedContent = `## Historical Context
+The following are the most recent filings for this company. Use this context to provide continuity and reference relevant patterns:
+
+${contextSection}
+
+---
+
+## Current Filing
+${processedContent}`;
           componentLogger.info(`Added historical context for ${tickerSymbol}: ${historicalSummaries.length} prior summaries`);
           monitoring.incrementCounter('ai.historical_context_added', 1);
           monitoring.recordMetric('ai.historical_context_count', historicalSummaries.length);

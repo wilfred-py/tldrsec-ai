@@ -29,6 +29,7 @@ jest.mock('@/lib/db/prisma', () => {
   const mockClient = {
     summary: {
       findUnique: jest.fn(async () => null),
+      findMany: jest.fn(async () => []),
       update: jest.fn(async () => ({})),
     },
     secFiling: {
@@ -57,11 +58,6 @@ jest.mock('@/lib/ai/web-search-context', () => ({
 
 jest.mock('@/lib/ai/x-sentiment-provider', () => ({
   getXSentiment: jest.fn(),
-}));
-
-jest.mock('@/lib/ai/historical-context', () => ({
-  getHistoricalSummaries: jest.fn(async () => []),
-  buildContextEnrichedPrompt: jest.fn((content) => content),
 }));
 
 jest.mock('@/lib/monitoring', () => ({
@@ -198,6 +194,136 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       trialEndsAt: pastTrialEnd,
     });
     expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
+  });
+});
+
+describe('summarizeFiling historical-context enrichment', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const prismaMock = require('@/lib/db/prisma').prisma as {
+    summary: { findMany: jest.Mock };
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedSendMessage.mockResolvedValue({
+      content: JSON.stringify(VALID_8K_RESPONSE),
+      model: 'x-ai/grok-4-fast',
+      usage: { inputTokens: 100, outputTokens: 50 },
+      cost: { totalCost: 0.001 },
+    });
+    mockedIsWhyItMattersEnabled.mockResolvedValue(false);
+    mockedIsProviderEnabled.mockResolvedValue(false);
+    mockedGetEnrichmentContext.mockResolvedValue([]);
+    mockedGetXSentiment.mockResolvedValue({ enrichment: null, skipReason: 'mock' });
+    prismaMock.summary.findMany.mockResolvedValue([]);
+  });
+
+  it('does not prefix prompt with Historical Context when no prior summaries exist', async () => {
+    prismaMock.summary.findMany.mockResolvedValue([]);
+    await summarizeFiling(ENRICHABLE_8K_CONTENT, {
+      metadata: baseMetadata,
+      userTier: 'FREE',
+      isTrialing: false,
+      trialEndsAt: null,
+    });
+    const sentPrompt = (mockedSendMessage.mock.calls[0][0] as Array<{ content: string }>)
+      .map((m) => m.content)
+      .join('\n');
+    expect(sentPrompt).not.toContain('## Historical Context');
+  });
+
+  it('prefixes prompt with Historical Context when prior summaries exist', async () => {
+    prismaMock.summary.findMany.mockResolvedValue([
+      {
+        filingType: '10-Q',
+        filingDate: new Date('2026-02-01'),
+        summaryText: 'Prior 10-Q narrative.',
+      },
+    ]);
+    await summarizeFiling(ENRICHABLE_8K_CONTENT, {
+      metadata: baseMetadata,
+      userTier: 'FREE',
+      isTrialing: false,
+      trialEndsAt: null,
+    });
+    const sentPrompt = (mockedSendMessage.mock.calls[0][0] as Array<{ content: string }>)
+      .map((m) => m.content)
+      .join('\n');
+    expect(sentPrompt).toContain('## Historical Context');
+    expect(sentPrompt).toContain('### Previous 10-Q (2026-02-01)');
+    expect(sentPrompt).toContain('Prior 10-Q narrative.');
+    expect(sentPrompt).toContain('## Current Filing');
+  });
+
+  it('queries prior summaries with lt filter and date-desc order, capped at 3', async () => {
+    prismaMock.summary.findMany.mockResolvedValue([]);
+    await summarizeFiling(ENRICHABLE_8K_CONTENT, {
+      metadata: baseMetadata,
+      userTier: 'FREE',
+      isTrialing: false,
+      trialEndsAt: null,
+    });
+    expect(prismaMock.summary.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ticker: { symbol: 'TSLA' },
+          filingDate: expect.objectContaining({ lt: expect.any(Date) }),
+        }),
+        orderBy: { filingDate: 'desc' },
+        take: 3,
+      }),
+    );
+  });
+
+  it('truncates each prior summary at 1500 chars to bound the prompt budget', async () => {
+    const longSummary = 'X'.repeat(2000);
+    prismaMock.summary.findMany.mockResolvedValue([
+      {
+        filingType: '10-K',
+        filingDate: new Date('2025-12-01'),
+        summaryText: longSummary,
+      },
+    ]);
+    await summarizeFiling(ENRICHABLE_8K_CONTENT, {
+      metadata: baseMetadata,
+      userTier: 'FREE',
+      isTrialing: false,
+      trialEndsAt: null,
+    });
+    const sentPrompt = (mockedSendMessage.mock.calls[0][0] as Array<{ content: string }>)
+      .map((m) => m.content)
+      .join('\n');
+    // Truncated to 1500 X's followed by ellipsis — anything longer would
+    // indicate the truncation was bypassed.
+    expect(sentPrompt).toMatch(/X{1500}\.\.\./);
+    expect(sentPrompt).not.toMatch(/X{1501}/);
+  });
+
+  it('continues summarization when historical-context query fails', async () => {
+    prismaMock.summary.findMany.mockRejectedValueOnce(new Error('db unavailable'));
+    const result = await summarizeFiling(ENRICHABLE_8K_CONTENT, {
+      metadata: baseMetadata,
+      userTier: 'FREE',
+      isTrialing: false,
+      trialEndsAt: null,
+    });
+    expect(result).toBeDefined();
+    // Prompt should NOT contain the Historical Context section since the
+    // fetch failed — but the summarize call itself completes.
+    const sentPrompt = (mockedSendMessage.mock.calls[0][0] as Array<{ content: string }>)
+      .map((m) => m.content)
+      .join('\n');
+    expect(sentPrompt).not.toContain('## Historical Context');
+  });
+
+  it('skips historical-context fetch when ticker is UNKNOWN', async () => {
+    await summarizeFiling(ENRICHABLE_8K_CONTENT, {
+      metadata: { ...baseMetadata, ticker: 'UNKNOWN' },
+      userTier: 'FREE',
+      isTrialing: false,
+      trialEndsAt: null,
+    });
+    expect(prismaMock.summary.findMany).not.toHaveBeenCalled();
   });
 });
 
