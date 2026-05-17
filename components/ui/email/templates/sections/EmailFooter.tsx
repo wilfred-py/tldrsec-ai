@@ -1,30 +1,38 @@
 import * as React from 'react';
-import { EmailColors, EMAIL_PREFERENCES_URL } from '../../design-system';
+import { EmailColors, EMAIL_PREFERENCES_URL, EMAIL_LANDING_URL } from '../../design-system';
 import { getSecFilingViewerUrl, type WhyItMattersUtmVariant } from '../../../../../lib/email/url-utils';
 
 interface EmailFooterProps {
   filingUrl: string;
   formType?: string;
   utmVariant?: WhyItMattersUtmVariant;
+  /**
+   * When `marketingCta` is true (per v12 PR1-polish), the CTA button reads
+   * "Want more filings like this?" and links to the landing page instead of
+   * the SEC filing. Used for the consolidated 10-K / 10-Q earnings emails,
+   * where the SEC link is rendered separately above the materiality
+   * rationale block.
+   */
+  marketingCta?: boolean;
 }
 
 /**
  * Minimalist email footer component
  * CTA button + preferences link (always shown)
  */
-export function EmailFooter({ filingUrl, formType, utmVariant }: EmailFooterProps) {
-  // Convert index URLs to EDGAR Filing Viewer URLs for better user experience.
-  // UTM variant (when provided) tags click-through attribution for the
-  // "Why it matters" rollout.
+export function EmailFooter({ filingUrl, formType, utmVariant, marketingCta }: EmailFooterProps) {
   const viewerUrl = filingUrl
     ? getSecFilingViewerUrl(filingUrl, formType, utmVariant ? { variant: utmVariant } : undefined)
     : '';
 
+  const ctaUrl = marketingCta ? EMAIL_LANDING_URL : viewerUrl;
+  const ctaText = marketingCta ? 'Want more filings like this?' : 'View Full Filing on SEC.gov';
+
   return (
     <table width="100%" cellPadding="0" cellSpacing="0">
       <tbody>
-        {/* CTA button - only show when there's a real filing URL */}
-        {viewerUrl && (
+        {/* CTA button - only show when there's a real CTA URL */}
+        {ctaUrl && (
         <tr>
           <td style={{
             padding: '20px 15px',
@@ -32,7 +40,7 @@ export function EmailFooter({ filingUrl, formType, utmVariant }: EmailFooterProp
             borderTop: `1px solid ${EmailColors.structure.border}`,
           }}>
             <a
-              href={viewerUrl}
+              href={ctaUrl}
               style={{
                 display: 'inline-block',
                 padding: '16px 24px',
@@ -44,7 +52,7 @@ export function EmailFooter({ filingUrl, formType, utmVariant }: EmailFooterProp
                 fontWeight: 600,
               }}
             >
-              View Full Filing on SEC.gov
+              {ctaText}
             </a>
           </td>
         </tr>

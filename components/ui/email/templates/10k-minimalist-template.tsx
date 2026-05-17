@@ -314,36 +314,19 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
           'ANNUAL REPORT' neutral label (no double-rendered badge per autoplan
           Design Decision #15). For high/medium/low we render the materiality
           pill in the existing signal slot. */}
+      {/* Materiality badge at the top — the rationale text + "Wrong call?"
+          link have moved to the BOTTOM (above the footer CTA) per v12
+          polish, so the top of the email stays clean. The rationale block
+          is rendered below the WIM section. */}
       {(() => {
         const materialitySignal = extractMaterialitySignal(summaryData);
         const materialityBadge = materialityToBadge(materialitySignal);
         const signal = materialityBadge ?? { label: 'ANNUAL REPORT', colorKey: 'neutral' as const };
-        const showFeedback = materialityBadge !== null;
-        const feedbackUrl = buildMaterialityFeedbackMailto({
-          ticker: displayTicker,
-          formType: filingType || '10-K',
-        });
         return (
-          <>
-            <FormPlusMaterialityBadgeRow
-              filingType={filingType || '10-K'}
-              signal={signal}
-            />
-            {showFeedback && (
-              <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '8px' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '0 15px', fontSize: '11px', color: EmailColors.text.muted }}>
-                      <em>{materialitySignal.rationale}</em>{' '}
-                      <a href={feedbackUrl} style={{ color: EmailColors.text.muted, textDecoration: 'underline' }}>
-                        Wrong call?
-                      </a>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </>
+          <FormPlusMaterialityBadgeRow
+            filingType={filingType || '10-K'}
+            signal={signal}
+          />
         );
       })()}
 
@@ -557,16 +540,24 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                                   {s.name}
                                 </td>
                                 <td style={{ padding: '6px 0' }}>
-                                  {/* Stacked dual-bar group: top = current
-                                      year, bottom = prior year (lighter).
-                                      Outer table holds the two rows; the
-                                      right-hand value/pill column spans
-                                      both rows so the labels sit beside
-                                      the bar pair as a unit. */}
+                                  {/* Dual-bar group rendered as TWO SEPARATE
+                                      nested tables, stacked. v11 used a
+                                      single table with two rows for the
+                                      current/prior bars; HTML table layout
+                                      reconciles column widths across rows,
+                                      so the prior cell's width was being
+                                      forced to match the current cell —
+                                      making both bars look the same length.
+                                      Separate tables per bar means each
+                                      bar's td width is honored
+                                      independently. The right-hand
+                                      value/pill column stays beside the
+                                      bar pair. */}
                                   <table width="100%" cellPadding="0" cellSpacing="0">
                                     <tbody>
                                       <tr>
                                         <td style={{ width: '70%', verticalAlign: 'middle' as const }}>
+                                          {/* Current-year bar (top, full color, accent border) */}
                                           <table width="100%" cellPadding="0" cellSpacing="0">
                                             <tbody>
                                               <tr>
@@ -583,8 +574,13 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                                                 }}>
                                                   {pctText}
                                                 </td>
-                                                <td style={{ width: 'auto' }}></td>
+                                                <td>&nbsp;</td>
                                               </tr>
+                                            </tbody>
+                                          </table>
+                                          {/* Prior-year bar (bottom, neutral grey, thinner) */}
+                                          <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginTop: '2px' }}>
+                                            <tbody>
                                               <tr>
                                                 <td width={`${Math.max(2, Math.round(priorDisplay))}%`} style={{
                                                   height: '6px',
@@ -595,7 +591,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                                                 }}>
                                                   &nbsp;
                                                 </td>
-                                                <td style={{ width: 'auto' }}></td>
+                                                <td>&nbsp;</td>
                                               </tr>
                                             </tbody>
                                           </table>
@@ -730,10 +726,63 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
         </table>
       )}
 
-      {/* Footer with CTA */}
+      {/* SEC filing link + materiality rationale + "Wrong call?" feedback —
+          moved to the bottom per v12 polish. The SEC link is rendered as
+          a plain blue hyperlink (no longer the email's primary CTA — that
+          slot is now the marketing "Want more filings like this?" button
+          in EmailFooter). */}
+      {(() => {
+        const materialitySignal = extractMaterialitySignal(summaryData);
+        const materialityBadge = materialityToBadge(materialitySignal);
+        const showRationale = materialityBadge !== null;
+        const feedbackUrl = buildMaterialityFeedbackMailto({
+          ticker: displayTicker,
+          formType: filingType || '10-K',
+        });
+        return (
+          <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginTop: '20px' }}>
+            <tbody>
+              {filingUrl && (
+                <tr>
+                  <td style={{ padding: '0 15px 8px', fontSize: '13px' }}>
+                    <a
+                      href={filingUrl}
+                      style={{
+                        color: EmailColors.semantic.accent,
+                        textDecoration: 'underline',
+                        fontWeight: 500,
+                      }}
+                    >
+                      View original filing on SEC.gov →
+                    </a>
+                  </td>
+                </tr>
+              )}
+              {showRationale && (
+                <tr>
+                  <td style={{ padding: '0 15px 16px', fontSize: '11px', color: EmailColors.text.muted }}>
+                    <em>{materialitySignal.rationale}</em>{' '}
+                    <a
+                      href={feedbackUrl}
+                      style={{ color: EmailColors.text.muted, textDecoration: 'underline' }}
+                    >
+                      Wrong call?
+                    </a>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        );
+      })()}
+
+      {/* Footer with marketing CTA — "Want more filings like this?" links
+          to the landing page (NOT the SEC filing). The SEC filing link
+          is above this block, rendered as a plain blue hyperlink. */}
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || '10-K'}
+        marketingCta
       />
     </div>
   );

@@ -415,38 +415,18 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
         headline={leadSentence || `${companyName || displayTicker} filed a quarterly report (10-Q)`}
       />
 
-      {/* Form badge + materiality signal row — see 10k-minimalist-template
-          for the symmetric materiality wiring contract. */}
+      {/* Materiality badge — rationale + "Wrong call?" link moved to the
+          BOTTOM per v12 polish. See the SEC-link / rationale block below
+          the WIM section. */}
       {(() => {
         const materialitySignal = extractMaterialitySignal(summaryData);
         const materialityBadge = materialityToBadge(materialitySignal);
         const signal = materialityBadge ?? { label: 'QUARTERLY REPORT', colorKey: 'neutral' as const };
-        const showFeedback = materialityBadge !== null;
-        const feedbackUrl = buildMaterialityFeedbackMailto({
-          ticker: displayTicker,
-          formType: filingType || '10-Q',
-        });
         return (
-          <>
-            <FormPlusMaterialityBadgeRow
-              filingType={filingType || '10-Q'}
-              signal={signal}
-            />
-            {showFeedback && (
-              <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '8px' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '0 15px', fontSize: '11px', color: EmailColors.text.muted }}>
-                      <em>{materialitySignal.rationale}</em>{' '}
-                      <a href={feedbackUrl} style={{ color: EmailColors.text.muted, textDecoration: 'underline' }}>
-                        Wrong call?
-                      </a>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </>
+          <FormPlusMaterialityBadgeRow
+            filingType={filingType || '10-Q'}
+            signal={signal}
+          />
         );
       })()}
 
@@ -656,10 +636,62 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
         </table>
       )}
 
-      {/* Footer with CTA */}
+      {/* SEC filing link + materiality rationale + "Wrong call?" — moved
+          to the bottom per v12 polish. The SEC link is a plain blue
+          hyperlink (not the email's primary CTA — that slot is now the
+          "Want more filings like this?" marketing button below). */}
+      {(() => {
+        const materialitySignal = extractMaterialitySignal(summaryData);
+        const materialityBadge = materialityToBadge(materialitySignal);
+        const showRationale = materialityBadge !== null;
+        const feedbackUrl = buildMaterialityFeedbackMailto({
+          ticker: displayTicker,
+          formType: filingType || '10-Q',
+        });
+        return (
+          <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginTop: '20px' }}>
+            <tbody>
+              {filingUrl && (
+                <tr>
+                  <td style={{ padding: '0 15px 8px', fontSize: '13px' }}>
+                    <a
+                      href={filingUrl}
+                      style={{
+                        color: EmailColors.semantic.accent,
+                        textDecoration: 'underline',
+                        fontWeight: 500,
+                      }}
+                    >
+                      View original filing on SEC.gov →
+                    </a>
+                  </td>
+                </tr>
+              )}
+              {showRationale && (
+                <tr>
+                  <td style={{ padding: '0 15px 16px', fontSize: '11px', color: EmailColors.text.muted }}>
+                    <em>{materialitySignal.rationale}</em>{' '}
+                    <a
+                      href={feedbackUrl}
+                      style={{ color: EmailColors.text.muted, textDecoration: 'underline' }}
+                    >
+                      Wrong call?
+                    </a>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        );
+      })()}
+
+      {/* Footer with marketing CTA — "Want more filings like this?" links
+          to the landing page. SEC filing link sits above as a blue
+          hyperlink. */}
       <EmailFooter
         filingUrl={filingUrl}
         formType={filingType || '10-Q'}
+        marketingCta
       />
     </div>
   );
