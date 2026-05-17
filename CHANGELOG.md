@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.33.0] - 2026-05-17
+
+### Fixed
+- **Form 4 emails now show every indirect-holding entity instead of silently truncating to three.** Investors reviewing Meta's COO Form 4 (2026-05-13) were missing two of five ownership entities, including the largest position (an 85,189-share family trust). The Ownership breakdown table in the minimalist Form 4 email was hard-capped at three entries via `getOwnershipBreakdown(...).slice(0, 3)`. Cap removed; every distinct `(form, nature)` entity now renders. Regression test added with the full five-entity Meta scenario. (`components/ui/email/templates/form4-minimalist-template.tsx`, `__tests__/email/form4-template-rendering.test.ts`)
+- **`HOLDINGS: X → Y (Z%)` row now computes Z deterministically from X and Y.** The LLM-supplied `percentageChange` used an unreliable denominator (Meta example: reported `-18.50%` from `total disposed across all tables ÷ (post-direct + total-disposed)`, instead of the direct-stake change of `-11.90%`). `normalizeForm4Data` now derives `percentageChange` from `previousStake` and `newStake` whenever both are present, so the percentage matches the two numbers the email actually renders. (`lib/email/form4-field-normalizer.ts`, `__tests__/email/form4-field-normalizer.test.ts`)
+
 ## [0.0.32.2] - 2026-05-17
 
 ### Added

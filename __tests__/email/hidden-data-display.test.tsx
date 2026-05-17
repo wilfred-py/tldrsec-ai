@@ -78,8 +78,8 @@ describe('Hidden Data Display', () => {
 
       // Always points right — direction encoded by color of (% change), not arrow
       expect(container.textContent).toContain('→');
-      // Should display the percentage change
-      expect(container.textContent).toContain('2.0%');
+      // Recomputed from stakes (500,000 → 490,000) to 2dp; LLM "-2.0%" overridden.
+      expect(container.textContent).toContain('2.00%');
     });
 
     it('should display right-pointing arrow for stake increase too', () => {

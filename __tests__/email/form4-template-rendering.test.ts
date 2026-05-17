@@ -14,6 +14,7 @@ import {
   getTransactionTypeConfig,
   isGiftTransaction,
   isPurchaseTransaction,
+  getOwnershipBreakdown,
 } from '../../components/ui/email/templates/form4-minimalist-template';
 
 describe('Form 4 Template Transfer Rendering', () => {
@@ -202,6 +203,45 @@ describe('Form 4 render order (post-restructure)', () => {
     // The ticker line should now carry "AAPL · Apple Inc. · Tim Cook, CEO".
     // That's the one place the filer identity renders — no dedicated table row.
     expect(container.textContent).toMatch(/Tim Cook, CEO/);
+  });
+});
+
+describe('getOwnershipBreakdown — all indirect entities shown', () => {
+  // Regression: Meta COO Javier Olivan Form 4 filed 2026-05-13
+  // (https://www.sec.gov/Archives/edgar/data/1326801/000095010326007167/ownership.xml)
+  // reports 5 distinct ownership entities (1 direct + 4 indirect). A prior
+  // `.slice(0, 3)` cap silently dropped the 4th and 5th entries from the
+  // rendered breakdown, hiding the trust holding 85,189 shares.
+  it('returns every distinct (form, nature) entity — does not cap at 3', () => {
+    const metaOlivanTransactions = [
+      { ownershipForm: 'D', ownershipNature: '', sharesOwnedFollowing: '6853' },
+      { ownershipForm: 'I', ownershipNature: 'By Olivan D LLC', sharesOwnedFollowing: '7556' },
+      { ownershipForm: 'I', ownershipNature: 'By Olivan Reinhold D LLC', sharesOwnedFollowing: '2258' },
+      { ownershipForm: 'I', ownershipNature: 'By Reinhold D LLC', sharesOwnedFollowing: '7556' },
+      { ownershipForm: 'I', ownershipNature: 'By Olivan Reinhold Family Revocable Trust u/a/d 10/16/12', sharesOwnedFollowing: '85189' },
+    ];
+
+    const breakdown = getOwnershipBreakdown(metaOlivanTransactions);
+
+    expect(breakdown).not.toBeNull();
+    expect(breakdown).toHaveLength(5);
+
+    const natures = breakdown!.map(b => b.nature);
+    expect(natures).toContain('By Reinhold D LLC');
+    expect(natures).toContain('By Olivan Reinhold Family Revocable Trust u/a/d 10/16/12');
+
+    const trust = breakdown!.find(b => b.nature.startsWith('By Olivan Reinhold Family'));
+    expect(trust).toBeDefined();
+    expect(trust!.form).toBe('Indirect');
+    expect(trust!.shares).toBe('85,189');
+  });
+
+  it('returns null when all transactions share one (form, nature) bucket', () => {
+    const allDirect = [
+      { ownershipForm: 'D', ownershipNature: '', sharesOwnedFollowing: '1000' },
+      { ownershipForm: 'D', ownershipNature: '', sharesOwnedFollowing: '900' },
+    ];
+    expect(getOwnershipBreakdown(allDirect)).toBeNull();
   });
 });
 

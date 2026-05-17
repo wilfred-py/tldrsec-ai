@@ -90,9 +90,11 @@ describe('Form 4 summary styling refresh', () => {
       });
 
       const { container } = render(<Form4MinimalistTemplate filing={filing} />);
-      // Match the *innermost* span equal to "(-10%)" exactly
+      // Match the *innermost* span equal to "(-10.00%)" exactly. The normalizer
+      // recomputes percentageChange from previousStake/newStake to 2dp, so the
+      // LLM-supplied "-10%" string is overridden.
       const pctSpan = Array.from(container.querySelectorAll('span')).find(
-        (s) => s.textContent === '(-10%)' && s.children.length === 0
+        (s) => s.textContent === '(-10.00%)' && s.children.length === 0
       );
       expect(pctSpan).toBeDefined();
       expect(pctSpan!.getAttribute('style')).toMatch(/color:\s*(rgb\(220,\s*38,\s*38\)|#DC2626)/i);
@@ -109,8 +111,9 @@ describe('Form 4 summary styling refresh', () => {
       });
 
       const { container } = render(<Form4MinimalistTemplate filing={filing} />);
+      // 40,000 → 45,000 = +12.50% (recomputed from stakes to 2dp).
       const pctSpan = Array.from(container.querySelectorAll('span')).find(
-        (s) => /^\(\+?12\.5%\)$/.test(s.textContent || '') && s.children.length === 0
+        (s) => /^\(\+?12\.50%\)$/.test(s.textContent || '') && s.children.length === 0
       );
       expect(pctSpan).toBeDefined();
       // #15803D (WCAG AA-compliant green) replaces the prior #16A34A which failed AA on small text.
