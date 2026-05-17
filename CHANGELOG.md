@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.32.2] - 2026-05-17
+
+### Added
+- **`scripts/send-pr1-test-email.ts` is now tracked in the repo.** The PR1 materiality-badge test-send harness was previously local-only in one Conductor workspace, so re-sending the canonical NVDA 10-K + CMG 10-Q test emails required hunting down the right machine. The script is now allowlisted in `.gitignore` and ships with the repo — anyone with `.env.local` can re-render and re-send the PR1 fixtures.
+
+### Changed
+- **PR1 test emails no longer surface the "summary was delayed" banner.** The PR1 fixtures use real (older) NVDA and CMG filing dates so the materiality pill, financial scorecard, and X-sentiment data stay grounded — but the consequence was every test inbox showed an amber "This summary was delayed — the filing was originally filed N days ago" warning that pulled attention away from the summary. `send-pr1-test-email.ts` now runs `stripStalenessBanner()` on the rendered HTML before sending, scoped to the script only. Production templates (`10k-/10q-/8k-/form4-minimalist`) are untouched and real customer emails still surface the staleness warning.
+
 ## [0.0.32.1] - 2026-05-16
 
 ### Added
