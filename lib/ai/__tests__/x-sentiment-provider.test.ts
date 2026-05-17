@@ -124,6 +124,75 @@ describe('getXSentiment', () => {
       expect(result.skipReason).toBe('no_ticker');
       expect(mockCallXai).not.toHaveBeenCalled();
     });
+
+    it('skips with invalid_ticker_format when ticker is malformed', async () => {
+      const tooLong = await getXSentiment({ ticker: 'TOOLONGSYMBOL', formType: '8-K', companyName: 'X' });
+      expect(tooLong.skipReason).toBe('invalid_ticker_format');
+      const numeric = await getXSentiment({ ticker: '$1234', formType: '8-K', companyName: 'X' });
+      expect(numeric.skipReason).toBe('invalid_ticker_format');
+      const punctuation = await getXSentiment({ ticker: '$AAPL!', formType: '8-K', companyName: 'X' });
+      expect(punctuation.skipReason).toBe('invalid_ticker_format');
+      expect(mockCallXai).not.toHaveBeenCalled();
+    });
+
+    it('skips with unknown_form_type for genuinely unknown forms', async () => {
+      const result = await getXSentiment({ ticker: 'AAPL', formType: 'NOT-A-FORM', companyName: 'Apple' });
+      expect(result.skipReason).toBe('unknown_form_type');
+      expect(mockCallXai).not.toHaveBeenCalled();
+    });
+
+    it('normalizes ticker — strips leading $ and uppercases', async () => {
+      mockCallXai.mockResolvedValue(buildXaiResponse());
+      const result = await getXSentiment({ ticker: '$aapl', formType: '8-K', companyName: 'Apple' });
+      expect(result.enrichment).not.toBeNull();
+    });
+
+    it('matches form type case-insensitively', async () => {
+      mockCallXai.mockResolvedValue(buildXaiResponse());
+      const result = await getXSentiment({ ticker: 'TSLA', formType: '10-k', companyName: 'Tesla' });
+      expect(result.enrichment).not.toBeNull();
+    });
+
+    it('honors X_SENTIMENT_ALLOWLIST_EXTRA env override', async () => {
+      const prior = process.env.X_SENTIMENT_ALLOWLIST_EXTRA;
+      process.env.X_SENTIMENT_ALLOWLIST_EXTRA = 'ASML,SAP, NVDA ';
+      _internal.getAllowlist();
+      // reset cache so override takes effect
+      const provider = await import('../x-sentiment-provider');
+      provider._resetAllowlistCache();
+      mockCallXai.mockResolvedValue(buildXaiResponse());
+      try {
+        const asml = await getXSentiment({ ticker: '$ASML', formType: '8-K', companyName: 'ASML' });
+        expect(asml.enrichment).not.toBeNull();
+        const sap = await getXSentiment({ ticker: 'sap', formType: '10-K', companyName: 'SAP' });
+        expect(sap.enrichment).not.toBeNull();
+      } finally {
+        if (prior === undefined) {
+          delete process.env.X_SENTIMENT_ALLOWLIST_EXTRA;
+        } else {
+          process.env.X_SENTIMENT_ALLOWLIST_EXTRA = prior;
+        }
+        provider._resetAllowlistCache();
+      }
+    });
+
+    it('does not weaken format validation via env override', async () => {
+      const prior = process.env.X_SENTIMENT_ALLOWLIST_EXTRA;
+      process.env.X_SENTIMENT_ALLOWLIST_EXTRA = 'BAD-TICKER!';
+      const provider = await import('../x-sentiment-provider');
+      provider._resetAllowlistCache();
+      try {
+        const result = await getXSentiment({ ticker: 'BAD-TICKER!', formType: '8-K', companyName: 'X' });
+        expect(result.skipReason).toBe('invalid_ticker_format');
+      } finally {
+        if (prior === undefined) {
+          delete process.env.X_SENTIMENT_ALLOWLIST_EXTRA;
+        } else {
+          process.env.X_SENTIMENT_ALLOWLIST_EXTRA = prior;
+        }
+        provider._resetAllowlistCache();
+      }
+    });
   });
 
   describe('budget cap', () => {

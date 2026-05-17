@@ -23,3 +23,6 @@ A user's saved interest in a [Filing] type or ticker. Drives which [Summary] pay
 
 ### Onboarding
 The first-run flow that turns a new signup into an engaged subscriber: ticker selection, preview email, account creation, first cached [Summary] delivery.
+
+### X Sentiment
+An enrichment of a [Summary] that captures public discussion on X (Twitter) about the ticker over a 7-day window — direction (bullish/bearish/mixed/neutral/no_signal), shift, confidence, and citation-backed claims. Gated by form importance + a mega-cap allowlist to keep cost and pump-and-dump risk bounded. Runs only for paid-tier callers via the enrichment gate.
