@@ -4,7 +4,6 @@ import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
-import { HangingBulletItem } from './sections/BulletList';
 import { XSentimentBlock } from './sections/XSentimentBlock';
 import { PillDelta } from './sections/PillDelta';
 import { FilingTemplateData } from '../../../../lib/email/types';
@@ -20,6 +19,114 @@ interface Form10KMinimalistTemplateProps {
 }
 
 const MONO_FONT = '"JetBrains Mono", "SF Mono", Monaco, Consolas, "Courier New", monospace';
+
+/**
+ * Annual-scorecard cell styles — visual twin of the 10-Q Earnings Scorecard
+ * but with a 4-column layout (no QoQ for annual filings). Mirrors
+ * 10q-minimalist-template's `fin` styles so the two templates render
+ * identically across the shared columns.
+ *
+ * Color is applied ONLY to the % delta pill — labels and dollar values
+ * stay neutral so the green/red chip carries the tone without competing
+ * with the numbers.
+ */
+const fin = {
+  headMetric: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: EmailColors.text.muted,
+    letterSpacing: '0.9px',
+    textTransform: 'uppercase' as const,
+    textAlign: 'left' as const,
+    padding: '12px 15px 8px',
+    borderBottom: `1px solid ${EmailColors.structure.border}`,
+  },
+  headNum: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: EmailColors.text.muted,
+    letterSpacing: '0.9px',
+    textTransform: 'uppercase' as const,
+    textAlign: 'right' as const,
+    padding: '12px 10px 8px',
+    borderBottom: `1px solid ${EmailColors.structure.border}`,
+  },
+  headNumLast: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: EmailColors.text.muted,
+    letterSpacing: '0.9px',
+    textTransform: 'uppercase' as const,
+    textAlign: 'right' as const,
+    padding: '12px 15px 8px',
+    borderBottom: `1px solid ${EmailColors.structure.border}`,
+  },
+  cellMetric: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: EmailColors.text.headline,
+    padding: '11px 15px',
+    verticalAlign: 'middle' as const,
+  },
+  cellPrior: {
+    fontSize: '13px',
+    fontWeight: 400,
+    color: EmailColors.text.muted,
+    fontFamily: MONO_FONT,
+    fontVariantNumeric: 'tabular-nums' as const,
+    textAlign: 'right' as const,
+    padding: '11px 10px',
+    verticalAlign: 'middle' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  cellValue: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: EmailColors.text.headline,
+    fontFamily: MONO_FONT,
+    fontVariantNumeric: 'tabular-nums' as const,
+    textAlign: 'right' as const,
+    padding: '11px 10px',
+    verticalAlign: 'middle' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  cellDeltaLast: {
+    textAlign: 'right' as const,
+    padding: '11px 15px 11px 8px',
+    verticalAlign: 'middle' as const,
+    whiteSpace: 'nowrap' as const,
+  },
+  dash: {
+    color: EmailColors.text.muted,
+    fontSize: '12px',
+    fontFamily: MONO_FONT,
+  },
+} as const;
+
+/**
+ * Normalize value to 2dp for visual consistency: `$215.94B`, `71.10%`,
+ * `$4.90`. Anything unparseable (e.g. "N/A", "—") passes through.
+ * Mirrors 10q-minimalist-template's formatValue.
+ */
+function formatValue(raw: string): string {
+  const trimmed = raw.trim();
+  const dollarMagnitude = trimmed.match(/^(\$?)(-?\d+(?:\.\d+)?)\s*([MBKT])$/i);
+  if (dollarMagnitude) {
+    const num = parseFloat(dollarMagnitude[2]);
+    if (!isNaN(num)) return `${dollarMagnitude[1]}${num.toFixed(2)}${dollarMagnitude[3].toUpperCase()}`;
+  }
+  const plainDollar = trimmed.match(/^(\$)(-?[\d,]+(?:\.\d+)?)$/);
+  if (plainDollar) {
+    const num = parseFloat(plainDollar[2].replace(/,/g, ''));
+    if (!isNaN(num)) return `${plainDollar[1]}${num.toFixed(2)}`;
+  }
+  const percent = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*%$/);
+  if (percent) {
+    const num = parseFloat(percent[1]);
+    if (!isNaN(num)) return `${num.toFixed(2)}%`;
+  }
+  return trimmed;
+}
 
 /**
  * Minimalist 10-K email template — Smart Brevity, story-first layout.
@@ -240,287 +347,306 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
         );
       })()}
 
-      {/* Smart Brevity body */}
+      {/* Smart Brevity body — tr-per-section structure mirroring 10-Q so the
+          black scorecard / watch-for bars span the full email width
+          (previously inset by the body td's 15px horizontal padding). */}
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
-          <tr>
-            <td style={{ padding: '0 15px 20px' }}>
 
-              {/* STORY-FIRST: summary prose leads the body — the magazine-cover
-                  paragraph that sets the narrative BEFORE the scorecard
-                  numbers land. Moved here from the post-scorecard slot per
-                  autoplan PR1-polish D3=A. Inline % tokens are wrapped in
-                  red/green/neutral pill chips by wrapPercentsInPills so the
-                  prose reads with the same skim-able semantics as the
-                  scorecard. */}
-              {summaryProse && (
+          {/* STORY-FIRST: summary prose leads the body. Pills wrap inline %
+              tokens for skim-able semantics. */}
+          {summaryProse && (
+            <tr>
+              <td style={{ padding: '12px 15px 4px' }}>
                 <div
-                  style={{ ...EmailStyles.prose, marginTop: '8px' }}
+                  style={EmailStyles.prose}
                   dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(summaryProse)) }}
                 />
-              )}
+              </td>
+            </tr>
+          )}
 
-              {/* Data snapshot — financial metrics.
-                  5-column layout for vertical alignment of prior/arrow/current/pill
-                  across rows: METRIC | PRIOR | → | CURRENT | PILL */}
-              {dataRows.length > 0 && (
-                <>
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+          {/* Annual Scorecard — visual twin of 10-Q Earnings Scorecard.
+              4-col layout: Metric | Previous | Latest | YoY. No arrow —
+              prior/latest sit in their own right-aligned columns. */}
+          {dataRows.length > 0 && (
+            <>
+              {/* Spacer above the black bar (margin doesn't work on td) */}
+              <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
+              {/* Full-width black "ANNUAL SCORECARD" bar */}
+              <tr>
+                <td style={{ backgroundColor: '#000000', padding: '11px 15px' }}>
+                  <table width="100%" cellPadding="0" cellSpacing="0">
+                    <tbody>
+                      <tr>
+                        <td style={{
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#FFFFFF',
+                          letterSpacing: '1.2px',
+                          textTransform: 'uppercase' as const,
+                        }}>
+                          Annual Scorecard
+                        </td>
+                        <td style={{
+                          textAlign: 'right' as const,
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          color: '#9CA3AF',
+                          letterSpacing: '0.6px',
+                          textTransform: 'uppercase' as const,
+                          fontFamily: MONO_FONT,
+                        }}>
+                          {dataRows.length} metrics
+                        </td>
+                      </tr>
+                    </tbody>
                   </table>
+                </td>
+              </tr>
 
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px', borderCollapse: 'collapse' as const }}>
+              {/* Column headers — 4 columns: Metric | Previous | Latest | YoY */}
+              <tr>
+                <td style={{ padding: '0' }}>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: 'collapse' as const }}>
+                    <thead>
+                      <tr>
+                        <th style={fin.headMetric}>Metric</th>
+                        <th style={fin.headNum}>Previous</th>
+                        <th style={fin.headNum}>Latest</th>
+                        <th style={fin.headNumLast}>YoY</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {dataRows.map((row, idx) => {
-                        const borderBottom = idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none';
-                        const cellBase = {
-                          borderBottom,
-                          fontFamily: MONO_FONT,
-                          fontVariantNumeric: 'tabular-nums' as const,
-                          whiteSpace: 'nowrap' as const,
-                        };
-                        // Tightened layout v5 — arrows are now visually snug
-                        // to the current value. Prior cell ends with the
-                        // arrow on its right edge (zero right-padding); the
-                        // current cell is LEFT-aligned with a tiny left
-                        // padding so the value starts immediately after the
-                        // arrow. The right edge of current is ragged across
-                        // rows by design — the pill column to the right
-                        // anchors the row's right-edge alignment.
+                        const isOdd = idx % 2 === 1;
+                        const rowBg = isOdd ? EmailColors.structure.backgroundAlt : EmailColors.structure.background;
                         return (
-                          <tr key={idx}>
-                            <td style={{
-                              ...EmailStyles.dataLabel,
-                              padding: '10px 0',
-                              borderBottom,
-                              width: '40%',
-                            }}>{row.label}</td>
-                            <td style={{
-                              ...cellBase,
-                              fontSize: '13px',
-                              color: EmailColors.text.muted,
-                              textAlign: 'right' as const,
-                              padding: '10px 0',
-                            }}>
-                              {row.priorValue ? (
-                                <>
-                                  {row.priorValue}
-                                  <span style={{ margin: '0 6px', color: EmailColors.text.muted }}>→</span>
-                                </>
-                              ) : null}
+                          <tr key={idx} style={{ backgroundColor: rowBg }}>
+                            <td style={fin.cellMetric}>{row.label}</td>
+                            <td style={fin.cellPrior}>
+                              {row.priorValue ? formatValue(row.priorValue) : <span style={fin.dash}>—</span>}
                             </td>
-                            <td style={{
-                              ...cellBase,
-                              fontSize: '13px',
-                              fontWeight: 600,
-                              color: '#111827',
-                              textAlign: 'left' as const,
-                              padding: '10px 12px 10px 0',
-                              width: '100%',
-                            }}>
-                              {row.value}
-                            </td>
-                            <td style={{
-                              padding: '10px 0',
-                              borderBottom,
-                              textAlign: 'right' as const,
-                              whiteSpace: 'nowrap' as const,
-                            }}>
-                              {row.change ? <PillDelta value={row.change} /> : null}
+                            <td style={fin.cellValue}>{formatValue(row.value)}</td>
+                            <td style={fin.cellDeltaLast}>
+                              {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
-                </>
-              )}
+                </td>
+              </tr>
+            </>
+          )}
 
-              {/* Segment mix — horizontal bar chart for revenue breakdown.
-                  Email-safe: nested <table> cells with width percentages
-                  (no <svg>, no <canvas>). Layout per row:
-                    [name 120px] [bar — scaled to display ≥ MIN_DISPLAY_PCT
-                    with the % label INSIDE the bar] [revenue] [growth pill
-                    right-aligned at row's far right]
-                  Bar widths use a floor+normalize scale so even 1%-share
-                  segments get a bar wide enough to fit their % label
-                  inline. Raw share % is still what's displayed in the
-                  label — only the visual width is adjusted. */}
-              {segments && segments.length > 0 && (() => {
-                // Parse "$185B" / "185" / "$2.3M" into a numeric weight for
-                // proportional bar widths. Falls back to equal weights if
-                // any segment can't be parsed.
-                const parseNum = (v: string | number): number => {
-                  if (typeof v === 'number') return v;
-                  const s = String(v).trim();
-                  const num = parseFloat(s.replace(/[^\d.-]/g, ''));
-                  if (isNaN(num)) return 0;
-                  const upper = s.toUpperCase();
-                  if (upper.includes('B')) return num * 1_000;
-                  if (upper.includes('M')) return num;
-                  return num;
-                };
-                const weights = segments.map(s => parseNum(s.revenue));
-                const total = weights.reduce((a, b) => a + b, 0);
-                const palette = [
-                  { bg: '#FEF3C7', fg: '#92400E' }, // amber
-                  { bg: '#EEF2FF', fg: '#4338CA' }, // indigo
-                  { bg: '#F1F5F9', fg: '#475569' }, // slate
-                  { bg: '#EDE9FE', fg: '#5B21B6' }, // violet
-                  { bg: '#EBF8FF', fg: '#1E40AF' }, // blue
-                  { bg: '#F5F3FF', fg: '#6D28D9' }, // purple
-                ];
+          {/* Segment mix — horizontal bar chart for revenue breakdown.
+              Email-safe: nested <table> cells with width percentages
+              (no <svg>, no <canvas>). Layout per row:
+                [name 120px] [bar with inline %] [revenue] [growth pill right-aligned]
+              Bar widths use floor+normalize so even 1%-share segments
+              have room for their inline % label. Raw share % is what's
+              displayed — only visual width is adjusted. */}
+          {segments && segments.length > 0 && (
+            <tr>
+              <td style={{ padding: '20px 15px 0' }}>
+                {(() => {
+                  const parseNum = (v: string | number): number => {
+                    if (typeof v === 'number') return v;
+                    const s = String(v).trim();
+                    const num = parseFloat(s.replace(/[^\d.-]/g, ''));
+                    if (isNaN(num)) return 0;
+                    const upper = s.toUpperCase();
+                    if (upper.includes('B')) return num * 1_000;
+                    if (upper.includes('M')) return num;
+                    return num;
+                  };
+                  const weights = segments.map(s => parseNum(s.revenue));
+                  const total = weights.reduce((a, b) => a + b, 0);
+                  const palette = [
+                    { bg: '#FEF3C7', fg: '#92400E' }, // amber
+                    { bg: '#EEF2FF', fg: '#4338CA' }, // indigo
+                    { bg: '#F1F5F9', fg: '#475569' }, // slate
+                    { bg: '#EDE9FE', fg: '#5B21B6' }, // violet
+                    { bg: '#EBF8FF', fg: '#1E40AF' }, // blue
+                    { bg: '#F5F3FF', fg: '#6D28D9' }, // purple
+                  ];
+                  const rawPcts = segments.map((_, idx) =>
+                    total > 0 ? (weights[idx] / total) * 100 : 100 / segments.length,
+                  );
+                  const MIN_DISPLAY_PCT = 7;
+                  const floored = rawPcts.map(p => Math.max(p, MIN_DISPLAY_PCT));
+                  const flooredTotal = floored.reduce((a, b) => a + b, 0);
+                  const displayPcts = floored.map(p => (p / flooredTotal) * 100);
+                  return (
+                    <>
+                      <div style={{ ...EmailStyles.watchForHeader, marginBottom: '10px' }}>Segment mix:</div>
+                      <table width="100%" cellPadding="0" cellSpacing="0">
+                        <tbody>
+                          {segments.map((s, idx) => {
+                            const rawPct = rawPcts[idx];
+                            const displayPct = displayPcts[idx];
+                            const colors = palette[idx % palette.length];
+                            const pctText = `${rawPct.toFixed(0)}%`;
+                            return (
+                              <tr key={idx}>
+                                <td style={{
+                                  padding: '4px 0',
+                                  fontSize: '13px',
+                                  color: '#374151',
+                                  whiteSpace: 'nowrap' as const,
+                                  paddingRight: '12px',
+                                  width: '120px',
+                                }}>
+                                  {s.name}
+                                </td>
+                                <td style={{ padding: '4px 0' }}>
+                                  <table width="100%" cellPadding="0" cellSpacing="0">
+                                    <tbody>
+                                      <tr>
+                                        <td width={`${Math.max(2, Math.round(displayPct))}%`} style={{
+                                          height: '16px',
+                                          backgroundColor: colors.bg,
+                                          borderLeft: `3px solid ${colors.fg}`,
+                                          fontSize: '11px',
+                                          color: colors.fg,
+                                          fontWeight: 600,
+                                          fontFamily: MONO_FONT,
+                                          paddingLeft: '6px',
+                                          whiteSpace: 'nowrap' as const,
+                                        }}>
+                                          {pctText}
+                                        </td>
+                                        <td style={{
+                                          paddingLeft: '10px',
+                                          whiteSpace: 'nowrap' as const,
+                                          fontSize: '12px',
+                                          color: '#111827',
+                                          fontFamily: MONO_FONT,
+                                          fontVariantNumeric: 'tabular-nums' as const,
+                                        }}>
+                                          {String(s.revenue)}
+                                        </td>
+                                        <td style={{
+                                          textAlign: 'right' as const,
+                                          whiteSpace: 'nowrap' as const,
+                                          paddingLeft: '8px',
+                                        }}>
+                                          {s.growth && <PillDelta value={s.growth} size="small" />}
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </>
+                  );
+                })()}
+              </td>
+            </tr>
+          )}
 
-                // True share %: what the label says.
-                const rawPcts = segments.map((_, idx) =>
-                  total > 0 ? (weights[idx] / total) * 100 : 100 / segments.length,
-                );
+          {/* Key takeaways — additional points beyond the summary lede */}
+          {storyText && (
+            <tr>
+              <td style={{ padding: '20px 15px 0' }}>
+                <div
+                  style={EmailStyles.prose}
+                  dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(storyText)) }}
+                />
+              </td>
+            </tr>
+          )}
 
-                // Display width: apply a floor so every bar is wide enough
-                // to fit its inline % text (≈ 24-32px depending on label
-                // length, which works out to ~6-7% of a 540px-wide inner
-                // table). Then normalize so the displayed widths still sum
-                // to 100%. The label text is the RAW share — only the
-                // visual width is adjusted.
-                const MIN_DISPLAY_PCT = 7;
-                const floored = rawPcts.map(p => Math.max(p, MIN_DISPLAY_PCT));
-                const flooredTotal = floored.reduce((a, b) => a + b, 0);
-                const displayPcts = floored.map(p => (p / flooredTotal) * 100);
-
-                return (
-                  <>
-                    <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                      <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
-                    </table>
-                    <div style={{ ...EmailStyles.watchForHeader, marginBottom: '10px' }}>Segment mix:</div>
-                    <table width="100%" cellPadding="0" cellSpacing="0">
-                      <tbody>
-                        {segments.map((s, idx) => {
-                          const rawPct = rawPcts[idx];
-                          const displayPct = displayPcts[idx];
-                          const colors = palette[idx % palette.length];
-                          const pctText = `${rawPct.toFixed(0)}%`;
-                          return (
-                            <tr key={idx}>
-                              <td style={{
-                                padding: '4px 0',
-                                fontSize: '13px',
-                                color: '#374151',
-                                whiteSpace: 'nowrap' as const,
-                                paddingRight: '12px',
-                                width: '120px',
-                              }}>
-                                {s.name}
-                              </td>
-                              <td style={{ padding: '4px 0' }}>
-                                {/* 3-column inner table: bar | revenue (left) | growth pill (right-aligned).
-                                    Bar width uses normalized displayPct so even small segments
-                                    have room for their inline % label. The pill cell is
-                                    pinned to the right edge of the row. */}
-                                <table width="100%" cellPadding="0" cellSpacing="0">
-                                  <tbody>
-                                    <tr>
-                                      <td width={`${Math.max(2, Math.round(displayPct))}%`} style={{
-                                        height: '16px',
-                                        backgroundColor: colors.bg,
-                                        borderLeft: `3px solid ${colors.fg}`,
-                                        fontSize: '11px',
-                                        color: colors.fg,
-                                        fontWeight: 600,
-                                        fontFamily: MONO_FONT,
-                                        paddingLeft: '6px',
-                                        whiteSpace: 'nowrap' as const,
-                                      }}>
-                                        {pctText}
-                                      </td>
-                                      <td style={{
-                                        paddingLeft: '10px',
-                                        whiteSpace: 'nowrap' as const,
-                                        fontSize: '12px',
-                                        color: '#111827',
-                                        fontFamily: MONO_FONT,
-                                        fontVariantNumeric: 'tabular-nums' as const,
-                                      }}>
-                                        {String(s.revenue)}
-                                      </td>
-                                      <td style={{
-                                        textAlign: 'right' as const,
-                                        whiteSpace: 'nowrap' as const,
-                                        paddingLeft: '8px',
-                                      }}>
-                                        {s.growth && <PillDelta value={s.growth} size="small" />}
-                                      </td>
-                                    </tr>
-                                  </tbody>
-                                </table>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </>
-                );
-              })()}
-
-              {/* Key takeaways — additional points beyond what's in the summary lede */}
-              {storyText && (
-                <>
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+          {/* Watch for — full-width black "What to Watch" bar + numbered
+              list, matching 10-Q's structure. */}
+          {watchForItems.length > 0 && (
+            <>
+              <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
+              <tr>
+                <td style={{ backgroundColor: '#000000', padding: '11px 15px' }}>
+                  <span style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#FFFFFF',
+                    letterSpacing: '1.2px',
+                    textTransform: 'uppercase' as const,
+                  }}>
+                    What to Watch
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td style={{ padding: '6px 15px 8px' }}>
+                  <table width="100%" cellPadding="0" cellSpacing="0">
+                    <tbody>
+                      {watchForItems.map((risk, idx) => (
+                        <tr key={idx}>
+                          <td style={{
+                            padding: '8px 0',
+                            borderBottom: idx < watchForItems.length - 1 ? '1px solid #F0F0F0' : 'none',
+                            fontSize: '14px',
+                            color: EmailColors.text.body,
+                            lineHeight: '1.5',
+                            verticalAlign: 'top' as const,
+                          }}>
+                            <span style={{
+                              fontFamily: MONO_FONT,
+                              color: EmailColors.text.muted,
+                              fontWeight: 700,
+                              marginRight: '10px',
+                              fontSize: '12px',
+                            }}>
+                              {String(idx + 1).padStart(2, '0')}
+                            </span>
+                            <span dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(escapeHtmlMinimal(risk)) }} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
+                </td>
+              </tr>
+            </>
+          )}
 
-                  <div
-                    style={EmailStyles.prose}
-                    dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(storyText)) }}
-                  />
-                </>
-              )}
+          {/* Fallback: when no structured data, render full summaryText */}
+          {!hasStructuredData && !summaryProse && summaryText && (
+            <tr>
+              <td style={{ padding: '20px 15px 0' }}>
+                <div
+                  style={EmailStyles.prose}
+                  dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(summaryText)) }}
+                />
+              </td>
+            </tr>
+          )}
 
-              {/* Watch for — risk factors. Each item's % tokens are
-                  pill-wrapped via HangingBulletItem's html prop. */}
-              {watchForItems.length > 0 && (
-                <>
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
-                  </table>
-                  <div style={EmailStyles.watchForHeader}>Watch for:</div>
-                  {watchForItems.map((risk, idx) => (
-                    <HangingBulletItem
-                      key={idx}
-                      html={wrapPercentsInPills(escapeHtmlMinimal(risk))}
-                    />
-                  ))}
-                </>
-              )}
-
-              {/* Fallback: when no structured data, render full summaryText */}
-              {!hasStructuredData && !summaryProse && summaryText && (
-                <>
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
-                    <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
-                  </table>
-                  <div
-                    style={EmailStyles.prose}
-                    dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(summaryText)) }}
-                  />
-                </>
-              )}
-
-              {/* No data at all */}
-              {!hasStructuredData && !summaryText && (
+          {/* No data at all */}
+          {!hasStructuredData && !summaryText && (
+            <tr>
+              <td style={{ padding: '0 15px' }}>
                 <p style={{
                   fontSize: '14px',
                   lineHeight: '1.6',
                   color: EmailColors.text.meta,
                   textAlign: 'center',
                   padding: '20px 0',
+                  margin: 0,
                 }}>
                   View the full 10-K filing for details.
                 </p>
-              )}
-            </td>
-          </tr>
+              </td>
+            </tr>
+          )}
+
+          {/* Bottom spacer */}
+          <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
         </tbody>
       </table>
 
