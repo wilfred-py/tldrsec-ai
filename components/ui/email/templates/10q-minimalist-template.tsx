@@ -1,16 +1,18 @@
 import * as React from 'react';
-import { EmailColors, EmailStyles, getChangeArrow, isUsableMetricRow, markdownToHtml } from '../design-system';
+import { EmailColors, EmailStyles, isUsableMetricRow, markdownToHtml } from '../design-system';
 import { EmailLeadHeader } from './sections/EmailLeadHeader';
 import { FormPlusMaterialityBadgeRow } from './sections/FormPlusMaterialityBadgeRow';
 import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { XSentimentBlock } from './sections/XSentimentBlock';
+import { PillDelta } from './sections/PillDelta';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import {
   extractMaterialitySignal,
   materialityToBadge,
   buildMaterialityFeedbackMailto,
 } from '../../../../lib/email/materiality';
+import { wrapPercentsInPills, escapeHtmlMinimal } from '../../../../lib/email/pill-pct';
 
 /**
  * Coerce a possibly-non-string array entry into a clean string.
@@ -53,8 +55,11 @@ const MONO_FONT = '"JetBrains Mono", "SF Mono", Monaco, Consolas, "Courier New",
 
 /**
  * Litquidity-style financial scorecard cell styles.
- * 4-column grid: METRIC | LATEST | YoY | QoQ.
- * Color is applied ONLY to the % delta pills, never to the dollar value.
+ * 5-column grid: METRIC | PREVIOUS | LATEST | YoY | QoQ.
+ * Color is applied ONLY to the % delta pills, never to the dollar values.
+ * "Previous" is its own column (added 2026-05-17 per autoplan PR1-polish
+ * D3=A) — previously rendered inline in Latest as `[muted prior] → [current]`,
+ * which broke vertical alignment when prior strings had different lengths.
  */
 const fin = {
   headMetric: {
@@ -74,6 +79,16 @@ const fin = {
     letterSpacing: '0.9px',
     textTransform: 'uppercase' as const,
     textAlign: 'right' as const,
+    padding: '12px 10px 8px',
+    borderBottom: `1px solid ${EmailColors.structure.border}`,
+  },
+  headNumLast: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: EmailColors.text.muted,
+    letterSpacing: '0.9px',
+    textTransform: 'uppercase' as const,
+    textAlign: 'right' as const,
     padding: '12px 15px 8px',
     borderBottom: `1px solid ${EmailColors.structure.border}`,
   },
@@ -84,6 +99,17 @@ const fin = {
     padding: '11px 15px',
     verticalAlign: 'middle' as const,
   },
+  cellPrior: {
+    fontSize: '13px',
+    fontWeight: 400,
+    color: EmailColors.text.muted,
+    fontFamily: MONO_FONT,
+    fontVariantNumeric: 'tabular-nums' as const,
+    textAlign: 'right' as const,
+    padding: '11px 10px',
+    verticalAlign: 'middle' as const,
+    whiteSpace: 'nowrap' as const,
+  },
   cellValue: {
     fontSize: '13px',
     fontWeight: 600,
@@ -91,13 +117,13 @@ const fin = {
     fontFamily: MONO_FONT,
     fontVariantNumeric: 'tabular-nums' as const,
     textAlign: 'right' as const,
-    padding: '11px 15px',
+    padding: '11px 10px',
     verticalAlign: 'middle' as const,
     whiteSpace: 'nowrap' as const,
   },
   cellDelta: {
     textAlign: 'right' as const,
-    padding: '11px 8px 11px 15px',
+    padding: '11px 8px',
     verticalAlign: 'middle' as const,
     whiteSpace: 'nowrap' as const,
   },
@@ -144,97 +170,17 @@ function formatValue(raw: string): string {
   return trimmed;
 }
 
-type DeltaTone = 'positive' | 'negative' | 'zero' | 'unparseable';
-
 /**
- * Parse a YoY/QoQ change value into a tone + display text.
+ * 10-Q Email Template - Smart Brevity, story-first layout.
  *
- * Numeric strings ("+6.1%", "-2.7", 6.1) → positive/negative/zero with
- * "+N%" / "−N%" formatting. Non-numeric strings ("N/A", "n/m") and basis-
- * point measures ("5 points") fall through as "unparseable" — they render
- * in a neutral gray pill with the raw text preserved, never colored as
- * positive by accident.
- */
-function parseDelta(value: string | number | undefined): { tone: DeltaTone; text: string } | null {
-  if (value === undefined || value === null) return null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-
-  // Percentage-point unit ("pp", "pts", "points") — used for margin changes.
-  // The LLM may emit pp suffixes; we normalize to "%" for display so the
-  // scorecard reads consistently across revenue (% relative) and margin
-  // (% point) rows. Disambiguation lives in the column label, not the unit.
-  const ppMatch = raw.match(/^([+-]?\d+(?:\.\d+)?)\s*(?:pp|pts|points?)$/i);
-  if (ppMatch) {
-    const num = parseFloat(ppMatch[1]);
-    if (isNaN(num)) return { tone: 'unparseable', text: raw };
-    if (num === 0) return { tone: 'zero', text: '0.00%' };
-    const isNegative = num < 0;
-    const abs = Math.abs(num);
-    const sign = isNegative ? '\u2212' : '+';
-    return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${abs.toFixed(2)}%` };
-  }
-
-  const stripped = raw.replace(/[%+,$\s]/g, '');
-  // Reject anything with non-numeric characters left after stripping the
-  // sign / unit decorations — catches "n/m", "N/A", and similar.
-  if (!/^-?\d+(\.\d+)?$/.test(stripped)) return { tone: 'unparseable', text: raw };
-  const num = parseFloat(stripped);
-  if (isNaN(num)) return { tone: 'unparseable', text: raw };
-  if (num === 0) return { tone: 'zero', text: '0.00%' };
-  const isNegative = num < 0;
-  const abs = Math.abs(num);
-  const sign = isNegative ? '\u2212' : '+';
-  return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${abs.toFixed(2)}%` };
-}
-
-/**
- * Pill chip showing a percentage delta. Green for positive, red for
- * negative, gray for zero AND for unparseable values like "N/A" / "n/m".
- * The pill is the ONLY colored element in the financial scorecard rows —
- * labels and dollar values stay neutral.
- */
-function PillDelta({ value }: { value: string | number }) {
-  const parsed = parseDelta(value);
-  if (!parsed) return <span style={fin.dash}>—</span>;
-
-  const colors = parsed.tone === 'positive'
-    ? { bg: EmailColors.semantic.pillPositiveBg, text: EmailColors.semantic.pillPositiveFg }
-    : parsed.tone === 'negative'
-      ? { bg: EmailColors.semantic.pillNegativeBg, text: EmailColors.semantic.pillNegativeFg }
-      : { bg: EmailColors.semantic.pillNeutralBg, text: EmailColors.semantic.pillNeutralFg };
-
-  return (
-    <span style={{
-      display: 'inline-block' as const,
-      padding: '3px 8px',
-      borderRadius: '4px',
-      backgroundColor: colors.bg,
-      color: colors.text,
-      fontSize: '11px',
-      fontWeight: 700,
-      fontFamily: MONO_FONT,
-      fontVariantNumeric: 'tabular-nums' as const,
-      letterSpacing: '0.2px',
-      lineHeight: '1.2',
-      whiteSpace: 'nowrap' as const,
-    }}>
-      {parsed.text}
-    </span>
-  );
-}
-
-/**
- * 10-Q Email Template - Smart Brevity format
+ * Order (top → bottom):
+ *   Header → Materiality badge → Summary/story → Earnings Scorecard
+ *   → Watch for → X sentiment → Why it matters → Footer
  *
- * Signal-first layout:
- * - [QUARTERLY REPORT] pill badge
- * - Lead sentence from top highlight
- * - "Why it matters:" QoQ/YoY context
- * - Data snapshot: financial metrics with YoY + QoQ in same rows
- * - Story: guidance updates + trends as narrative
- * - "Watch for:" risks + next quarter expectations
- * - Fallback: full summaryText via markdownToHtml()
+ * Story-first is deliberate. "Why it matters" sits at the very bottom
+ * (after X sentiment, before the View Filing button) so it can act as a
+ * synthesis-of-the-whole-email closer, not a metric restatement above
+ * the scorecard.
  */
 export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateProps) {
   const {
@@ -297,25 +243,29 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
       leadSentence = keyPoints[0];
     } else if (financialHighlights && financialHighlights.length > 0) {
       const h = financialHighlights[0];
-      const changeStr = h.change ? ` (${getChangeArrow(h.change)}${h.change} YoY)` : '';
-      leadSentence = `${h.label}: ${h.value}${changeStr}`;
+      leadSentence = `${h.label}: ${h.value}`;
     } else if (summaryText) {
       leadSentence = summaryText.split(/(?<=[.!?])\s+/)[0] || summaryText;
     }
   }
 
-  // Build "Why it matters" context from QoQ/YoY data.
+  // Build "Why it matters" content.
   //
-  // Renders as JSX (not a string) so we can embed PillDelta chips inline
-  // instead of unicode arrows (↓ / ↑) glued to colored text. The white-meta
-  // section in this template is hard to read with arrow markers — pills
+  // Primary path: the model produced a real interpretive sentence via the
+  // rewritten WIM prompt (forbidden to restate metrics). Render as text.
+  //
+  // Fallback path (model returned empty / omitted): build a pill-chip
+  // composite from financialHighlights so the field still has something
+  // useful. The white-meta block is hard to read with arrow markers — pills
   // match the scorecard's visual register and the chip colors carry the
-  // tone (red / green / gray) without needing an arrow glyph.
-  //
-  // Falls back to plain prose from summaryText when no financialHighlights
-  // / quarterlyTrends are available — plain-prose paths render as a string.
+  // tone (red / green / gray) without an arrow glyph.
+  const modelWhyItMatters = typeof rawData?.whyItMatters === 'string'
+    ? rawData.whyItMatters.trim()
+    : '';
   let whyItMatters: React.ReactNode = null;
-  if (financialHighlights && financialHighlights.length > 0) {
+  if (modelWhyItMatters.length > 0) {
+    whyItMatters = modelWhyItMatters;
+  } else if (financialHighlights && financialHighlights.length > 0) {
     const withChanges = financialHighlights.filter(h => h.change || h.qoqChange);
     if (withChanges.length > 0) {
       const parts = withChanges.slice(0, 2).map((h, idx) => {
@@ -349,8 +299,6 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
   }
   if (!whyItMatters && quarterlyTrends && quarterlyTrends.length > 0) {
     const summaries = quarterlyTrends.slice(0, 2).map((t, idx) => {
-      // Render the trend as a directional pill matching the scorecard:
-      // up → green +, down → red −, flat → gray neutral.
       const pillValue = t.trend === 'up' ? '+1' : t.trend === 'down' ? '-1' : '0';
       return (
         <React.Fragment key={idx}>
@@ -362,7 +310,6 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
     whyItMatters = <>{summaries}.</>;
   }
   if (!whyItMatters && summaryText) {
-    // Grab the second sentence as context
     const sentences = summaryText.split(/(?<=[.!?])\s+/);
     if (sentences.length > 1) {
       whyItMatters = sentences[1];
@@ -385,9 +332,17 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
     }
   }
 
-  // Story narrative: guidance updates + quarterly trends woven together.
-  // Defensively coerce — schema says string[] but the LLM occasionally
-  // returns objects, which would otherwise render as "[object Object]".
+  // Story (summary lede) — moved ABOVE the scorecard per autoplan PR1-polish
+  // D3=A. The long-form `summary` field is the magazine-cover paragraph that
+  // sets the picture before the data lands.
+  const summaryProse = typeof rawData?.summary === 'string' && rawData.summary.trim()
+    ? rawData.summary.trim()
+    : summaryText || '';
+
+  // Additional story narrative beyond the summary lede: guidance updates +
+  // quarterly trends woven together. Defensively coerce — schema says
+  // string[] but the LLM occasionally returns objects, which would
+  // otherwise render as "[object Object]".
   const storyParts: string[] = [];
   if (guidanceUpdates && guidanceUpdates.length > 0) {
     for (const item of guidanceUpdates as unknown[]) {
@@ -460,7 +415,6 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
         headline={leadSentence || `${companyName || displayTicker} filed a quarterly report (10-Q)`}
       />
 
-      {/* Form badge + signal badge row */}
       {/* Form badge + materiality signal row — see 10k-minimalist-template
           for the symmetric materiality wiring contract. */}
       {(() => {
@@ -500,19 +454,22 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
 
-          {/* Why it matters — padded */}
-          {whyItMatters && (
+          {/* STORY-FIRST: summary prose leads the body. Moved here from
+              the post-scorecard slot per autoplan PR1-polish D3=A. Inline
+              % tokens get wrapped in red/green/neutral pill chips by
+              wrapPercentsInPills for skim-able semantics. */}
+          {summaryProse && (
             <tr>
-              <td style={{ padding: '0 15px 4px' }}>
-                <p style={EmailStyles.whyItMatters}>
-                  <strong style={{ color: '#000000' }}>Why it matters: </strong>
-                  {whyItMatters}
-                </p>
+              <td style={{ padding: '12px 15px 4px' }}>
+                <div
+                  style={EmailStyles.prose}
+                  dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(summaryProse)) }}
+                />
               </td>
             </tr>
           )}
 
-          {/* Data snapshot: black bar header + 4-column financials grid */}
+          {/* Data snapshot: black bar header + 5-column financials grid */}
           {dataRows.length > 0 && (
             <>
               {/* Spacer above the black bar (margin doesn't work on td) */}
@@ -542,7 +499,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                           color: '#9CA3AF',
                           letterSpacing: '0.6px',
                           textTransform: 'uppercase' as const,
-                          fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace',
+                          fontFamily: MONO_FONT,
                         }}>
                           {dataRows.length} metrics
                         </td>
@@ -552,16 +509,19 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                 </td>
               </tr>
 
-              {/* Column headers */}
+              {/* Column headers — 5 columns: Metric | Previous | Latest | YoY | QoQ.
+                  Previous was inlined into Latest in v3; broken out into its
+                  own column for vertical alignment per autoplan PR1-polish D3=A. */}
               <tr>
                 <td style={{ padding: '0' }}>
                   <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: 'collapse' as const }}>
                     <thead>
                       <tr>
                         <th style={fin.headMetric}>Metric</th>
+                        <th style={fin.headNum}>Previous</th>
                         <th style={fin.headNum}>Latest</th>
                         <th style={fin.headNum}>YoY</th>
-                        <th style={fin.headNum}>QoQ</th>
+                        <th style={fin.headNumLast}>QoQ</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -571,23 +531,10 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                         return (
                           <tr key={idx} style={{ backgroundColor: rowBg }}>
                             <td style={fin.cellMetric}>{row.label}</td>
-                            <td style={fin.cellValue}>
-                              {row.priorValue && (
-                                <>
-                                  <span style={{
-                                    color: EmailColors.text.muted,
-                                    fontFamily: 'inherit' as const,
-                                    fontVariantNumeric: 'tabular-nums' as const,
-                                  }}>{formatValue(row.priorValue)}</span>
-                                  <span style={{
-                                    color: EmailColors.text.muted,
-                                    margin: '0 6px',
-                                    fontFamily: 'inherit' as const,
-                                  }}>→</span>
-                                </>
-                              )}
-                              {formatValue(row.value)}
+                            <td style={fin.cellPrior}>
+                              {row.priorValue ? formatValue(row.priorValue) : <span style={fin.dash}>—</span>}
                             </td>
+                            <td style={fin.cellValue}>{formatValue(row.value)}</td>
                             <td style={fin.cellDelta}>
                               {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
                             </td>
@@ -604,13 +551,14 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
             </>
           )}
 
-          {/* Story — guidance + trends narrative */}
+          {/* Additional story narrative — guidance + trends. Sits below the
+              scorecard; the long-form summary already leads the body above. */}
           {storyParts.length > 0 && (
             <tr>
               <td style={{ padding: '20px 15px 0' }}>
                 <div
                   style={EmailStyles.prose}
-                  dangerouslySetInnerHTML={{ __html: markdownToHtml(storyParts.join('\n\n')) }}
+                  dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(storyParts.join('\n\n'))) }}
                 />
               </td>
             </tr>
@@ -652,7 +600,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                             verticalAlign: 'top' as const,
                           }}>
                             <span style={{
-                              fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace',
+                              fontFamily: MONO_FONT,
                               color: EmailColors.text.muted,
                               fontWeight: 700,
                               marginRight: '10px',
@@ -671,13 +619,14 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
             </>
           )}
 
-          {/* Fallback: full summary text when no structured data */}
-          {!hasStructuredData && summaryText && (
+          {/* Fallback: full summary text when no structured data and no
+              summary lede already rendered above */}
+          {!hasStructuredData && !summaryProse && summaryText && (
             <tr>
               <td style={{ padding: '20px 15px 0' }}>
                 <div
                   style={EmailStyles.prose}
-                  dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
+                  dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(summaryText)) }}
                 />
               </td>
             </tr>
@@ -708,6 +657,34 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
 
       {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
       <XSentimentBlock rawData={summaryData} formType="10-Q" />
+
+      {/* Why it matters — moved to the END of the body content per
+          autoplan PR1-polish D3=A. Sits after X sentiment and just before
+          the View-Filing action button. When the rewritten WIM prompt fires
+          (flag on, 10-Q), the model produces a real interpretive sentence
+          that synthesizes the data + sentiment context above. When it
+          doesn't, the pill-chip fallback shows YoY/QoQ for the top
+          metrics — same visual register as the scorecard pills.
+          String-path % tokens get pill-wrapped inline; ReactNode-path
+          (the fallback) already uses PillDelta. */}
+      {whyItMatters && (
+        <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginTop: '12px' }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: '0 15px 16px' }}>
+                <p style={EmailStyles.whyItMatters}>
+                  <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                  {typeof whyItMatters === 'string' ? (
+                    <span dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(escapeHtmlMinimal(whyItMatters)) }} />
+                  ) : (
+                    whyItMatters
+                  )}
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
 
       {/* Footer with CTA */}
       <EmailFooter

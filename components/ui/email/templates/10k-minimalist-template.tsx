@@ -6,30 +6,33 @@ import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { HangingBulletItem } from './sections/BulletList';
 import { XSentimentBlock } from './sections/XSentimentBlock';
+import { PillDelta } from './sections/PillDelta';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import {
   extractMaterialitySignal,
   materialityToBadge,
   buildMaterialityFeedbackMailto,
 } from '../../../../lib/email/materiality';
+import { wrapPercentsInPills, escapeHtmlMinimal } from '../../../../lib/email/pill-pct';
 
 interface Form10KMinimalistTemplateProps {
   filing: FilingTemplateData;
 }
 
+const MONO_FONT = '"JetBrains Mono", "SF Mono", Monaco, Consolas, "Courier New", monospace';
+
 /**
- * Minimalist 10-K email template — Smart Brevity format
+ * Minimalist 10-K email template — Smart Brevity, story-first layout.
  *
- * Layout:
- * - Preheader for inbox preview
- * - Header: ticker, company name, fiscal year
- * - [ANNUAL REPORT] pill badge
- * - Lead sentence from first key point or financial highlight
- * - "Why it matters:" revenue/earnings context
- * - Data snapshot: top financial metrics with YoY changes
- * - Story: segment performance + key takeaways woven into narrative prose
- * - "Watch for:" risk factors as bullets
- * - CTA: View full filing
+ * Order (top → bottom):
+ *   Header → Materiality badge → Summary/story → Scorecard → Segment mix
+ *   → Watch for → X sentiment → Why it matters → Footer
+ *
+ * Story-first is deliberate: the long-form summary is the magazine-cover
+ * lede; "Why it matters" is a closer that adds interpretation AFTER the
+ * data has established the picture. The WIM section sits below the
+ * X-sentiment block so it can pull on the same factClaims/discussion
+ * context the model just saw at prompt time.
  */
 export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateProps) {
   const {
@@ -56,6 +59,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
   const rawFinancialHighlights = rawData?.financialHighlights as Array<{
     label: string;
     value: string | number;
+    priorValue?: string | number;
     change?: string | number;
   }> | undefined;
   const financialHighlights = rawFinancialHighlights?.filter(isUsableMetricRow);
@@ -92,13 +96,31 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
     }
   }
 
-  // "Why it matters" context — pull revenue/earnings highlights or second key point
-  let whyItMatters = '';
-  if (financialHighlights && financialHighlights.length > 0) {
-    const parts = financialHighlights.slice(0, 3).map(h =>
-      `${h.label} ${h.value}${h.change ? ` (${h.change} YoY)` : ''}`
-    );
-    whyItMatters = parts.join('; ') + '.';
+  // "Why it matters" content. Primary path: the model produced a real
+  // interpretive sentence via the rewritten WIM prompt (40-400 chars,
+  // forbidden to restate metrics). Fallback path: model returned empty
+  // string OR omitted the field. We build a pill-chip composite from
+  // financialHighlights as a graceful degradation — same pattern as the
+  // 10-Q template's WIM fallback. This is what renders BEFORE the prompt
+  // rewrite ships to flag-on cohorts; once the model produces real prose,
+  // this fallback rarely fires.
+  const modelWhyItMatters = typeof rawData?.whyItMatters === 'string'
+    ? rawData.whyItMatters.trim()
+    : '';
+  let whyItMatters: React.ReactNode = null;
+  if (modelWhyItMatters.length > 0) {
+    whyItMatters = modelWhyItMatters;
+  } else if (financialHighlights && financialHighlights.length > 0) {
+    const withChanges = financialHighlights.filter(h => h.change);
+    if (withChanges.length > 0) {
+      const parts = withChanges.slice(0, 3).map((h, idx) => (
+        <React.Fragment key={idx}>
+          {idx > 0 && '; '}
+          {h.label} <PillDelta value={h.change as string | number} /> YoY
+        </React.Fragment>
+      ));
+      whyItMatters = <>{parts}.</>;
+    }
   } else if (keyPoints && keyPoints.length > 1) {
     whyItMatters = keyPoints[1];
   } else if (summaryText) {
@@ -107,9 +129,9 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
   }
 
   // Data snapshot rows: top financial metrics. Carries priorValue when the
-  // LLM emitted a prior-year value alongside the current — renders as
-  // "[prior] → [current]" with the prior in light grey, matching the
-  // 10-Q scorecard's side-by-side layout.
+  // LLM emitted a prior-year value alongside the current — renders in
+  // dedicated columns so prior/arrow/current/pill all align vertically
+  // across rows.
   const dataRows: { label: string; value: string; priorValue?: string; change?: string | number }[] = [];
   if (financialHighlights) {
     for (const h of financialHighlights.slice(0, 5)) {
@@ -123,17 +145,15 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
     }
   }
 
-  // Story: segment performance + remaining key takeaways woven into prose
+  // Story (the summary lede) — pull from summary field first, falling back
+  // to keyPoints. The story moves to ABOVE the scorecard in this layout —
+  // it's the magazine-cover paragraph that sets the picture before the
+  // numbers land.
+  const summaryProse = typeof rawData?.summary === 'string' && rawData.summary.trim()
+    ? rawData.summary.trim()
+    : summaryText || '';
   const storyParts: string[] = [];
-  // Segments render as a visual bar chart in the dedicated "Segment mix"
-  // section below — skipping the prose duplicate here. Falls back to prose
-  // only when there's no structured segment data.
-  if (!segments || segments.length === 0) {
-    // Backwards-compat: older summaries with segment data nested in
-    // keyPoints will still surface via the keyPoints fallback.
-  }
   if (keyPoints && keyPoints.length > 1) {
-    // Skip the first (used as lead sentence) and weave the rest
     storyParts.push(...keyPoints.slice(1));
   }
   const storyText = storyParts.join(' ');
@@ -226,79 +246,87 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
           <tr>
             <td style={{ padding: '0 15px 20px' }}>
 
-              {/* Why it matters */}
-              {whyItMatters && (
-                <p style={EmailStyles.whyItMatters}>
-                  <strong style={{ color: '#000000' }}>Why it matters: </strong>
-                  {whyItMatters}
-                </p>
+              {/* STORY-FIRST: summary prose leads the body — the magazine-cover
+                  paragraph that sets the narrative BEFORE the scorecard
+                  numbers land. Moved here from the post-scorecard slot per
+                  autoplan PR1-polish D3=A. Inline % tokens are wrapped in
+                  red/green/neutral pill chips by wrapPercentsInPills so the
+                  prose reads with the same skim-able semantics as the
+                  scorecard. */}
+              {summaryProse && (
+                <div
+                  style={{ ...EmailStyles.prose, marginTop: '8px' }}
+                  dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(summaryProse)) }}
+                />
               )}
 
-              {/* Data snapshot — financial metrics */}
+              {/* Data snapshot — financial metrics.
+                  5-column layout for vertical alignment of prior/arrow/current/pill
+                  across rows: METRIC | PRIOR | → | CURRENT | PILL */}
               {dataRows.length > 0 && (
                 <>
                   <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
                     <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
                   </table>
 
-                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
+                  <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px', borderCollapse: 'collapse' as const }}>
                     <tbody>
                       {dataRows.map((row, idx) => {
-                        // Derive pill tone from the change value. Mirrors the
-                        // 10-Q PillDelta logic: + → green, − → red, 0/null → gray.
-                        const changeStr = row.change != null ? String(row.change).trim() : '';
-                        const isPositive = /^\+/.test(changeStr) || (changeStr && !changeStr.startsWith('-') && !changeStr.startsWith('−') && parseFloat(changeStr) > 0);
-                        const isNegative = /^[-−]/.test(changeStr) || (changeStr && parseFloat(changeStr) < 0);
-                        const pillBg = isPositive ? EmailColors.semantic.pillPositiveBg
-                          : isNegative ? EmailColors.semantic.pillNegativeBg
-                          : EmailColors.semantic.pillNeutralBg;
-                        const pillFg = isPositive ? EmailColors.semantic.pillPositiveFg
-                          : isNegative ? EmailColors.semantic.pillNegativeFg
-                          : EmailColors.semantic.pillNeutralFg;
+                        const borderBottom = idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none';
+                        const cellBase = {
+                          borderBottom,
+                          fontFamily: MONO_FONT,
+                          fontVariantNumeric: 'tabular-nums' as const,
+                          whiteSpace: 'nowrap' as const,
+                        };
+                        // Tightened layout v5 — arrows are now visually snug
+                        // to the current value. Prior cell ends with the
+                        // arrow on its right edge (zero right-padding); the
+                        // current cell is LEFT-aligned with a tiny left
+                        // padding so the value starts immediately after the
+                        // arrow. The right edge of current is ragged across
+                        // rows by design — the pill column to the right
+                        // anchors the row's right-edge alignment.
                         return (
                           <tr key={idx}>
                             <td style={{
                               ...EmailStyles.dataLabel,
-                              borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                              padding: '10px 0',
+                              borderBottom,
+                              width: '40%',
                             }}>{row.label}</td>
                             <td style={{
-                              ...EmailStyles.dataValue,
-                              color: '#111827',
-                              borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
+                              ...cellBase,
+                              fontSize: '13px',
+                              color: EmailColors.text.muted,
+                              textAlign: 'right' as const,
+                              padding: '10px 0',
                             }}>
-                              {row.priorValue && (
+                              {row.priorValue ? (
                                 <>
-                                  <span style={{
-                                    color: EmailColors.text.muted,
-                                    fontFamily: 'inherit' as const,
-                                    fontVariantNumeric: 'tabular-nums' as const,
-                                  }}>{row.priorValue}</span>
-                                  <span style={{
-                                    color: EmailColors.text.muted,
-                                    margin: '0 6px',
-                                  }}>→</span>
+                                  {row.priorValue}
+                                  <span style={{ margin: '0 6px', color: EmailColors.text.muted }}>→</span>
                                 </>
-                              )}
+                              ) : null}
+                            </td>
+                            <td style={{
+                              ...cellBase,
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              color: '#111827',
+                              textAlign: 'left' as const,
+                              padding: '10px 12px 10px 0',
+                              width: '100%',
+                            }}>
                               {row.value}
-                              {row.change && (
-                                <span style={{
-                                  display: 'inline-block' as const,
-                                  marginLeft: '8px',
-                                  padding: '2px 8px',
-                                  borderRadius: '4px',
-                                  backgroundColor: pillBg,
-                                  color: pillFg,
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace',
-                                  fontVariantNumeric: 'tabular-nums' as const,
-                                  letterSpacing: '0.2px',
-                                  lineHeight: '1.2',
-                                  whiteSpace: 'nowrap' as const,
-                                }}>
-                                  {changeStr.startsWith('+') ? changeStr : (isPositive ? `+${changeStr}` : changeStr)}
-                                </span>
-                              )}
+                            </td>
+                            <td style={{
+                              padding: '10px 0',
+                              borderBottom,
+                              textAlign: 'right' as const,
+                              whiteSpace: 'nowrap' as const,
+                            }}>
+                              {row.change ? <PillDelta value={row.change} /> : null}
                             </td>
                           </tr>
                         );
@@ -309,11 +337,15 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
               )}
 
               {/* Segment mix — horizontal bar chart for revenue breakdown.
-                  Email-safe: uses nested <table> cells with width percentages
-                  (no <svg>, no <canvas>). Bar width is proportional to
-                  segment revenue. Bars colored from the muted BadgeColors
-                  palette so the mix reads at a glance without competing
-                  with the scorecard pills. */}
+                  Email-safe: nested <table> cells with width percentages
+                  (no <svg>, no <canvas>). Layout per row:
+                    [name 120px] [bar — scaled to display ≥ MIN_DISPLAY_PCT
+                    with the % label INSIDE the bar] [revenue] [growth pill
+                    right-aligned at row's far right]
+                  Bar widths use a floor+normalize scale so even 1%-share
+                  segments get a bar wide enough to fit their % label
+                  inline. Raw share % is still what's displayed in the
+                  label — only the visual width is adjusted. */}
               {segments && segments.length > 0 && (() => {
                 // Parse "$185B" / "185" / "$2.3M" into a numeric weight for
                 // proportional bar widths. Falls back to equal weights if
@@ -338,6 +370,23 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                   { bg: '#EBF8FF', fg: '#1E40AF' }, // blue
                   { bg: '#F5F3FF', fg: '#6D28D9' }, // purple
                 ];
+
+                // True share %: what the label says.
+                const rawPcts = segments.map((_, idx) =>
+                  total > 0 ? (weights[idx] / total) * 100 : 100 / segments.length,
+                );
+
+                // Display width: apply a floor so every bar is wide enough
+                // to fit its inline % text (≈ 24-32px depending on label
+                // length, which works out to ~6-7% of a 540px-wide inner
+                // table). Then normalize so the displayed widths still sum
+                // to 100%. The label text is the RAW share — only the
+                // visual width is adjusted.
+                const MIN_DISPLAY_PCT = 7;
+                const floored = rawPcts.map(p => Math.max(p, MIN_DISPLAY_PCT));
+                const flooredTotal = floored.reduce((a, b) => a + b, 0);
+                const displayPcts = floored.map(p => (p / flooredTotal) * 100);
+
                 return (
                   <>
                     <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
@@ -347,56 +396,59 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                     <table width="100%" cellPadding="0" cellSpacing="0">
                       <tbody>
                         {segments.map((s, idx) => {
-                          const pct = total > 0 ? (weights[idx] / total) * 100 : 100 / segments.length;
+                          const rawPct = rawPcts[idx];
+                          const displayPct = displayPcts[idx];
                           const colors = palette[idx % palette.length];
-                          const growthStr = s.growth != null ? String(s.growth).trim() : '';
-                          const isPositive = /^\+/.test(growthStr) || (growthStr && parseFloat(growthStr) > 0);
-                          const isNegative = /^[-−]/.test(growthStr) || (growthStr && parseFloat(growthStr) < 0);
-                          const pillBg = isPositive ? EmailColors.semantic.pillPositiveBg
-                            : isNegative ? EmailColors.semantic.pillNegativeBg
-                            : EmailColors.semantic.pillNeutralBg;
-                          const pillFg = isPositive ? EmailColors.semantic.pillPositiveFg
-                            : isNegative ? EmailColors.semantic.pillNegativeFg
-                            : EmailColors.semantic.pillNeutralFg;
+                          const pctText = `${rawPct.toFixed(0)}%`;
                           return (
                             <tr key={idx}>
-                              <td style={{ padding: '4px 0 4px 0', fontSize: '13px', color: '#374151', whiteSpace: 'nowrap' as const, paddingRight: '12px', width: '120px' }}>
+                              <td style={{
+                                padding: '4px 0',
+                                fontSize: '13px',
+                                color: '#374151',
+                                whiteSpace: 'nowrap' as const,
+                                paddingRight: '12px',
+                                width: '120px',
+                              }}>
                                 {s.name}
                               </td>
                               <td style={{ padding: '4px 0' }}>
+                                {/* 3-column inner table: bar | revenue (left) | growth pill (right-aligned).
+                                    Bar width uses normalized displayPct so even small segments
+                                    have room for their inline % label. The pill cell is
+                                    pinned to the right edge of the row. */}
                                 <table width="100%" cellPadding="0" cellSpacing="0">
                                   <tbody>
                                     <tr>
-                                      <td width={`${Math.max(2, Math.round(pct))}%`} style={{
-                                        height: '14px',
+                                      <td width={`${Math.max(2, Math.round(displayPct))}%`} style={{
+                                        height: '16px',
                                         backgroundColor: colors.bg,
                                         borderLeft: `3px solid ${colors.fg}`,
                                         fontSize: '11px',
                                         color: colors.fg,
                                         fontWeight: 600,
-                                        fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace',
-                                        paddingLeft: '8px',
+                                        fontFamily: MONO_FONT,
+                                        paddingLeft: '6px',
                                         whiteSpace: 'nowrap' as const,
                                       }}>
-                                        {pct >= 8 ? `${pct.toFixed(0)}%` : ''}
+                                        {pctText}
                                       </td>
-                                      <td style={{ paddingLeft: '8px', whiteSpace: 'nowrap' as const, fontSize: '12px', color: '#111827', fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace', fontVariantNumeric: 'tabular-nums' as const }}>
+                                      <td style={{
+                                        paddingLeft: '10px',
+                                        whiteSpace: 'nowrap' as const,
+                                        fontSize: '12px',
+                                        color: '#111827',
+                                        fontFamily: MONO_FONT,
+                                        fontVariantNumeric: 'tabular-nums' as const,
+                                      }}>
                                         {String(s.revenue)}
-                                        {s.growth && (
-                                          <span style={{
-                                            display: 'inline-block' as const,
-                                            marginLeft: '6px',
-                                            padding: '1px 6px',
-                                            borderRadius: '3px',
-                                            backgroundColor: pillBg,
-                                            color: pillFg,
-                                            fontSize: '10px',
-                                            fontWeight: 700,
-                                            letterSpacing: '0.2px',
-                                          }}>
-                                            {growthStr.startsWith('+') ? growthStr : (isPositive ? `+${growthStr}` : growthStr)}
-                                          </span>
-                                        )}
+                                      </td>
+                                      <td style={{
+                                        textAlign: 'right' as const,
+                                        whiteSpace: 'nowrap' as const,
+                                        paddingLeft: '8px',
+                                      }}>
+                                        {s.growth && <PillDelta value={s.growth} size="small" />}
                                       </td>
                                     </tr>
                                   </tbody>
@@ -411,7 +463,7 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                 );
               })()}
 
-              {/* Story — segment performance + key takeaways */}
+              {/* Key takeaways — additional points beyond what's in the summary lede */}
               {storyText && (
                 <>
                   <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
@@ -420,12 +472,13 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
 
                   <div
                     style={EmailStyles.prose}
-                    dangerouslySetInnerHTML={{ __html: markdownToHtml(storyText) }}
+                    dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(storyText)) }}
                   />
                 </>
               )}
 
-              {/* Watch for — risk factors */}
+              {/* Watch for — risk factors. Each item's % tokens are
+                  pill-wrapped via HangingBulletItem's html prop. */}
               {watchForItems.length > 0 && (
                 <>
                   <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
@@ -433,20 +486,23 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                   </table>
                   <div style={EmailStyles.watchForHeader}>Watch for:</div>
                   {watchForItems.map((risk, idx) => (
-                    <HangingBulletItem key={idx} text={risk} />
+                    <HangingBulletItem
+                      key={idx}
+                      html={wrapPercentsInPills(escapeHtmlMinimal(risk))}
+                    />
                   ))}
                 </>
               )}
 
               {/* Fallback: when no structured data, render full summaryText */}
-              {!hasStructuredData && summaryText && (
+              {!hasStructuredData && !summaryProse && summaryText && (
                 <>
                   <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
                     <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
                   </table>
                   <div
                     style={EmailStyles.prose}
-                    dangerouslySetInnerHTML={{ __html: markdownToHtml(summaryText) }}
+                    dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(summaryText)) }}
                   />
                 </>
               )}
@@ -470,6 +526,33 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
 
       {/* X (Twitter) sentiment — F3-validated payload from xAI x_search */}
       <XSentimentBlock rawData={summaryData} formType="10-K" />
+
+      {/* Why it matters — moved to the END of the body content per
+          autoplan PR1-polish D3=A. The story above sets the picture; this
+          section closes with interpretation. When the rewritten WIM prompt
+          fires (flag on, 10-K), the model produces a real interpretive
+          sentence here. When it doesn't, the pill-chip fallback shows the
+          top-3 YoY changes — same visual register as the scorecard.
+          String-path % tokens get pill-wrapped inline; ReactNode-path
+          (the fallback) already uses PillDelta. */}
+      {whyItMatters && (
+        <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginTop: '12px' }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: '0 15px 16px' }}>
+                <p style={EmailStyles.whyItMatters}>
+                  <strong style={{ color: '#000000' }}>Why it matters: </strong>
+                  {typeof whyItMatters === 'string' ? (
+                    <span dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(escapeHtmlMinimal(whyItMatters)) }} />
+                  ) : (
+                    whyItMatters
+                  )}
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
 
       {/* Footer with CTA */}
       <EmailFooter
