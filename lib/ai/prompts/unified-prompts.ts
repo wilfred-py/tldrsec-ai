@@ -141,11 +141,63 @@ const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
  * Interpretive "why it matters" property reused across target schemas.
  * Opt-in per schema — not in BASE_SCHEMA_PROPERTIES because Form 4, Form 3, Form 144,
  * SC 13D/G, and Generic rely on label-based copy rather than AI interpretation.
+ *
+ * This is the LEGACY 180-char version. For 10-K / 10-Q when the
+ * earnings-mini-deep-dive flag is on, `generateFilingPrompt` swaps in
+ * `WHY_IT_MATTERS_PROPERTY_10K` / `WHY_IT_MATTERS_PROPERTY_10Q` below — both
+ * carry a 400-char cap and form-specific guidance that explicitly forbids
+ * metric restatement and routes the model to X-sentiment + web-search
+ * enrichment context (now wired for 10-K/10-Q in `summarize.ts`).
  */
 const WHY_IT_MATTERS_PROPERTY: SchemaProperty = {
   type: 'string',
   description: 'ONE SENTENCE (40-180 chars). If the reader reads only this line, what should they know that ISN\'T already in headline or summary? Add interpretation, not restatement — e.g., why terms are notable, what this means for the company, what comes next. If web-search ENRICHMENT context is provided above, use it to ground claims (rates, spreads, consensus, peer context). If you can\'t produce something specific and non-obvious, return empty string — the parser will coerce it to an absent field and a template fallback will render.',
   maxLength: 180
+};
+
+/**
+ * 10-K-specific whyItMatters property. Used when the earnings-mini-deep-dive
+ * flag is on. The description is deliberately longer than the legacy version
+ * because the autoplan v2 rewrite is meant to surface investor-grade
+ * interpretation — cross-year inflections, peer/sector framing, sentiment
+ * context — not restate the scorecard.
+ *
+ * 400-char cap matches the materiality rationale cap; gives the model room
+ * for a real synthesis sentence without inviting essay-length output that
+ * won't fit the email layout.
+ */
+const WHY_IT_MATTERS_PROPERTY_10K: SchemaProperty = {
+  type: 'string',
+  description:
+    'ONE SENTENCE (80-400 chars). Investor-grade interpretation that the headline and summary do NOT already state. ' +
+    'STRICT BAN ON METRIC RESTATEMENT — if the sentence boils down to "Revenue grew X% to $Y" or any other restated number ' +
+    'from financialHighlights, return empty string instead. Useful angles, in priority order: ' +
+    '(1) cross-year inflection in MD&A or risk factors — what NEW theme appeared this year that wasn\'t in the prior 10-K, ' +
+    '(2) X-sentiment context when present above — what did the market expect vs deliver, and what are bears arguing, ' +
+    '(3) web-search ENRICHMENT context when present — peer beats/misses, sector trajectory, macro framing, ' +
+    '(4) write-downs, capital allocation shifts, or new partnerships that reframe the multi-year thesis. ' +
+    'Cite specifics: dollar amounts, item numbers, named risks. Empty string is better than vague prose.',
+  maxLength: 400,
+};
+
+/**
+ * 10-Q-specific whyItMatters property. Quarterly cadence demands different
+ * emphasis: management commentary deltas, QoQ inflection points, whether
+ * the print matched or broke consensus.
+ */
+const WHY_IT_MATTERS_PROPERTY_10Q: SchemaProperty = {
+  type: 'string',
+  description:
+    'ONE SENTENCE (80-400 chars). Investor-grade interpretation that the headline and summary do NOT already state. ' +
+    'STRICT BAN ON METRIC RESTATEMENT — if the sentence boils down to "Revenue is +X% YoY, -Y% QoQ" or any restated number ' +
+    'from financialHighlights, return empty string instead. Useful angles, in priority order: ' +
+    '(1) QoQ inflection points where the trajectory just changed — acceleration, deceleration, or reversal, and what management said about it in MD&A, ' +
+    '(2) X-sentiment context when present above — whether the market saw this coming, bull/bear consensus split, ' +
+    '(3) web-search ENRICHMENT context when present — consensus expectations, peer beats/misses, sector dynamics, ' +
+    '(4) management commentary deltas vs the prior quarter\'s MD&A — language shift from confident to cautious is a signal, ' +
+    '(5) capital allocation moves (buybacks, dividend changes, capex) when they reframe the near-term setup. ' +
+    'Cite specifics. Empty string is better than vague prose.',
+  maxLength: 400,
 };
 
 /**
@@ -1325,7 +1377,14 @@ MATERIALITY SIGNAL (4-tier classification, symmetric — big beats are as materi
 - MEDIUM  — Any of: (a) noteworthy guidance change or revised outlook in MD&A, (b) segment realignment or new segment introduced, (c) accounting principle change, (d) 5-10% YoY revenue or earnings shift in either direction, (e) new material legal proceeding short of "material adverse effect", (f) auditor change, (g) major new product line launched (not just routine product refresh).
 - LOW     — Routine annual filing. Numbers in line with prior year (<5% variance in either direction). No new risk factors. No leadership change. No accounting change. Boilerplate MD&A.
 - NOISE   — Filings with NO material content. Reserved for: amended 10-K/A correcting a single typo or administrative detail; shell-company or dormant-entity annual; transition reports with no operating results. Do NOT classify a routine large-cap annual as NOISE — that is LOW.
-- RATIONALE: One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NEVER generic.`,
+- RATIONALE: One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NEVER generic.
+
+WHY-IT-MATTERS WRITING RULES (10-K):
+- The whyItMatters field is interpretation, NOT restatement. If your sentence is structurally "{Metric} grew/fell {X%} to {$Y}", that is restatement and must be rejected — return empty string instead.
+- Lean on the X-SENTIMENT and ENRICHMENT context blocks above (when present): factClaims tell you what the market knows, discussionSynthesis tells you what bulls vs bears are saying. Pull one specific quoted fact or sentiment beat-vs-expect into your sentence.
+- Acceptable angles: (a) a new theme in Item 1A risk factors that wasn't there last year, (b) a write-down or one-time charge that reframes the multi-year thesis, (c) a capital-allocation move (buyback ramp, dividend cut, large M&A or investment), (d) an MD&A inflection where management's tone shifted, (e) a peer or sector comparison from ENRICHMENT context.
+- BAD: "Revenue grew 65% to $215.9B." GOOD: "The $4.5B H20 write-down — biggest single-product charge in NVIDIA's history per Item 7 — turns US-China export policy into a Tier-1 risk for the AI infrastructure thesis."
+- BAD: "Strong year for the company." GOOD: "Open-source frontier models flagged as a new risk factor in Item 1A (first appearance in any NVIDIA 10-K) — a tacit acknowledgement that proprietary moats around accelerator demand may be narrower than the Street consensus assumes."`,
 
   '10-Q': `10-Q QUARTERLY REPORT EXTRACTION RULES:
 - DOCUMENT STRUCTURE: 10-Q has 2 parts:
@@ -1383,7 +1442,14 @@ MATERIALITY SIGNAL (4-tier classification, symmetric — big beats are as materi
 - MEDIUM  — Any of: (a) guidance narrowed or reaffirmed with notable color change, (b) 3-5% YoY miss or beat on revenue/EPS, (c) working-capital flag (DSO or DPO swing >15%), (d) segment narrative shift (e.g., previously bullish segment now described cautiously), (e) accounting estimate change, (f) senior officer transition agreement (CMO, GC, CTO, head of major segment).
 - LOW     — In-line quarter. Numbers within ±3% of prior year in either direction. No guidance change. No new risk factors. Routine MD&A. Standard buybacks and 10b5-1 plan disclosures only.
 - NOISE   — Filings with NO material content beyond mechanical financial restatement. Reserved for: shell-company quarterly with no operations; pre-revenue entity routine submission. Do NOT classify a large-cap quarterly with full operating results as NOISE — that is LOW.
-- RATIONALE: One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NEVER generic.`,
+- RATIONALE: One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NEVER generic.
+
+WHY-IT-MATTERS WRITING RULES (10-Q):
+- The whyItMatters field is interpretation, NOT restatement. If your sentence is structurally "{Metric} is +X% YoY / -Y% QoQ", that is restatement and must be rejected — return empty string instead.
+- Lean on the X-SENTIMENT and ENRICHMENT context blocks above (when present): factClaims tell you what the market knows, discussionSynthesis tells you what bulls vs bears are saying. Use one specific consensus-vs-actual delta or sentiment line in your sentence.
+- Acceptable angles: (a) a QoQ inflection where the trajectory changed direction (revenue growth turned negative, margin recovery stalled, transaction volume reversed), (b) management language shift in MD&A vs prior 10-Q (confident → cautious is a real signal), (c) capital-allocation move (buyback pace, dividend, capex) that reframes the near-term setup, (d) a senior-officer transition or 10b5-1 plan adoption that pairs with operating data to read as repositioning, (e) a peer or consensus comparison from ENRICHMENT context.
+- BAD: "Comps fell 1.7%, transactions dropped 2.9%." GOOD: "Comp-store sales swung from +7.4% to -1.7% YoY in a 60-day window where the CMO and GC both filed Transition Agreements and the CEO adopted his first 10b5-1 plan — a coordinated repositioning signal that buybacks alone won't paper over."
+- QoQ DATA REQUIREMENT: When historical context is provided above (prior-quarter summaries), you MUST populate qoqChange on EVERY financialHighlights row. If the prior-quarter value isn't extractable, write "N/A" — never leave qoqChange empty when historical context exists.`,
 
   '3': `FORM 3 INITIAL STATEMENT OF BENEFICIAL OWNERSHIP EXTRACTION RULES:
 - COMPANY FIELD IS REQUIRED: The "company" field must contain the ISSUER name (the company whose securities are held). Extract from "Name of Issuer" field on the form. NEVER leave blank.
@@ -1764,16 +1830,40 @@ export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {
     schema = { ...schema, properties: remainingProps };
   }
 
+  // Swap whyItMatters to the per-form upgraded version (400-char cap +
+  // form-specific guidance forbidding metric restatement) when the flag is
+  // on AND the form is 10-K/10-Q. Off-flag earnings filings keep the legacy
+  // 180-char generic description so production behavior is unchanged for
+  // non-cohort users.
+  if (enableEarningsMiniDeepDive && isEarningsForm && schema.properties && 'whyItMatters' in schema.properties) {
+    const upgraded = canonicalType === '10-K'
+      ? WHY_IT_MATTERS_PROPERTY_10K
+      : WHY_IT_MATTERS_PROPERTY_10Q;
+    schema = {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        whyItMatters: upgraded,
+      },
+    };
+  }
+
   // Build the user prompt with schema FIRST, then content
   const schemaDescription = formatSchemaDescription(schema);
 
   // Get form-specific extraction guidance, using the canonical type.
-  // Mirror the schema gate — strip the MATERIALITY SIGNAL rubric section
-  // when the flag is off so the model doesn't see contradictory guidance.
+  // Mirror the schema gate — strip the MATERIALITY SIGNAL rubric section AND
+  // the WHY-IT-MATTERS WRITING RULES section when the flag is off, so the
+  // model doesn't see contradictory guidance for the still-active legacy
+  // 180-char WIM schema description.
   let extractionGuidance = FORM_EXTRACTION_GUIDANCE[canonicalType] || '';
   if (stripMateriality) {
     extractionGuidance = extractionGuidance.replace(
       /\n\nMATERIALITY SIGNAL \(4-tier classification[\s\S]*?\n- RATIONALE:[^`]*?(?=\n\n|$)/g,
+      '',
+    );
+    extractionGuidance = extractionGuidance.replace(
+      /\n\nWHY-IT-MATTERS WRITING RULES \(10-[KQ]\):[\s\S]*?(?=\n\n[A-Z]|$)/g,
       '',
     );
   }

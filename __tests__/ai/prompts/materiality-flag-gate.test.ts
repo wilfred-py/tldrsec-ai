@@ -150,4 +150,76 @@ describe('enableEarningsMiniDeepDive flag gating', () => {
       expect(mat.properties?.rationale?.maxLength).toBe(400);
     });
   });
+
+  describe('whyItMatters per-form swap (flag-gated)', () => {
+    it('10-K flag OFF — whyItMatters keeps the legacy 180-char generic description', () => {
+      const { schema, userPrompt } = generateFilingPrompt({
+        formType: '10-K',
+        filingContent: 'x',
+      });
+      const wim = schema.properties?.whyItMatters as { maxLength?: number; description?: string };
+      expect(wim.maxLength).toBe(180);
+      expect(wim.description).toContain('40-180 chars');
+      // Off-flag 10-K must NOT carry the new WIM WRITING RULES guidance block
+      expect(userPrompt).not.toContain('WHY-IT-MATTERS WRITING RULES (10-K)');
+    });
+
+    it('10-K flag ON — whyItMatters gets the 400-char form-specific description', () => {
+      const { schema, userPrompt } = generateFilingPrompt({
+        formType: '10-K',
+        filingContent: 'x',
+        enableEarningsMiniDeepDive: true,
+      });
+      const wim = schema.properties?.whyItMatters as { maxLength?: number; description?: string };
+      expect(wim.maxLength).toBe(400);
+      expect(wim.description).toContain('80-400 chars');
+      expect(wim.description).toContain('STRICT BAN ON METRIC RESTATEMENT');
+      // Flag-on 10-K must carry the WIM WRITING RULES guidance
+      expect(userPrompt).toContain('WHY-IT-MATTERS WRITING RULES (10-K)');
+    });
+
+    it('10-Q flag OFF — whyItMatters keeps the legacy 180-char generic description', () => {
+      const { schema, userPrompt } = generateFilingPrompt({
+        formType: '10-Q',
+        filingContent: 'x',
+      });
+      const wim = schema.properties?.whyItMatters as { maxLength?: number; description?: string };
+      expect(wim.maxLength).toBe(180);
+      expect(userPrompt).not.toContain('WHY-IT-MATTERS WRITING RULES (10-Q)');
+    });
+
+    it('10-Q flag ON — whyItMatters gets the 400-char form-specific description', () => {
+      const { schema, userPrompt } = generateFilingPrompt({
+        formType: '10-Q',
+        filingContent: 'x',
+        enableEarningsMiniDeepDive: true,
+      });
+      const wim = schema.properties?.whyItMatters as { maxLength?: number; description?: string };
+      expect(wim.maxLength).toBe(400);
+      expect(wim.description).toContain('80-400 chars');
+      expect(wim.description).toContain('STRICT BAN ON METRIC RESTATEMENT');
+      // 10-Q-specific guidance must be present, and must contain the
+      // QoQ DATA REQUIREMENT clause added 2026-05-17 per autoplan PR1-polish D5.
+      expect(userPrompt).toContain('WHY-IT-MATTERS WRITING RULES (10-Q)');
+      expect(userPrompt).toContain('QoQ DATA REQUIREMENT');
+    });
+
+    it('10-K vs 10-Q descriptions are DIFFERENT under flag ON (per-form-type guidance)', () => {
+      const onK = generateFilingPrompt({ formType: '10-K', filingContent: 'x', enableEarningsMiniDeepDive: true });
+      const onQ = generateFilingPrompt({ formType: '10-Q', filingContent: 'x', enableEarningsMiniDeepDive: true });
+      const wimK = onK.schema.properties?.whyItMatters as { description?: string };
+      const wimQ = onQ.schema.properties?.whyItMatters as { description?: string };
+      expect(wimK.description).not.toBe(wimQ.description);
+      expect(wimK.description).toContain('cross-year inflection');
+      expect(wimQ.description).toContain('QoQ inflection');
+    });
+
+    it('non-earnings 8-K is unaffected by the per-form WIM swap', () => {
+      // 8-K has its own whyItMatters slot using the legacy 180-char generic
+      // property; the flag must not swap it for any non-10-K/10-Q form.
+      const on = generateFilingPrompt({ formType: '8-K', filingContent: 'x', enableEarningsMiniDeepDive: true });
+      const wim = on.schema.properties?.whyItMatters as { maxLength?: number };
+      expect(wim.maxLength).toBe(180);
+    });
+  });
 });

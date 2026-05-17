@@ -860,7 +860,15 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     // PostHog flag + daily spend cap. Tier check is first so non-Max requests
     // never burn PostHog evaluations or budget for enrichment they can't see —
     // see review item 16A in tasks/x-search-max-only.md.
-    const ENRICHMENT_FORM_TYPES = new Set(['8-K', '8-K/A', '424B2', '424B3', 'FWP']);
+    // 10-K and 10-Q routing added 2026-05-17 per autoplan D2=B (PR1 polish
+    // follow-up). The whyItMatters property description has always referenced
+    // web-search enrichment context ("rates, spreads, consensus, peer context")
+    // but the routing previously excluded earnings filings — making the
+    // instruction dead for 10-K/10-Q. With the new per-form WIM guidance
+    // explicitly leaning on this context, the routing is now wired through.
+    // Cost: ~$0.003/filing × MAX-tier users on allowlisted tickers; latency:
+    // up to 45s total / 20s per-provider budget (enforced inside runEnrichment).
+    const ENRICHMENT_FORM_TYPES = new Set(['8-K', '8-K/A', '424B2', '424B3', 'FWP', '10-K', '10-K/A', '10-Q', '10-Q/A']);
     if (enrichmentApplied && ENRICHMENT_FORM_TYPES.has(filingRecordFromDB.formType) && !process.env.ENRICHMENT_FORCE_DISABLE) {
       const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol || 'unknown';
       try {
