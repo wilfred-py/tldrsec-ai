@@ -669,7 +669,9 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
               )}
               {showRationale && (
                 <tr>
-                  <td style={{ padding: '0 15px 16px', fontSize: '11px', color: EmailColors.text.muted }}>
+                  {/* v13: bump padding-bottom 16 → 32 so "Wrong call?" has
+                      breathing room before the CTA divider line below. */}
+                  <td style={{ padding: '0 15px 32px', fontSize: '11px', color: EmailColors.text.muted }}>
                     <em>{materialitySignal.rationale}</em>{' '}
                     <a
                       href={feedbackUrl}

@@ -487,23 +487,40 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                     return weights[idx] / (1 + growth / 100);
                   });
 
-                  // Bar widths use sqrt of absolute revenue relative to the
-                  // largest current segment. This (a) keeps single-digit
-                  // segments visually meaningfully smaller than two-digit
-                  // ones, (b) shows real growth/degrowth between the prior
-                  // and current bar — the gap between the two bar widths
-                  // IS the YoY jump in visible form.
-                  const maxRev = Math.max(...weights, ...priorWeights);
-                  const sqrtCurrentDisplay = weights.map(w =>
-                    maxRev > 0 ? (Math.sqrt(w) / Math.sqrt(maxRev)) * 100 : 0,
+                  // v13: per-segment slot with linear within-slot ratio.
+                  // The OLD scheme used sqrt(rev)/sqrt(maxRev) for BOTH
+                  // bars, which dampened the visible gap on small
+                  // segments because sqrt compresses the ratio. The NEW
+                  // scheme:
+                  //   1. Compute each segment's "slot" width from
+                  //      sqrt(max(current, prior)) / sqrt(globalMax) —
+                  //      preserves cross-segment proportionality so Data
+                  //      Center's slot is still much larger than Pro Viz's.
+                  //   2. Within each slot, scale current and prior LINEARLY
+                  //      by their share of the segment's own max — so the
+                  //      bigger of the pair fills the slot and the other
+                  //      shows the true proportional shrinkage.
+                  // Example NVDA Pro Viz (+70%): slot 12.7% of bar area;
+                  // current = 12.7%, prior = 12.7% * (1.76/3) = 7.5%.
+                  // Gap is now 5.2pp vs the OLD scheme's 2.9pp — much
+                  // more visible.
+                  const segmentMaxes = segments.map((_, idx) =>
+                    Math.max(weights[idx], priorWeights[idx]),
                   );
-                  const sqrtPriorDisplay = priorWeights.map(w =>
-                    maxRev > 0 ? (Math.sqrt(w) / Math.sqrt(maxRev)) * 100 : 0,
+                  const globalMax = Math.max(...segmentMaxes);
+                  const slotWidths = segmentMaxes.map(m =>
+                    globalMax > 0 ? (Math.sqrt(m) / Math.sqrt(globalMax)) * 100 : 0,
                   );
-                  // Floor at 4% so even tiny segments still show a visible
-                  // bar fragment.
-                  const displayPcts = sqrtCurrentDisplay.map(d => Math.max(d, 4));
-                  const displayPctsPrior = sqrtPriorDisplay.map(d => Math.max(d, 4));
+                  const displayPcts = segments.map((_, idx) => {
+                    const slot = slotWidths[idx];
+                    const segMax = segmentMaxes[idx];
+                    return segMax > 0 ? Math.max(slot * (weights[idx] / segMax), 4) : 4;
+                  });
+                  const displayPctsPrior = segments.map((_, idx) => {
+                    const slot = slotWidths[idx];
+                    const segMax = segmentMaxes[idx];
+                    return segMax > 0 ? Math.max(slot * (priorWeights[idx] / segMax), 4) : 4;
+                  });
                   return (
                     <>
                       <div style={{ ...EmailStyles.watchForHeader, marginBottom: '10px' }}>Segment mix:</div>
@@ -760,7 +777,9 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
               )}
               {showRationale && (
                 <tr>
-                  <td style={{ padding: '0 15px 16px', fontSize: '11px', color: EmailColors.text.muted }}>
+                  {/* v13: bump padding-bottom 16 → 32 so "Wrong call?" has
+                      breathing room before the CTA divider line below. */}
+                  <td style={{ padding: '0 15px 32px', fontSize: '11px', color: EmailColors.text.muted }}>
                     <em>{materialitySignal.rationale}</em>{' '}
                     <a
                       href={feedbackUrl}

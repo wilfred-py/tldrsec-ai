@@ -35,7 +35,10 @@ export function EmailFooter({ filingUrl, formType, utmVariant, marketingCta }: E
         {ctaUrl && (
         <tr>
           <td style={{
-            padding: '20px 15px',
+            // v13: bump padding-top so the CTA button breathes below the
+            // divider line. 20 → 32px gives a clearer visual break
+            // between the rationale block above and the action button.
+            padding: '32px 15px 20px',
             textAlign: 'center',
             borderTop: `1px solid ${EmailColors.structure.border}`,
           }}>
