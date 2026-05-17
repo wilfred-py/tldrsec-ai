@@ -164,16 +164,20 @@ describe('enableEarningsMiniDeepDive flag gating', () => {
       expect(userPrompt).not.toContain('WHY-IT-MATTERS WRITING RULES (10-K)');
     });
 
-    it('10-K flag ON — whyItMatters gets the 400-char form-specific description', () => {
+    it('10-K flag ON — whyItMatters gets the 1000-char consolidated-synthesis description', () => {
+      // v12: WIM rewritten to be the ONE consolidated synthesis section
+      // (multi-paragraph, includes forward-looking risk synthesis folded
+      // in). Length bumped 400 → 1000 to accommodate 2-3 paragraphs.
       const { schema, userPrompt } = generateFilingPrompt({
         formType: '10-K',
         filingContent: 'x',
         enableEarningsMiniDeepDive: true,
       });
       const wim = schema.properties?.whyItMatters as { maxLength?: number; description?: string };
-      expect(wim.maxLength).toBe(400);
-      expect(wim.description).toContain('80-400 chars');
-      expect(wim.description).toContain('STRICT BAN ON METRIC RESTATEMENT');
+      expect(wim.maxLength).toBe(1000);
+      expect(wim.description).toContain('200-1000 chars');
+      expect(wim.description).toContain('CONSOLIDATED SYNTHESIS');
+      expect(wim.description).toContain('No standalone "What to Watch" section renders');
       // Flag-on 10-K must carry the WIM WRITING RULES guidance
       expect(userPrompt).toContain('WHY-IT-MATTERS WRITING RULES (10-K)');
     });
@@ -188,18 +192,17 @@ describe('enableEarningsMiniDeepDive flag gating', () => {
       expect(userPrompt).not.toContain('WHY-IT-MATTERS WRITING RULES (10-Q)');
     });
 
-    it('10-Q flag ON — whyItMatters gets the 400-char form-specific description', () => {
+    it('10-Q flag ON — whyItMatters gets the 1000-char consolidated-synthesis description', () => {
       const { schema, userPrompt } = generateFilingPrompt({
         formType: '10-Q',
         filingContent: 'x',
         enableEarningsMiniDeepDive: true,
       });
       const wim = schema.properties?.whyItMatters as { maxLength?: number; description?: string };
-      expect(wim.maxLength).toBe(400);
-      expect(wim.description).toContain('80-400 chars');
-      expect(wim.description).toContain('STRICT BAN ON METRIC RESTATEMENT');
-      // 10-Q-specific guidance must be present, and must contain the
-      // QoQ DATA REQUIREMENT clause added 2026-05-17 per autoplan PR1-polish D5.
+      expect(wim.maxLength).toBe(1000);
+      expect(wim.description).toContain('200-1000 chars');
+      expect(wim.description).toContain('CONSOLIDATED SYNTHESIS');
+      // 10-Q-specific guidance must carry the QoQ DATA REQUIREMENT clause
       expect(userPrompt).toContain('WHY-IT-MATTERS WRITING RULES (10-Q)');
       expect(userPrompt).toContain('QoQ DATA REQUIREMENT');
     });
@@ -210,8 +213,9 @@ describe('enableEarningsMiniDeepDive flag gating', () => {
       const wimK = onK.schema.properties?.whyItMatters as { description?: string };
       const wimQ = onQ.schema.properties?.whyItMatters as { description?: string };
       expect(wimK.description).not.toBe(wimQ.description);
-      expect(wimK.description).toContain('cross-year inflection');
-      expect(wimQ.description).toContain('QoQ inflection');
+      // 10-K leads on cross-year inflection; 10-Q leads on QoQ inflection
+      expect(wimK.description.toLowerCase()).toContain('cross-year inflection');
+      expect(wimQ.description.toLowerCase()).toContain('qoq inflection');
     });
 
     it('non-earnings 8-K is unaffected by the per-form WIM swap', () => {

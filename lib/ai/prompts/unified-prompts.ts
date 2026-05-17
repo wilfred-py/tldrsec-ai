@@ -156,48 +156,50 @@ const WHY_IT_MATTERS_PROPERTY: SchemaProperty = {
 };
 
 /**
- * 10-K-specific whyItMatters property. Used when the earnings-mini-deep-dive
- * flag is on. The description is deliberately longer than the legacy version
- * because the autoplan v2 rewrite is meant to surface investor-grade
- * interpretation — cross-year inflections, peer/sector framing, sentiment
- * context — not restate the scorecard.
+ * 10-K-specific whyItMatters property — consolidated synthesis output.
  *
- * 400-char cap matches the materiality rationale cap; gives the model room
- * for a real synthesis sentence without inviting essay-length output that
- * won't fit the email layout.
+ * v12 rewrite per Wilfred 2026-05-17: the WIM field is now the ONE place
+ * the email surfaces investor-grade interpretation. The "What to Watch"
+ * section has been removed from rendering; the forward-looking risks
+ * that used to live there are now folded INTO this prose, alongside the
+ * material context and sentiment framing. Multi-paragraph output
+ * supported. 1000-char cap accommodates real synthesis.
+ *
+ * `riskFactors` and `keyPoints` arrays are still extracted into the
+ * schema for downstream consumers (DB storage, future analytics) but
+ * are no longer rendered as their own email sections.
  */
 const WHY_IT_MATTERS_PROPERTY_10K: SchemaProperty = {
   type: 'string',
   description:
-    'ONE SENTENCE (80-400 chars). Investor-grade interpretation that the headline and summary do NOT already state. ' +
-    'STRICT BAN ON METRIC RESTATEMENT — if the sentence boils down to "Revenue grew X% to $Y" or any other restated number ' +
-    'from financialHighlights, return empty string instead. Useful angles, in priority order: ' +
-    '(1) cross-year inflection in MD&A or risk factors — what NEW theme appeared this year that wasn\'t in the prior 10-K, ' +
-    '(2) X-sentiment context when present above — what did the market expect vs deliver, and what are bears arguing, ' +
-    '(3) web-search ENRICHMENT context when present — peer beats/misses, sector trajectory, macro framing, ' +
-    '(4) write-downs, capital allocation shifts, or new partnerships that reframe the multi-year thesis. ' +
-    'Cite specifics: dollar amounts, item numbers, named risks. Empty string is better than vague prose.',
-  maxLength: 400,
+    'CONSOLIDATED SYNTHESIS (200-1000 chars, 2-3 short paragraphs separated by blank lines). ' +
+    'This is the ONE section in the email that combines material context with forward-looking interpretation. ' +
+    'No standalone "What to Watch" section renders — the risks that would have gone there must be folded into this prose. ' +
+    'STRUCTURE: ' +
+    '(¶1) Material take — the single most important investor read of this filing, citing ONE specific cross-year inflection from MD&A or Item 1A risk factors. Reference dollar amounts, item numbers, named risks. NEVER just restate the scorecard metrics. ' +
+    '(¶2) Forward-looking risks — synthesize the 2-3 most material risk factors / themes (from Item 1A) into a coherent "what bears watching" paragraph. Compare voices: filing\'s tone vs market sentiment (X-sentiment context above) vs peer/sector framing (web-search ENRICHMENT context above). Where do they agree, where do they diverge? ' +
+    '(¶3, optional) Peer or sector framing — only if web-search ENRICHMENT context is provided. ' +
+    'STRICT BAN: do not restate metric deltas already shown in the scorecard. Do not enumerate risks as a list — write prose that synthesizes the connections between them. If you cannot produce specific, non-obvious interpretation, return empty string.',
+  maxLength: 1000,
 };
 
 /**
- * 10-Q-specific whyItMatters property. Quarterly cadence demands different
- * emphasis: management commentary deltas, QoQ inflection points, whether
- * the print matched or broke consensus.
+ * 10-Q-specific whyItMatters property — consolidated synthesis output.
+ * Same shape as the 10-K variant but tuned for quarterly cadence:
+ * QoQ inflections, management commentary deltas, consensus delta.
  */
 const WHY_IT_MATTERS_PROPERTY_10Q: SchemaProperty = {
   type: 'string',
   description:
-    'ONE SENTENCE (80-400 chars). Investor-grade interpretation that the headline and summary do NOT already state. ' +
-    'STRICT BAN ON METRIC RESTATEMENT — if the sentence boils down to "Revenue is +X% YoY, -Y% QoQ" or any restated number ' +
-    'from financialHighlights, return empty string instead. Useful angles, in priority order: ' +
-    '(1) QoQ inflection points where the trajectory just changed — acceleration, deceleration, or reversal, and what management said about it in MD&A, ' +
-    '(2) X-sentiment context when present above — whether the market saw this coming, bull/bear consensus split, ' +
-    '(3) web-search ENRICHMENT context when present — consensus expectations, peer beats/misses, sector dynamics, ' +
-    '(4) management commentary deltas vs the prior quarter\'s MD&A — language shift from confident to cautious is a signal, ' +
-    '(5) capital allocation moves (buybacks, dividend changes, capex) when they reframe the near-term setup. ' +
-    'Cite specifics. Empty string is better than vague prose.',
-  maxLength: 400,
+    'CONSOLIDATED SYNTHESIS (200-1000 chars, 2-3 short paragraphs separated by blank lines). ' +
+    'This is the ONE section in the email that combines material context with forward-looking interpretation. ' +
+    'No standalone "What to Watch" section renders — the risks that would have gone there must be folded into this prose. ' +
+    'STRUCTURE: ' +
+    '(¶1) Material take — the single most important investor read of this quarterly print, citing ONE specific QoQ inflection point or management commentary delta from MD&A. Reference dollar amounts, item numbers, named events. NEVER just restate the scorecard metrics. ' +
+    '(¶2) Forward-looking risks — synthesize the 2-3 most material near-term concerns (from the quarter\'s risk factors / management commentary) into a coherent paragraph. Compare voices: management\'s tone in MD&A vs market sentiment (X-sentiment context above) vs consensus expectation (web-search ENRICHMENT context above). Where does the data confirm vs contradict each voice? ' +
+    '(¶3, optional) Consensus or peer framing — only if web-search ENRICHMENT context is provided. Did the print beat/miss consensus? Did peers print similar dynamics this quarter? ' +
+    'STRICT BAN: do not restate metric deltas. Do not enumerate risks — synthesize them as prose. Empty string beats vague prose.',
+  maxLength: 1000,
 };
 
 /**
@@ -1380,11 +1382,12 @@ MATERIALITY SIGNAL (4-tier classification, symmetric — big beats are as materi
 - RATIONALE: One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NEVER generic.
 
 WHY-IT-MATTERS WRITING RULES (10-K):
-- The whyItMatters field is interpretation, NOT restatement. If your sentence is structurally "{Metric} grew/fell {X%} to {$Y}", that is restatement and must be rejected — return empty string instead.
-- Lean on the X-SENTIMENT and ENRICHMENT context blocks above (when present): factClaims tell you what the market knows, discussionSynthesis tells you what bulls vs bears are saying. Pull one specific quoted fact or sentiment beat-vs-expect into your sentence.
-- Acceptable angles: (a) a new theme in Item 1A risk factors that wasn't there last year, (b) a write-down or one-time charge that reframes the multi-year thesis, (c) a capital-allocation move (buyback ramp, dividend cut, large M&A or investment), (d) an MD&A inflection where management's tone shifted, (e) a peer or sector comparison from ENRICHMENT context.
-- BAD: "Revenue grew 65% to $215.9B." GOOD: "The $4.5B H20 write-down — biggest single-product charge in NVIDIA's history per Item 7 — turns US-China export policy into a Tier-1 risk for the AI infrastructure thesis."
-- BAD: "Strong year for the company." GOOD: "Open-source frontier models flagged as a new risk factor in Item 1A (first appearance in any NVIDIA 10-K) — a tacit acknowledgement that proprietary moats around accelerator demand may be narrower than the Street consensus assumes."`,
+- CRITICAL: whyItMatters is the ONLY interpretive prose in the email. The "What to Watch" section is no longer rendered — the forward-looking risks that would have lived there must be folded INTO this whyItMatters prose. Treat it as the consolidated synthesis section.
+- Multi-paragraph output expected (2-3 short paragraphs separated by blank lines). Paragraph 1: material take (single most important read of the filing). Paragraph 2: forward-looking risks synthesized as prose (NOT a bulleted list). Paragraph 3 (optional): peer/sector framing from ENRICHMENT context.
+- Compare voices across the inputs: the filing's own narrative tone in MD&A, vs market sentiment in the X-SENTIMENT block (factClaims + discussionSynthesis), vs peer/sector framing in the ENRICHMENT block. Note where they agree and where they diverge — that divergence is often the most material signal.
+- Forward-looking risk paragraph: pull 2-3 specific risk factors from Item 1A (especially NEW ones not in the prior 10-K) and synthesize them. Do NOT list them as bullets. Do NOT just restate them. Write prose that connects the risks to the multi-year thesis.
+- BAD: "Revenue grew 65% to $215.9B. Watch out for export controls, customer concentration, open-source models." (restatement + list)
+- GOOD: "The $4.5B H20 write-down (Item 7) — biggest single-product charge in NVIDIA history — turns US-China export policy into a Tier-1 risk for the AI infrastructure thesis. The Street already priced the Data Center beat ($185B vs $172B consensus); bears are now pressing the new H200 25% US import tariff as the next leg of policy headwinds.\n\nThree forward concerns compound. Open-source frontier models appeared in Item 1A for the first time in any NVIDIA 10-K — a tacit admission that proprietary accelerator moats may be narrower than consensus assumes. Hyperscaler customer concentration (still unnamed in Item 1A but visible in the 10-K's revenue concentration disclosures) means a CSP capex pause hits revenue faster than the multi-product diversification narrative suggests. And the $17.5B in FY26 strategic investments in AI model makers is a bet that demand for accelerators is supply-constrained, not demand-constrained — a thesis that breaks if any of the model-maker bets fail to ship at expected scale."`,
 
   '10-Q': `10-Q QUARTERLY REPORT EXTRACTION RULES:
 - DOCUMENT STRUCTURE: 10-Q has 2 parts:
@@ -1445,10 +1448,12 @@ MATERIALITY SIGNAL (4-tier classification, symmetric — big beats are as materi
 - RATIONALE: One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NEVER generic.
 
 WHY-IT-MATTERS WRITING RULES (10-Q):
-- The whyItMatters field is interpretation, NOT restatement. If your sentence is structurally "{Metric} is +X% YoY / -Y% QoQ", that is restatement and must be rejected — return empty string instead.
-- Lean on the X-SENTIMENT and ENRICHMENT context blocks above (when present): factClaims tell you what the market knows, discussionSynthesis tells you what bulls vs bears are saying. Use one specific consensus-vs-actual delta or sentiment line in your sentence.
-- Acceptable angles: (a) a QoQ inflection where the trajectory changed direction (revenue growth turned negative, margin recovery stalled, transaction volume reversed), (b) management language shift in MD&A vs prior 10-Q (confident → cautious is a real signal), (c) capital-allocation move (buyback pace, dividend, capex) that reframes the near-term setup, (d) a senior-officer transition or 10b5-1 plan adoption that pairs with operating data to read as repositioning, (e) a peer or consensus comparison from ENRICHMENT context.
-- BAD: "Comps fell 1.7%, transactions dropped 2.9%." GOOD: "Comp-store sales swung from +7.4% to -1.7% YoY in a 60-day window where the CMO and GC both filed Transition Agreements and the CEO adopted his first 10b5-1 plan — a coordinated repositioning signal that buybacks alone won't paper over."
+- CRITICAL: whyItMatters is the ONLY interpretive prose in the email. The "What to Watch" section is no longer rendered — forward-looking risks/concerns must fold INTO this whyItMatters prose. Treat it as the consolidated synthesis section.
+- Multi-paragraph output expected (2-3 short paragraphs separated by blank lines). Paragraph 1: material take of the quarterly print (single most important investor read). Paragraph 2: forward-looking risks/concerns synthesized as prose. Paragraph 3 (optional): consensus or peer framing from ENRICHMENT context.
+- Compare voices across the inputs: management's MD&A tone vs market sentiment in the X-SENTIMENT block (factClaims + discussionSynthesis) vs consensus expectation from the ENRICHMENT block. Where do they agree, where do they diverge? Divergence is often the most material signal — e.g., management is reassuring while the market is pressing on the print, or vice versa.
+- Forward-looking risk paragraph: pull 2-3 specific concerns from this quarter's risk factors or MD&A (especially management language shifts vs prior quarter) and synthesize them. Do NOT list as bullets. Do NOT just restate them.
+- BAD: "Comps fell 1.7%. Watch: tariffs, exec departures, slower growth." (restatement + list)
+- GOOD: "Comps swung from +7.4% to -1.7% YoY in a 60-day window where the CMO and GC both filed Transition Agreements and the CEO adopted his first 10b5-1 plan — a coordinated repositioning that the $701M Q1 buyback (vs $378M prior year) reads as management trying to paper over. Street had Q1 comps at +1.2%; this is the first negative-comp print since 2017.\n\nThree near-term concerns compound. The CMO and GC departures in the same week leave brand-marketing and litigation tracks without continuity heading into the H2 comp-recovery pivot the Street is pricing in. 2025 food/beverage/packaging tariffs added 0.2pp to Q1 costs and management guided 15bp scale-up in 2026 — pressuring the gross-margin trajectory just as comps are turning. And the aggressive buyback pace ($701M Q1 alone) means the cash buffer for organic recovery investments is shrinking, raising the stakes on the next two quarters."
 - QoQ DATA REQUIREMENT: When historical context is provided above (prior-quarter summaries), you MUST populate qoqChange on EVERY financialHighlights row. If the prior-quarter value isn't extractable, write "N/A" — never leave qoqChange empty when historical context exists.`,
 
   '3': `FORM 3 INITIAL STATEMENT OF BENEFICIAL OWNERSHIP EXTRACTION RULES:

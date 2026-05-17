@@ -12,7 +12,7 @@ import {
   materialityToBadge,
   buildMaterialityFeedbackMailto,
 } from '../../../../lib/email/materiality';
-import { wrapPercentsInPills, escapeHtmlMinimal } from '../../../../lib/email/pill-pct';
+import { wrapPercentsInPills } from '../../../../lib/email/pill-pct';
 
 /**
  * Coerce a possibly-non-string array entry into a clean string.
@@ -139,24 +139,6 @@ const fin = {
     fontFamily: MONO_FONT,
   },
 } as const;
-
-/**
- * Decide whether the consolidated "What to Watch" section should render.
- * The section combines X-sentiment + filing-derived numbered risks under
- * one black bar — should appear when EITHER signal has content.
- */
-function shouldRenderWatchSection({
-  summaryData,
-  watchFor,
-}: {
-  summaryData: FilingTemplateData['summaryData'] | undefined;
-  watchFor: string[];
-}): boolean {
-  if (watchFor.length > 0) return true;
-  const xs = (summaryData as Record<string, unknown> | undefined)?.xSentiment as
-    { direction?: string } | undefined;
-  return !!(xs && typeof xs.direction === 'string' && xs.direction.length > 0);
-}
 
 /**
  * Normalize the "Latest" column value to two decimal places so the scorecard
@@ -586,71 +568,14 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
             </tr>
           )}
 
-          {/* "What to Watch" — consolidated forward-signals section per
-              v11 polish. X-sentiment (market chatter) + filing-derived
-              numbered risks under ONE black bar. Renders if either has
-              content. */}
-          {shouldRenderWatchSection({ summaryData, watchFor }) && (
-            <>
-              <tr><td style={{ height: '20px', lineHeight: '20px', fontSize: 0 }}>&nbsp;</td></tr>
-              <tr>
-                <td style={{
-                  backgroundColor: '#000000',
-                  padding: '11px 15px',
-                }}>
-                  <span style={{
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    color: '#FFFFFF',
-                    letterSpacing: '1.2px',
-                    textTransform: 'uppercase' as const,
-                  }}>
-                    What to Watch
-                  </span>
-                </td>
-              </tr>
-              {/* X-sentiment sub-block (market chatter) renders first */}
-              <tr>
-                <td>
-                  <XSentimentBlock rawData={summaryData} formType="10-Q" />
-                </td>
-              </tr>
-              {/* Numbered risk list (filing-derived) renders below */}
-              {watchFor.length > 0 && (
-                <tr>
-                  <td style={{ padding: '6px 15px 8px' }}>
-                    <table width="100%" cellPadding="0" cellSpacing="0">
-                      <tbody>
-                        {watchFor.map((item, idx) => (
-                          <tr key={idx}>
-                            <td style={{
-                              padding: '8px 0',
-                              borderBottom: idx < watchFor.length - 1 ? '1px solid #F0F0F0' : 'none',
-                              fontSize: '14px',
-                              color: EmailColors.text.body,
-                              lineHeight: '1.5',
-                              verticalAlign: 'top' as const,
-                            }}>
-                              <span style={{
-                                fontFamily: MONO_FONT,
-                                color: EmailColors.text.muted,
-                                fontWeight: 700,
-                                marginRight: '10px',
-                                fontSize: '12px',
-                              }}>
-                                {String(idx + 1).padStart(2, '0')}
-                              </span>
-                              {item}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              )}
-            </>
-          )}
+          {/* X (Twitter) sentiment — standalone section above WIM.
+              v12 removed the "What to Watch" section; the forward-looking
+              risks are now folded into the whyItMatters synthesis. */}
+          <tr>
+            <td>
+              <XSentimentBlock rawData={summaryData} formType="10-Q" />
+            </td>
+          </tr>
 
           {/* Fallback: full summary text when no structured data and no
               summary lede already rendered above */}
@@ -688,10 +613,11 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
         </tbody>
       </table>
 
-      {/* Why it matters — moved to the END of the body content per
-          autoplan PR1-polish D3=A. Sits after the body content and just
-          before the View-Filing action button. X-sentiment now lives
-          inside the body table above (above What-to-Watch). When the rewritten WIM prompt fires
+      {/* Why It Matters — consolidated synthesis section per v12. This is
+          now the ONLY interpretive section in the email body: the "What to
+          Watch" section was removed, and forward-looking risks are folded
+          into this multi-paragraph prose. Black bar header gives it
+          visual weight since it now carries the synthesis load alone. When the rewritten WIM prompt fires
           (flag on, 10-Q), the model produces a real interpretive sentence
           that synthesizes the data + sentiment context above. When it
           doesn't, the pill-chip fallback shows YoY/QoQ for the top
@@ -699,18 +625,31 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
           String-path % tokens get pill-wrapped inline; ReactNode-path
           (the fallback) already uses PillDelta. */}
       {whyItMatters && (
-        <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginTop: '12px' }}>
+        <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginTop: '20px' }}>
           <tbody>
             <tr>
-              <td style={{ padding: '0 15px 16px' }}>
-                <p style={EmailStyles.whyItMatters}>
-                  <strong style={{ color: '#000000' }}>Why it matters: </strong>
-                  {typeof whyItMatters === 'string' ? (
-                    <span dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(escapeHtmlMinimal(whyItMatters)) }} />
-                  ) : (
-                    whyItMatters
-                  )}
-                </p>
+              <td style={{ backgroundColor: '#000000', padding: '11px 15px' }}>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  letterSpacing: '1.2px',
+                  textTransform: 'uppercase' as const,
+                }}>
+                  Why It Matters
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style={{ padding: '14px 15px 18px' }}>
+                {typeof whyItMatters === 'string' ? (
+                  <div
+                    style={EmailStyles.prose}
+                    dangerouslySetInnerHTML={{ __html: wrapPercentsInPills(markdownToHtml(whyItMatters)) }}
+                  />
+                ) : (
+                  <p style={EmailStyles.whyItMatters}>{whyItMatters}</p>
+                )}
               </td>
             </tr>
           </tbody>
