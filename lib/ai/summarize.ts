@@ -17,11 +17,6 @@ import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
 import { getHistoricalSummaries, buildContextEnrichedPrompt } from './historical-context';
 import { getEnrichmentContext } from './web-search-context';
-import {
-  isWhyItMattersEnabled,
-  isProviderEnabled,
-  isEarningsMiniDeepDiveEnabled,
-} from './enrichment-flags';
 import { getXSentiment, type XSentimentEnrichment } from './x-sentiment-provider';
 import { isMaxEligible } from '../auth/tier-eligibility';
 // Removed Anthropic SDK import - using OpenRouter client
@@ -473,6 +468,85 @@ function truncateDocumentContent(content: string, maxTokens: number): string {
 
 // Component logger
 const componentLogger = logger.child('claude-summarizer');
+
+// ── Enrichment flag evaluation (PostHog feature flags) ───────────────
+// Resolves the rollout gates that control whether the why-it-matters
+// enrichment pipeline runs, whether each provider runs, and whether the
+// materialitySignal field is included on 10-K/10-Q prompts. accessionNumber
+// is the distinctId — gives stable per-filing bucketing across retries.
+
+const TOP_LEVEL_ENRICHMENT_FLAG = 'why_it_matters_enrichment';
+
+// Per-provider flags — keyed by provider name as used in `runEnrichment`.
+const PROVIDER_FLAGS: Record<string, string> = {
+  counterparty: 'why_it_matters_counterparty',
+  governance: 'why_it_matters_governance',
+  debt_issuance: 'why_it_matters_debt',
+  earnings: 'why_it_matters_earnings',
+  capital_return: 'why_it_matters_capital_return',
+  x_sentiment: 'x_sentiment_enrichment',
+};
+
+// Cohort-gated per autoplan plan: Day 1 internal users only, Day 4 = 10%
+// of allowlisted-ticker users, Day 14 = 100%. Kill-switch metric:
+// unsubscribe rate > 1.5x 7-day baseline triggers auto-rollback.
+const EARNINGS_MINI_DEEP_DIVE_FLAG = 'enable_earnings_mini_deep_dive';
+
+async function evaluateEnrichmentFlag(flagKey: string, distinctId: string): Promise<boolean> {
+  // Dev/QA bypass: ENRICHMENT_FORCE_ENABLE=1 short-circuits every flag to
+  // true so test scripts can exercise enrichment without provisioning
+  // PostHog flags. NEVER set in production — it disables the kill-switch.
+  if (process.env.ENRICHMENT_FORCE_ENABLE === '1') {
+    return true;
+  }
+  try {
+    // Dynamic import prevents posthog-node (Node-only deps like `readline`)
+    // from being pulled into any client bundle that transitively imports
+    // this module via the summarize pipeline.
+    const { getServerPostHog } = await import('../analytics/posthog-server');
+    const posthog = getServerPostHog();
+    if (!posthog) {
+      return false;
+    }
+    const value = await posthog.getFeatureFlag(flagKey, distinctId);
+    return value === true || value === 'true';
+  } catch (error) {
+    componentLogger.warn(`PostHog flag evaluation failed for ${flagKey}, defaulting to off`, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * Gate for the entire enrichment path. Short-circuits before any provider
+ * work. Returns false on any PostHog error (fail-safe off).
+ */
+async function isWhyItMattersEnabled(accessionNumber: string): Promise<boolean> {
+  return evaluateEnrichmentFlag(TOP_LEVEL_ENRICHMENT_FLAG, accessionNumber);
+}
+
+/**
+ * Gate for a specific provider. Callers MUST also check
+ * `isWhyItMattersEnabled` first so the whole path can be killed via one
+ * flag.
+ */
+async function isProviderEnabled(providerName: string, accessionNumber: string): Promise<boolean> {
+  const flagKey = PROVIDER_FLAGS[providerName];
+  if (!flagKey) {
+    componentLogger.warn(`Unknown provider name for flag lookup: ${providerName}`);
+    return false;
+  }
+  return evaluateEnrichmentFlag(flagKey, accessionNumber);
+}
+
+/**
+ * Gate for the materialitySignal field on 10-K/10-Q summaries. Stable
+ * per-filing bucketing via accessionNumber.
+ */
+async function isEarningsMiniDeepDiveEnabled(accessionNumber: string): Promise<boolean> {
+  return evaluateEnrichmentFlag(EARNINGS_MINI_DEEP_DIVE_FLAG, accessionNumber);
+}
 
 /**
  * Get the appropriate prompt for a filing type with context

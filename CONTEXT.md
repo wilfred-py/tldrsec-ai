@@ -23,3 +23,6 @@ A user's saved interest in a [Filing] type or ticker. Drives which [Summary] pay
 
 ### Onboarding
 The first-run flow that turns a new signup into an engaged subscriber: ticker selection, preview email, account creation, first cached [Summary] delivery.
+
+### Enrichment Gate
+The decision layer inside the summarize module that resolves three rollout dimensions per [Filing] before the model call: (1) tier eligibility (paid Max / active trial), (2) PostHog feature flags (top-level enrichment + per-provider), (3) the earnings-mini-deep-dive cohort flag for 10-K/10-Q. Inlined into summarize because the gate's only caller is the surrounding enrichment block; the previous standalone module was a 1:1 wrapper over PostHog's `getFeatureFlag` with three thin entry points.

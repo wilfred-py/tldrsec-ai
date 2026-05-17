@@ -21,7 +21,7 @@
 
 import { summarizeFiling } from '@/lib/ai/summarize';
 import { openRouterClient } from '@/lib/ai/openrouter-client';
-import { isWhyItMattersEnabled, isProviderEnabled } from '@/lib/ai/enrichment-flags';
+import { getServerPostHog } from '@/lib/analytics/posthog-server';
 import { getEnrichmentContext } from '@/lib/ai/web-search-context';
 import { getXSentiment } from '@/lib/ai/x-sentiment-provider';
 
@@ -45,10 +45,14 @@ jest.mock('@/lib/ai/openrouter-client', () => ({
   openRouterClient: { sendMessage: jest.fn() },
 }));
 
-jest.mock('@/lib/ai/enrichment-flags', () => ({
-  isWhyItMattersEnabled: jest.fn(),
-  isProviderEnabled: jest.fn(),
-  isEarningsMiniDeepDiveEnabled: jest.fn(async () => false),
+// Mock at the real external seam (PostHog) rather than the internal
+// flag-eval functions (which now live inside summarize.ts after the
+// enrichment-flags deepening). `getFeatureFlag` is the single call the
+// inlined flag-eval delegates to.
+jest.mock('@/lib/analytics/posthog-server', () => ({
+  getServerPostHog: jest.fn(() => ({
+    getFeatureFlag: jest.fn(async () => false),
+  })),
 }));
 
 jest.mock('@/lib/ai/web-search-context', () => ({
@@ -84,8 +88,8 @@ jest.mock('@/lib/logging', () => ({
 }));
 
 const mockedSendMessage = openRouterClient.sendMessage as jest.Mock;
-const mockedIsWhyItMattersEnabled = isWhyItMattersEnabled as jest.Mock;
-const mockedIsProviderEnabled = isProviderEnabled as jest.Mock;
+const mockedGetServerPostHog = getServerPostHog as jest.Mock;
+const mockedGetFeatureFlag = jest.fn();
 const mockedGetEnrichmentContext = getEnrichmentContext as jest.Mock;
 const mockedGetXSentiment = getXSentiment as jest.Mock;
 
@@ -117,11 +121,11 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       usage: { inputTokens: 100, outputTokens: 50 },
       cost: { totalCost: 0.001 },
     });
-    // If anything escapes the gate, these would resolve and would be
-    // observable via the call-count assertion. Default to permissive so
-    // a missing gate would fail loudly.
-    mockedIsWhyItMattersEnabled.mockResolvedValue(true);
-    mockedIsProviderEnabled.mockResolvedValue(true);
+    // Default permissive: all flags ON so any leak past the tier gate is
+    // observable via downstream call counts (`getEnrichmentContext`,
+    // `getXSentiment`). A missing gate would fail loudly.
+    mockedGetFeatureFlag.mockResolvedValue(true);
+    mockedGetServerPostHog.mockReturnValue({ getFeatureFlag: mockedGetFeatureFlag });
     mockedGetEnrichmentContext.mockResolvedValue([]);
     mockedGetXSentiment.mockResolvedValue({ enrichment: null, skipReason: 'mock' });
   });
@@ -135,10 +139,10 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
     });
 
     // Both enrichment branches (why-it-matters + x-sentiment) gate on tier
-    // FIRST, so neither flag eval should fire for a PRO user without a
-    // trial. If the gate is reordered or removed, this assertion catches it.
-    expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
-    expect(mockedIsProviderEnabled).not.toHaveBeenCalled();
+    // FIRST, so no PostHog flag eval should fire for a PRO user without a
+    // trial. If the gate is reordered or removed, this catches it.
+    expect(mockedGetFeatureFlag).not.toHaveBeenCalledWith('why_it_matters_enrichment', expect.anything());
+    expect(mockedGetFeatureFlag).not.toHaveBeenCalledWith('x_sentiment_enrichment', expect.anything());
     expect(mockedGetEnrichmentContext).not.toHaveBeenCalled();
     expect(mockedGetXSentiment).not.toHaveBeenCalled();
   });
@@ -150,7 +154,7 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       isTrialing: false,
       trialEndsAt: null,
     });
-    expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
+    expect(mockedGetFeatureFlag).not.toHaveBeenCalledWith('why_it_matters_enrichment', expect.anything());
     expect(mockedGetEnrichmentContext).not.toHaveBeenCalled();
     expect(mockedGetXSentiment).not.toHaveBeenCalled();
   });
@@ -161,7 +165,7 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
     await summarizeFiling(ENRICHABLE_8K_CONTENT, {
       metadata: baseMetadata,
     });
-    expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
+    expect(mockedGetFeatureFlag).not.toHaveBeenCalledWith('why_it_matters_enrichment', expect.anything());
     expect(mockedGetEnrichmentContext).not.toHaveBeenCalled();
     expect(mockedGetXSentiment).not.toHaveBeenCalled();
   });
@@ -175,7 +179,7 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
     });
     // Why-it-matters branch fires its flag eval; x-sentiment branch fires
     // both top-level flag and provider flag (composed inside the same `if`).
-    expect(mockedIsWhyItMattersEnabled).toHaveBeenCalled();
+    expect(mockedGetFeatureFlag).toHaveBeenCalledWith('why_it_matters_enrichment', expect.anything());
   });
 
   it('runs enrichment for active-trial users (Max-eligible via trial)', async () => {
@@ -186,7 +190,7 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       isTrialing: true,
       trialEndsAt: futureTrialEnd,
     });
-    expect(mockedIsWhyItMattersEnabled).toHaveBeenCalled();
+    expect(mockedGetFeatureFlag).toHaveBeenCalledWith('why_it_matters_enrichment', expect.anything());
   });
 
   it('skips enrichment for users with EXPIRED trial', async () => {
@@ -197,15 +201,15 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       isTrialing: true,
       trialEndsAt: pastTrialEnd,
     });
-    expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
+    expect(mockedGetFeatureFlag).not.toHaveBeenCalledWith('why_it_matters_enrichment', expect.anything());
   });
 });
 
 describe('summarizeFiling defense-in-depth scrub of whyItMatters', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedIsWhyItMattersEnabled.mockResolvedValue(true);
-    mockedIsProviderEnabled.mockResolvedValue(true);
+    mockedGetFeatureFlag.mockResolvedValue(true);
+    mockedGetServerPostHog.mockReturnValue({ getFeatureFlag: mockedGetFeatureFlag });
     mockedGetEnrichmentContext.mockResolvedValue([]);
     mockedGetXSentiment.mockResolvedValue({ enrichment: null, skipReason: 'mock' });
   });
