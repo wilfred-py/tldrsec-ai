@@ -6,6 +6,11 @@ import { EmailFooter } from './sections/EmailFooter';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
+import {
+  extractMaterialitySignal,
+  materialityToBadge,
+  buildMaterialityFeedbackMailto,
+} from '../../../../lib/email/materiality';
 
 /**
  * Coerce a possibly-non-string array entry into a clean string.
@@ -258,6 +263,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
   const rawFinancialHighlights = rawData?.financialHighlights as Array<{
     label: string;
     value: string | number;
+    priorValue?: string | number;
     change?: string | number;
     qoqChange?: string | number;
   }> | undefined;
@@ -298,32 +304,62 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
     }
   }
 
-  // Build "Why it matters" context from QoQ/YoY data
-  let whyItMatters = '';
+  // Build "Why it matters" context from QoQ/YoY data.
+  //
+  // Renders as JSX (not a string) so we can embed PillDelta chips inline
+  // instead of unicode arrows (↓ / ↑) glued to colored text. The white-meta
+  // section in this template is hard to read with arrow markers — pills
+  // match the scorecard's visual register and the chip colors carry the
+  // tone (red / green / gray) without needing an arrow glyph.
+  //
+  // Falls back to plain prose from summaryText when no financialHighlights
+  // / quarterlyTrends are available — plain-prose paths render as a string.
+  let whyItMatters: React.ReactNode = null;
   if (financialHighlights && financialHighlights.length > 0) {
     const withChanges = financialHighlights.filter(h => h.change || h.qoqChange);
     if (withChanges.length > 0) {
-      const parts = withChanges.slice(0, 2).map(h => {
-        const pieces: string[] = [];
+      const parts = withChanges.slice(0, 2).map((h, idx) => {
+        const pieces: React.ReactNode[] = [];
         if (h.change) {
-          const text = parseDelta(h.change)?.text ?? String(h.change);
-          pieces.push(`${getChangeArrow(h.change)}${text} YoY`);
+          pieces.push(
+            <React.Fragment key="yoy">
+              <PillDelta value={h.change} />
+              <span style={{ marginLeft: '4px', marginRight: '4px' }}> YoY</span>
+            </React.Fragment>
+          );
         }
         if (h.qoqChange) {
-          const text = parseDelta(h.qoqChange)?.text ?? String(h.qoqChange);
-          pieces.push(`${getChangeArrow(h.qoqChange)}${text} QoQ`);
+          if (pieces.length > 0) pieces.push(<span key="sep" style={{ marginRight: '4px' }}>,</span>);
+          pieces.push(
+            <React.Fragment key="qoq">
+              <PillDelta value={h.qoqChange} />
+              <span style={{ marginLeft: '4px' }}> QoQ</span>
+            </React.Fragment>
+          );
         }
-        return `${h.label} is ${pieces.join(', ')}`;
+        return (
+          <React.Fragment key={idx}>
+            {idx > 0 && '. '}
+            {h.label} is {pieces}
+          </React.Fragment>
+        );
       });
-      whyItMatters = parts.join('. ') + '.';
+      whyItMatters = <>{parts}.</>;
     }
   }
   if (!whyItMatters && quarterlyTrends && quarterlyTrends.length > 0) {
-    const summaries = quarterlyTrends.slice(0, 2).map(t => {
-      const arrow = t.trend === 'up' ? '↑' : t.trend === 'down' ? '↓' : '→';
-      return `${t.metric} trending ${arrow} at ${t.current}`;
+    const summaries = quarterlyTrends.slice(0, 2).map((t, idx) => {
+      // Render the trend as a directional pill matching the scorecard:
+      // up → green +, down → red −, flat → gray neutral.
+      const pillValue = t.trend === 'up' ? '+1' : t.trend === 'down' ? '-1' : '0';
+      return (
+        <React.Fragment key={idx}>
+          {idx > 0 && '; '}
+          {t.metric} trending <PillDelta value={pillValue} /> at {t.current}
+        </React.Fragment>
+      );
     });
-    whyItMatters = summaries.join('; ') + '.';
+    whyItMatters = <>{summaries}.</>;
   }
   if (!whyItMatters && summaryText) {
     // Grab the second sentence as context
@@ -336,12 +372,13 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
   // Data snapshot rows: financial metrics with YoY + QoQ in same row.
   // Cap at 6 so the canonical 10-Q metric set fits without scrolling:
   // Revenue, Gross Margin, Operating Margin, FCF Margin, Net Income, EPS.
-  const dataRows: { label: string; value: string; change?: string | number; qoqChange?: string | number }[] = [];
+  const dataRows: { label: string; value: string; priorValue?: string; change?: string | number; qoqChange?: string | number }[] = [];
   if (financialHighlights) {
     for (const h of financialHighlights.slice(0, 6)) {
       dataRows.push({
         label: h.label,
         value: String(h.value),
+        priorValue: h.priorValue !== undefined && h.priorValue !== null ? String(h.priorValue) : undefined,
         change: h.change,
         qoqChange: h.qoqChange,
       });
@@ -424,10 +461,40 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
       />
 
       {/* Form badge + signal badge row */}
-      <FormPlusMaterialityBadgeRow
-        filingType={filingType || '10-Q'}
-        signal={{ label: 'QUARTERLY REPORT', colorKey: 'neutral' }}
-      />
+      {/* Form badge + materiality signal row — see 10k-minimalist-template
+          for the symmetric materiality wiring contract. */}
+      {(() => {
+        const materialitySignal = extractMaterialitySignal(summaryData);
+        const materialityBadge = materialityToBadge(materialitySignal);
+        const signal = materialityBadge ?? { label: 'QUARTERLY REPORT', colorKey: 'neutral' as const };
+        const showFeedback = materialityBadge !== null;
+        const feedbackUrl = buildMaterialityFeedbackMailto({
+          ticker: displayTicker,
+          formType: filingType || '10-Q',
+        });
+        return (
+          <>
+            <FormPlusMaterialityBadgeRow
+              filingType={filingType || '10-Q'}
+              signal={signal}
+            />
+            {showFeedback && (
+              <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '8px' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '0 15px', fontSize: '11px', color: EmailColors.text.muted }}>
+                      <em>{materialitySignal.rationale}</em>{' '}
+                      <a href={feedbackUrl} style={{ color: EmailColors.text.muted, textDecoration: 'underline' }}>
+                        Wrong call?
+                      </a>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </>
+        );
+      })()}
 
       {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
@@ -504,7 +571,23 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                         return (
                           <tr key={idx} style={{ backgroundColor: rowBg }}>
                             <td style={fin.cellMetric}>{row.label}</td>
-                            <td style={fin.cellValue}>{formatValue(row.value)}</td>
+                            <td style={fin.cellValue}>
+                              {row.priorValue && (
+                                <>
+                                  <span style={{
+                                    color: EmailColors.text.muted,
+                                    fontFamily: 'inherit' as const,
+                                    fontVariantNumeric: 'tabular-nums' as const,
+                                  }}>{formatValue(row.priorValue)}</span>
+                                  <span style={{
+                                    color: EmailColors.text.muted,
+                                    margin: '0 6px',
+                                    fontFamily: 'inherit' as const,
+                                  }}>→</span>
+                                </>
+                              )}
+                              {formatValue(row.value)}
+                            </td>
                             <td style={fin.cellDelta}>
                               {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
                             </td>

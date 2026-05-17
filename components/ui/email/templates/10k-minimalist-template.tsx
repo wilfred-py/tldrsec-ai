@@ -7,6 +7,11 @@ import { StalenessBanner } from './sections/StalenessBanner';
 import { HangingBulletItem } from './sections/BulletList';
 import { XSentimentBlock } from './sections/XSentimentBlock';
 import { FilingTemplateData } from '../../../../lib/email/types';
+import {
+  extractMaterialitySignal,
+  materialityToBadge,
+  buildMaterialityFeedbackMailto,
+} from '../../../../lib/email/materiality';
 
 interface Form10KMinimalistTemplateProps {
   filing: FilingTemplateData;
@@ -101,21 +106,31 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
     whyItMatters = sentences.length > 1 ? sentences[1] : '';
   }
 
-  // Data snapshot rows: top financial metrics
-  const dataRows: { label: string; value: string; change?: string | number }[] = [];
+  // Data snapshot rows: top financial metrics. Carries priorValue when the
+  // LLM emitted a prior-year value alongside the current — renders as
+  // "[prior] → [current]" with the prior in light grey, matching the
+  // 10-Q scorecard's side-by-side layout.
+  const dataRows: { label: string; value: string; priorValue?: string; change?: string | number }[] = [];
   if (financialHighlights) {
     for (const h of financialHighlights.slice(0, 5)) {
-      dataRows.push({ label: h.label, value: String(h.value), change: h.change });
+      const fh = h as { label: string; value: string | number; priorValue?: string | number; change?: string | number };
+      dataRows.push({
+        label: fh.label,
+        value: String(fh.value),
+        priorValue: fh.priorValue !== undefined && fh.priorValue !== null ? String(fh.priorValue) : undefined,
+        change: fh.change,
+      });
     }
   }
 
   // Story: segment performance + remaining key takeaways woven into prose
   const storyParts: string[] = [];
-  if (segments && segments.length > 0) {
-    const segmentSummaries = segments.map(s =>
-      `${s.name} generated ${s.revenue} in revenue (${s.growth} YoY)`
-    );
-    storyParts.push(segmentSummaries.join('. ') + '.');
+  // Segments render as a visual bar chart in the dedicated "Segment mix"
+  // section below — skipping the prose duplicate here. Falls back to prose
+  // only when there's no structured segment data.
+  if (!segments || segments.length === 0) {
+    // Backwards-compat: older summaries with segment data nested in
+    // keyPoints will still surface via the keyPoints fallback.
   }
   if (keyPoints && keyPoints.length > 1) {
     // Skip the first (used as lead sentence) and weave the rest
@@ -166,11 +181,44 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
         headline={leadSentence || `${companyName || displayTicker} filed its annual report (10-K)`}
       />
 
-      {/* Form badge + signal badge row */}
-      <FormPlusMaterialityBadgeRow
-        filingType={filingType || '10-K'}
-        signal={{ label: 'ANNUAL REPORT', colorKey: 'neutral' }}
-      />
+      {/* Form badge + materiality signal row.
+          materialitySignal is OPTIONAL on summaryJSON — extractor defaults to
+          'noise' when absent. For noise we fall back to the existing
+          'ANNUAL REPORT' neutral label (no double-rendered badge per autoplan
+          Design Decision #15). For high/medium/low we render the materiality
+          pill in the existing signal slot. */}
+      {(() => {
+        const materialitySignal = extractMaterialitySignal(summaryData);
+        const materialityBadge = materialityToBadge(materialitySignal);
+        const signal = materialityBadge ?? { label: 'ANNUAL REPORT', colorKey: 'neutral' as const };
+        const showFeedback = materialityBadge !== null;
+        const feedbackUrl = buildMaterialityFeedbackMailto({
+          ticker: displayTicker,
+          formType: filingType || '10-K',
+        });
+        return (
+          <>
+            <FormPlusMaterialityBadgeRow
+              filingType={filingType || '10-K'}
+              signal={signal}
+            />
+            {showFeedback && (
+              <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '8px' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '0 15px', fontSize: '11px', color: EmailColors.text.muted }}>
+                      <em>{materialitySignal.rationale}</em>{' '}
+                      <a href={feedbackUrl} style={{ color: EmailColors.text.muted, textDecoration: 'underline' }}>
+                        Wrong call?
+                      </a>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </>
+        );
+      })()}
 
       {/* Smart Brevity body */}
       <table width="100%" cellPadding="0" cellSpacing="0">
@@ -196,8 +244,17 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                   <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginBottom: '4px' }}>
                     <tbody>
                       {dataRows.map((row, idx) => {
-                        const changeStyle = getChangeStyle(row.change);
-                        const arrow = getChangeArrow(row.change);
+                        // Derive pill tone from the change value. Mirrors the
+                        // 10-Q PillDelta logic: + → green, − → red, 0/null → gray.
+                        const changeStr = row.change != null ? String(row.change).trim() : '';
+                        const isPositive = /^\+/.test(changeStr) || (changeStr && !changeStr.startsWith('-') && !changeStr.startsWith('−') && parseFloat(changeStr) > 0);
+                        const isNegative = /^[-−]/.test(changeStr) || (changeStr && parseFloat(changeStr) < 0);
+                        const pillBg = isPositive ? EmailColors.semantic.pillPositiveBg
+                          : isNegative ? EmailColors.semantic.pillNegativeBg
+                          : EmailColors.semantic.pillNeutralBg;
+                        const pillFg = isPositive ? EmailColors.semantic.pillPositiveFg
+                          : isNegative ? EmailColors.semantic.pillNegativeFg
+                          : EmailColors.semantic.pillNeutralFg;
                         return (
                           <tr key={idx}>
                             <td style={{
@@ -209,10 +266,37 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                               color: '#111827',
                               borderBottom: idx < dataRows.length - 1 ? '1px solid #F0F0F0' : 'none',
                             }}>
+                              {row.priorValue && (
+                                <>
+                                  <span style={{
+                                    color: EmailColors.text.muted,
+                                    fontFamily: 'inherit' as const,
+                                    fontVariantNumeric: 'tabular-nums' as const,
+                                  }}>{row.priorValue}</span>
+                                  <span style={{
+                                    color: EmailColors.text.muted,
+                                    margin: '0 6px',
+                                  }}>→</span>
+                                </>
+                              )}
                               {row.value}
                               {row.change && (
-                                <span style={{ ...changeStyle, marginLeft: '6px', fontSize: '13px' }}>
-                                  {arrow}{row.change}
+                                <span style={{
+                                  display: 'inline-block' as const,
+                                  marginLeft: '8px',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  backgroundColor: pillBg,
+                                  color: pillFg,
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace',
+                                  fontVariantNumeric: 'tabular-nums' as const,
+                                  letterSpacing: '0.2px',
+                                  lineHeight: '1.2',
+                                  whiteSpace: 'nowrap' as const,
+                                }}>
+                                  {changeStr.startsWith('+') ? changeStr : (isPositive ? `+${changeStr}` : changeStr)}
                                 </span>
                               )}
                             </td>
@@ -223,6 +307,109 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
                   </table>
                 </>
               )}
+
+              {/* Segment mix — horizontal bar chart for revenue breakdown.
+                  Email-safe: uses nested <table> cells with width percentages
+                  (no <svg>, no <canvas>). Bar width is proportional to
+                  segment revenue. Bars colored from the muted BadgeColors
+                  palette so the mix reads at a glance without competing
+                  with the scorecard pills. */}
+              {segments && segments.length > 0 && (() => {
+                // Parse "$185B" / "185" / "$2.3M" into a numeric weight for
+                // proportional bar widths. Falls back to equal weights if
+                // any segment can't be parsed.
+                const parseNum = (v: string | number): number => {
+                  if (typeof v === 'number') return v;
+                  const s = String(v).trim();
+                  const num = parseFloat(s.replace(/[^\d.-]/g, ''));
+                  if (isNaN(num)) return 0;
+                  const upper = s.toUpperCase();
+                  if (upper.includes('B')) return num * 1_000;
+                  if (upper.includes('M')) return num;
+                  return num;
+                };
+                const weights = segments.map(s => parseNum(s.revenue));
+                const total = weights.reduce((a, b) => a + b, 0);
+                const palette = [
+                  { bg: '#FEF3C7', fg: '#92400E' }, // amber
+                  { bg: '#EEF2FF', fg: '#4338CA' }, // indigo
+                  { bg: '#F1F5F9', fg: '#475569' }, // slate
+                  { bg: '#EDE9FE', fg: '#5B21B6' }, // violet
+                  { bg: '#EBF8FF', fg: '#1E40AF' }, // blue
+                  { bg: '#F5F3FF', fg: '#6D28D9' }, // purple
+                ];
+                return (
+                  <>
+                    <table width="100%" cellPadding="0" cellSpacing="0" style={{ margin: '20px 0' }}>
+                      <tbody><tr><td style={EmailStyles.thinDivider}></td></tr></tbody>
+                    </table>
+                    <div style={{ ...EmailStyles.watchForHeader, marginBottom: '10px' }}>Segment mix:</div>
+                    <table width="100%" cellPadding="0" cellSpacing="0">
+                      <tbody>
+                        {segments.map((s, idx) => {
+                          const pct = total > 0 ? (weights[idx] / total) * 100 : 100 / segments.length;
+                          const colors = palette[idx % palette.length];
+                          const growthStr = s.growth != null ? String(s.growth).trim() : '';
+                          const isPositive = /^\+/.test(growthStr) || (growthStr && parseFloat(growthStr) > 0);
+                          const isNegative = /^[-−]/.test(growthStr) || (growthStr && parseFloat(growthStr) < 0);
+                          const pillBg = isPositive ? EmailColors.semantic.pillPositiveBg
+                            : isNegative ? EmailColors.semantic.pillNegativeBg
+                            : EmailColors.semantic.pillNeutralBg;
+                          const pillFg = isPositive ? EmailColors.semantic.pillPositiveFg
+                            : isNegative ? EmailColors.semantic.pillNegativeFg
+                            : EmailColors.semantic.pillNeutralFg;
+                          return (
+                            <tr key={idx}>
+                              <td style={{ padding: '4px 0 4px 0', fontSize: '13px', color: '#374151', whiteSpace: 'nowrap' as const, paddingRight: '12px', width: '120px' }}>
+                                {s.name}
+                              </td>
+                              <td style={{ padding: '4px 0' }}>
+                                <table width="100%" cellPadding="0" cellSpacing="0">
+                                  <tbody>
+                                    <tr>
+                                      <td width={`${Math.max(2, Math.round(pct))}%`} style={{
+                                        height: '14px',
+                                        backgroundColor: colors.bg,
+                                        borderLeft: `3px solid ${colors.fg}`,
+                                        fontSize: '11px',
+                                        color: colors.fg,
+                                        fontWeight: 600,
+                                        fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace',
+                                        paddingLeft: '8px',
+                                        whiteSpace: 'nowrap' as const,
+                                      }}>
+                                        {pct >= 8 ? `${pct.toFixed(0)}%` : ''}
+                                      </td>
+                                      <td style={{ paddingLeft: '8px', whiteSpace: 'nowrap' as const, fontSize: '12px', color: '#111827', fontFamily: '"JetBrains Mono", Monaco, Consolas, monospace', fontVariantNumeric: 'tabular-nums' as const }}>
+                                        {String(s.revenue)}
+                                        {s.growth && (
+                                          <span style={{
+                                            display: 'inline-block' as const,
+                                            marginLeft: '6px',
+                                            padding: '1px 6px',
+                                            borderRadius: '3px',
+                                            backgroundColor: pillBg,
+                                            color: pillFg,
+                                            fontSize: '10px',
+                                            fontWeight: 700,
+                                            letterSpacing: '0.2px',
+                                          }}>
+                                            {growthStr.startsWith('+') ? growthStr : (isPositive ? `+${growthStr}` : growthStr)}
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </>
+                );
+              })()}
 
               {/* Story — segment performance + key takeaways */}
               {storyText && (
