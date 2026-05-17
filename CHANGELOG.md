@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 - **Form 4 emails now show every indirect-holding entity instead of silently truncating to three.** Investors reviewing Meta's COO Form 4 (2026-05-13) were missing two of five ownership entities, including the largest position (an 85,189-share family trust). The Ownership breakdown table in the minimalist Form 4 email was hard-capped at three entries via `getOwnershipBreakdown(...).slice(0, 3)`. Cap removed; every distinct `(form, nature)` entity now renders. Regression test added with the full five-entity Meta scenario. (`components/ui/email/templates/form4-minimalist-template.tsx`, `__tests__/email/form4-template-rendering.test.ts`)
 - **`HOLDINGS: X → Y (Z%)` row now computes Z deterministically from X and Y.** The LLM-supplied `percentageChange` used an unreliable denominator (Meta example: reported `-18.50%` from `total disposed across all tables ÷ (post-direct + total-disposed)`, instead of the direct-stake change of `-11.90%`). `normalizeForm4Data` now derives `percentageChange` from `previousStake` and `newStake` whenever both are present, so the percentage matches the two numbers the email actually renders. (`lib/email/form4-field-normalizer.ts`, `__tests__/email/form4-field-normalizer.test.ts`)
 
+## [0.0.32.2] - 2026-05-17
+
+### Added
+- **`scripts/send-pr1-test-email.ts` is now tracked in the repo.** The PR1 materiality-badge test-send harness was previously local-only in one Conductor workspace, so re-sending the canonical NVDA 10-K + CMG 10-Q test emails required hunting down the right machine. The script is now allowlisted in `.gitignore` and ships with the repo — anyone with `.env.local` can re-render and re-send the PR1 fixtures.
+
+### Changed
+- **PR1 test emails no longer surface the "summary was delayed" banner.** The PR1 fixtures use real (older) NVDA and CMG filing dates so the materiality pill, financial scorecard, and X-sentiment data stay grounded — but the consequence was every test inbox showed an amber "This summary was delayed — the filing was originally filed N days ago" warning that pulled attention away from the summary. `send-pr1-test-email.ts` now runs `stripStalenessBanner()` on the rendered HTML before sending, scoped to the script only. Production templates (`10k-/10q-/8k-/form4-minimalist`) are untouched and real customer emails still surface the staleness warning.
+
 ## [0.0.32.1] - 2026-05-16
 
 ### Added
