@@ -23,8 +23,9 @@ import { Form10KMinimalistTemplate } from '../components/ui/email/templates/10k-
 import { Form10QMinimalistTemplate } from '../components/ui/email/templates/10q-minimalist-template';
 
 const args = process.argv.slice(2);
+const toIdx = args.indexOf('--to');
 const toArg = args.find(a => a.startsWith('--to='))?.split('=')[1]
-  ?? args[args.indexOf('--to') + 1];
+  ?? (toIdx >= 0 ? args[toIdx + 1] : undefined);
 const dryRun = args.includes('--dry-run');
 const TO = toArg || 'wilfredchen1@gmail.com';
 const FROM = process.env.EMAIL_FROM || 'notifications@tldrsec.app';
@@ -151,8 +152,12 @@ const cmgFiling = {
  * inbox shows the summary unobstructed.
  */
 function stripStalenessBanner(html: string): string {
+  // Match the innermost <table> wrapping the sentinel — `(?:(?!<table)[\s\S])*?`
+  // forbids the lazy chunk from swallowing a nested <table>, so we cannot
+  // accidentally strip an outer wrapper if react-email's render structure
+  // changes in the future.
   const stripped = html.replace(
-    /<table[^>]*>[\s\S]*?This summary was delayed[\s\S]*?<\/table>/i,
+    /<table[^>]*>(?:(?!<table)[\s\S])*?This summary was delayed[\s\S]*?<\/table>/i,
     '',
   );
   if (stripped === html) {
@@ -187,8 +192,11 @@ async function main(): Promise<void> {
     // Story / summary prose (was missing in v1 test)
     { name: '10-K summary prose mentions Blackwell', got: html10K.includes('Blackwell') },
     { name: '10-K segments rendered (Data Center)', got: html10K.includes('Data Center') },
-    // X-sentiment block (was missing in v1 test — already wired in template, just needs data)
-    { name: '10-K X-sentiment block rendered', got: html10K.toLowerCase().includes('bulls focused') || html10K.toLowerCase().includes('bullish') },
+    // X-sentiment block (was missing in v1 test — already wired in template, just needs data).
+    // Assert on rendered prose (`Bulls focused`), not the bare token `bullish` —
+    // the latter substring-matches `shifting_bullish` in any JSON-ish dump and would
+    // pass even if the prose block failed to render.
+    { name: '10-K X-sentiment block rendered', got: html10K.includes('Bulls focused') },
     // v3: side-by-side prior → current values (new in this iteration)
     { name: '10-K renders prior-year value $130.50B before current $215.94B', got: html10K.includes('$130.50B') && html10K.includes('$215.94B') },
     { name: '10-K side-by-side arrow → present', got: html10K.includes('→') },
@@ -199,8 +207,9 @@ async function main(): Promise<void> {
     { name: '10-Q MEDIUM MATERIALITY pill', got: html10Q.includes('MEDIUM MATERIALITY') },
     { name: '10-Q rationale present', got: html10Q.includes('Chris Brandt') },
     { name: '10-Q "Wrong call?" mailto', got: html10Q.includes('Wrong call?') },
-    // 10-Q X-sentiment
-    { name: '10-Q X-sentiment rendered', got: html10Q.toLowerCase().includes('boatwright') || html10Q.toLowerCase().includes('mixed') },
+    // 10-Q X-sentiment — assert on rendered prose, not the bare `mixed` token which
+    // would substring-match `direction: 'mixed'` in any data dump.
+    { name: '10-Q X-sentiment rendered', got: html10Q.includes('Sentiment split') },
     // StalenessBanner suppression — PR1 fixtures use older filing dates, but the
     // test inbox should not surface the "summary was delayed" warning.
     { name: '10-K does NOT show staleness banner', got: !html10K.includes('This summary was delayed') },
