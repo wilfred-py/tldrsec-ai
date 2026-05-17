@@ -80,6 +80,13 @@ scripts/*
 !scripts/refresh-landing-fixtures.ts
 !scripts/backfill-enrichment-applied.ts
 !scripts/vercel-build.sh
+!scripts/materiality-calibration/
+!scripts/materiality-calibration/sample-filings.ts
+!scripts/materiality-calibration/run-calibration.ts
+!scripts/materiality-calibration/README.md
+# Generated artifacts (re-ignore inside the unignored dir):
+scripts/materiality-calibration/labeling-template.csv
+scripts/materiality-calibration/calibration-report-*.md
 
 # Prisma generated files
 lib/generated/
