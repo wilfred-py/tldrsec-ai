@@ -172,7 +172,9 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
   const financialHighlights = rawFinancialHighlights?.filter(isUsableMetricRow);
 
   const keyPoints = rawData?.keyPoints as string[] | undefined;
-  const riskFactors = rawData?.riskFactors as string[] | undefined;
+  // riskFactors no longer rendered as a standalone "Watch for" section
+  // (v0.0.34.0 — folded into the consolidated whyItMatters synthesis).
+  // Still extracted into rawData by the prompt for downstream consumers.
   const segments = rawData?.segments as Array<{
     name: string;
     revenue: string | number;
@@ -266,7 +268,9 @@ export function Form10KMinimalistTemplate({ filing }: Form10KMinimalistTemplateP
   const storyText = storyParts.join(' ');
 
   // Watch-for items: risk factors
-  const watchForItems = riskFactors ? riskFactors.slice(0, 4) : [];
+  // watchForItems (riskFactors.slice(0, 4)) removed v0.0.34.0 — forward-looking
+  // risks now fold into the consolidated whyItMatters synthesis section.
+  // riskFactors stays available via rawData if a future section needs it.
 
   // Preheader text for inbox preview
   const preheaderText = `${displayTicker} Annual Report: ${leadSentence.substring(0, 120)}`;
