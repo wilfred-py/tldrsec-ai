@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.34.0] - 2026-05-17
+
+The earnings mini deep-dive — PR1 of the rollout — lands. 10-K and 10-Q
+summary emails now classify overall materiality, surface a story-first
+synthesis, route web-search enrichment to earnings filings, and ship a
+fully redesigned scorecard + segment-chart visualization layer. All
+behavior is gated behind the `enable_earnings_mini_deep_dive` PostHog
+flag — off everywhere by default, so production emails are unchanged
+until the flag flips on for a cohort.
+
+### Added
+- **Materiality signal on 10-K / 10-Q summary emails.** Each annual/quarterly summary classifies overall materiality as `high | medium | low | noise` with a 40-400 char rationale. Renders as a colored badge in the email header (amber / indigo / slate), with a one-click `mailto:materiality-feedback@tldrsec.com` link below for quality reporting. The rubric is symmetric — large beats are as material as large misses — to avoid asymmetric-classifier failure modes that systematically underweight positive surprises.
+- **Materiality calibration harness** at `scripts/materiality-calibration/`. Reproducible 3-step pipeline: stratified 30-filing sampling from `pipeline.FilingContentCache`, Opus-labeled ground truth, and a runner that scores the production rubric (grok-4.3) and emits a confusion matrix with a 75% accuracy gate. Production rubric passes at 76.7% (23/30). Total iteration cost: $1.92.
+- **Per-form `whyItMatters` prompt** consolidates the email's interpretive section into one 200-1000 char multi-paragraph synthesis (`WHY_IT_MATTERS_PROPERTY_10K`, `WHY_IT_MATTERS_PROPERTY_10Q`). The prompt forbids metric restatement, requires forward-looking risks to be folded INTO the prose (not enumerated), and instructs the model to compare voices across the filing's narrative, X-sentiment, and web-search enrichment context. Worked BAD vs GOOD examples in the extraction guidance show the desired tone.
+- **Web-search enrichment routed to 10-K / 10-Q** via `ENRICHMENT_FORM_TYPES`. The existing `runEnrichment` orchestrator (45s budget, ~$0.003/filing) now fires on earnings filings for MAX-tier allowlisted tickers. Previously the routing excluded them, leaving the WIM property's "use web-search context" instruction dead code for the exact forms it targeted.
+- **`MetricPill` chip component** (`sections/PillDelta.tsx`) wraps prior and current scorecard values in grey and white pill chips respectively, matching the scorecard's visual register on every cell instead of just the YoY delta column.
+- **`wrapPercentsInPills` helper** (`lib/email/pill-pct.ts`) post-processes markdown HTML to wrap every percentage token (`+X%`, `-X%`, `X%`, `Xpp`) in colored chip spans — green for positive deltas, red for negative, neutral grey for unsigned magnitudes. Applied to summary prose, story narratives, watch-for items, and the WIM block so prose reads with the same skim semantics as the scorecard.
+- **Shared `PillDelta` component** (`sections/PillDelta.tsx`) extracted from inline 10-Q template code so both 10-K and 10-Q render scorecard pills via the same module.
+- **44 + 6 tests across 4 new suites.** Schema parsing, materiality extraction defaults, badge rendering, per-form WIM swap (300+, 1000-char cap), flag-strip contract. All 100+ PR1-related tests green.
+
+### Changed
+- **Story-first email layout.** Summary prose now leads the body (moved out from below the materiality badge); the Earnings / Annual Scorecard sits below; segment mix follows for 10-K; X-sentiment lives standalone; "Why It Matters" closes the body as a full-width black-bar section with multi-paragraph markdown rendering. The "What to Watch" section is removed — forward-looking risks fold into the WIM synthesis instead. Bottom of the email carries the SEC filing link (plain blue hyperlink), materiality rationale + "Wrong call?" feedback, then the CTA button.
+- **10-K scorecard redesigned to mirror the 10-Q "Earnings Scorecard" layout.** Full-width black-bar header reading "Annual Scorecard", 4-column right-aligned table (Metric | Previous | Latest | YoY), no inline arrows. Alternating row backgrounds, 2dp value formatting.
+- **10-Q scorecard gains a dedicated `Previous` column** to the left of `Latest`. Previously the prior value rendered inline within the Latest cell as `[muted] → [current]`, which broke vertical alignment across rows.
+- **Segment-mix bar chart.** Dual-bar visualization: a current-year bar on top (full segment color, accent border on the left) and a prior-year bar below in neutral grey (`#E5E7EB`) with the segment's accent color as a thin left border, signifying the previous year's revenue. Bar widths use per-segment sqrt slots with within-slot linear ratio against `current / (1 + growth%)`, so the gap between current and prior bars is the YoY revenue jump rendered as a delta. Percentage labels render inside every bar (no longer skipped for small segments). Growth pill is right-aligned at the row edge.
+- **CTA button** reads "Want more filings like this?" and links to `tldrsec.app/?utm_source=email&utm_campaign=filing_summary`. The SEC filing link is rendered separately as a blue hyperlink above the rationale block (no longer the primary CTA).
+- **Materiality rationale moved to the bottom** (just above the EmailFooter CTA). Top of the email now carries only the badge, leaving more vertical space for the summary lede.
+- **`whyItMatters` schema cap bumped 180 → 1000 chars** (for 10-K / 10-Q under the flag) to accommodate 2-3 paragraph synthesis output. Legacy 180-char cap stays for all other form types.
+
+### Fixed
+- **`wrapPercentsInPills` regex never matched any prose `%` token.** The regex ended with `\b` (word boundary) after the unit group, but `%` is a non-word character so a following space or punctuation produced no boundary — every prose pill silently failed. Replaced with `(?![a-zA-Z])` lookahead. Rendered emails now ship 27+ colored prose pills per body where previously they shipped 1 (scorecard only).
+
+### Notes
+- **No production behavior change without the flag.** `enable_earnings_mini_deep_dive` is off everywhere by default. The schema swap (per-form WIM property, materiality property) and extraction-guidance blocks are stripped in `generateFilingPrompt` when the flag is off, so off-flag filings produce exactly the same prompt as before and the templates render with the legacy WIM defaults. PR2 / PR3 of the rollout will ramp the flag.
+- **Single-layer flag gate.** The schema-strip is the load-bearing contract — if the field doesn't enter the JSON, the render path's noise default takes over for free. Three-layer gating (schema, prompt, render) would create three places to drift apart; the flag-gate test suite asserts the schema strip is sufficient.
+
 ## [0.0.33.0] - 2026-05-17
 
 ### Fixed
