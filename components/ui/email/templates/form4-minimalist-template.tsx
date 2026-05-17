@@ -410,7 +410,7 @@ function _getAwardSubtitle(aggTx: AggregatedTransaction): string {
   return 'Equity compensation';
 }
 
-function getOwnershipBreakdown(transactions: TransactionData[]): { form: string; nature: string; shares: string }[] | null {
+export function getOwnershipBreakdown(transactions: TransactionData[]): { form: string; nature: string; shares: string }[] | null {
   const groups = new Map<string, string>();
   for (const tx of transactions) {
     const form = tx.ownershipForm || 'D';
@@ -429,7 +429,7 @@ function getOwnershipBreakdown(transactions: TransactionData[]): { form: string;
       shares: parseFloat(shares.replace(/,/g, '')).toLocaleString(),
     });
   }
-  return result.slice(0, 3); // Cap at 3 entities
+  return result;
 }
 
 /**
