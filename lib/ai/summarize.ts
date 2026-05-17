@@ -20,6 +20,7 @@ import { getEnrichmentContext } from './web-search-context';
 import {
   isWhyItMattersEnabled,
   isProviderEnabled,
+  isEarningsMiniDeepDiveEnabled,
 } from './enrichment-flags';
 import { getXSentiment, type XSentimentEnrichment } from './x-sentiment-provider';
 import { isMaxEligible } from '../auth/tier-eligibility';
@@ -477,7 +478,16 @@ const componentLogger = logger.child('claude-summarizer');
  * Get the appropriate prompt for a filing type with context
  * Phase 4: Uses unified-prompts for bulletproof JSON output
  */
-function getPromptForFilingType(filingType: SECFilingType, context: { ticker?: string; companyName?: string; accessionNumber?: string }) {
+function getPromptForFilingType(
+  filingType: SECFilingType,
+  context: {
+    ticker?: string;
+    companyName?: string;
+    accessionNumber?: string;
+    /** Pre-evaluated PostHog flag — caller resolves async, prompt build stays sync. */
+    enableEarningsMiniDeepDive?: boolean;
+  },
+) {
   return {
     /**
      * Generate the complete prompt including system and user prompts
@@ -489,7 +499,8 @@ function getPromptForFilingType(filingType: SECFilingType, context: { ticker?: s
         company: context.companyName || 'Unknown Company',
         ticker: context.ticker || 'Unknown',
         filingDate: new Date().toISOString().split('T')[0],
-        filingContent: content
+        filingContent: content,
+        enableEarningsMiniDeepDive: context.enableEarningsMiniDeepDive,
       });
 
       return { systemPrompt, userPrompt };
@@ -504,7 +515,8 @@ function getPromptForFilingType(filingType: SECFilingType, context: { ticker?: s
         company: context.companyName || 'Unknown Company',
         ticker: context.ticker || 'Unknown',
         filingDate: new Date().toISOString().split('T')[0],
-        filingContent: content
+        filingContent: content,
+        enableEarningsMiniDeepDive: context.enableEarningsMiniDeepDive,
       });
 
       return userPrompt;
@@ -797,6 +809,14 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     // Use the processed content for the prompt
     const processedContent = processedDoc.processedContent;
 
+    // Resolve the earnings-mini-deep-dive flag once before building the
+    // prompt. Used to gate the materialitySignal field on 10-K/10-Q at the
+    // schema layer (autoplan Decision #33 — single gating layer). 8-K and
+    // other filings ignore this flag.
+    const earningsMiniDeepDiveEnabled = await isEarningsMiniDeepDiveEnabled(
+      filingRecordFromDB.accessionNumber,
+    );
+
     // Get the appropriate prompt for this filing type
     // Phase 4: Now using unified-prompts with bulletproof JSON enforcement
     const promptGenerator = getPromptForFilingType(
@@ -805,7 +825,8 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         ticker: filingRecordFromDB.ticker?.symbol,
         companyName: filingRecordFromDB.companyName,
         // Add accession number if available
-        accessionNumber: filingRecordFromDB.accessionNumber
+        accessionNumber: filingRecordFromDB.accessionNumber,
+        enableEarningsMiniDeepDive: earningsMiniDeepDiveEnabled,
       }
     );
 
