@@ -405,7 +405,7 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
   const filerName = resolveField(summaryJSON, 'filerName', FORM4_FIELD_ALIASES.filerName) as string || '';
   const filerRole = resolveField(summaryJSON, 'filerRole', FORM4_FIELD_ALIASES.filerRole) as string || '';
   const totalValue = resolveField(summaryJSON, 'totalValue', FORM4_FIELD_ALIASES.totalValue) as string || '';
-  const percentageChange = resolveField(summaryJSON, 'percentageChange', FORM4_FIELD_ALIASES.percentageChange) as string || '';
+  let percentageChange = resolveField(summaryJSON, 'percentageChange', FORM4_FIELD_ALIASES.percentageChange) as string || '';
   let newStake = resolveField(summaryJSON, 'newStake', FORM4_FIELD_ALIASES.newStake) as string || '';
   let previousStake = resolveField(summaryJSON, 'previousStake', FORM4_FIELD_ALIASES.previousStake) as string || '';
 
@@ -475,6 +475,21 @@ export function normalizeForm4Data(summaryJSON: Record<string, unknown> | null |
     const prevNum = derivePreviousStake(transactions);
     if (prevNum !== null) {
       previousStake = formatNumberWithCommas(prevNum);
+    }
+  }
+
+  // Recompute percentageChange from the same numbers we render.
+  // The LLM-supplied percentageChange uses an unreliable denominator (observed:
+  // Meta 2026-05-13 reported -18.50% by dividing total disposed across all
+  // ownership tables by post-direct + total-disposed, instead of using the
+  // direct-stake change shown in the Holdings row).
+  if (newStake && previousStake) {
+    const newNum = parseFloat(String(newStake).replace(/[,$\s]/g, ''));
+    const prevNum = parseFloat(String(previousStake).replace(/[,$\s]/g, ''));
+    if (Number.isFinite(newNum) && Number.isFinite(prevNum) && prevNum > 0) {
+      const pct = ((newNum - prevNum) / prevNum) * 100;
+      const sign = pct > 0 ? '+' : '';
+      percentageChange = `${sign}${pct.toFixed(2)}%`;
     }
   }
 

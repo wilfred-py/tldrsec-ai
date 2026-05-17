@@ -711,4 +711,63 @@ describe('Form 4 Field Normalizer', () => {
       expect(data!.newStakeSource).toBe('narrative');
     });
   });
+
+  describe('percentageChange recomputation', () => {
+    // Regression: Meta COO Javier Olivan Form 4 filed 2026-05-13.
+    // LLM reported percentageChange="-18.50%" by dividing total disposed across
+    // ALL ownership tables (1,555 shares) by post-direct + total-disposed
+    // (8,408). The Holdings row renders 7,779 → 6,853 (a -11.90% direct-stake
+    // change: (6853-7779)/7779 = -0.11904), so the rendered percent must be
+    // derived from those numbers.
+    it('overrides LLM percentageChange when newStake/previousStake disagree', () => {
+      const data = normalizeForm4Data({
+        company: 'Meta Platforms, Inc.',
+        summary: 'Meta COO Javier Olivan sold 1,555 Class A shares.',
+        filerName: 'Olivan Javier',
+        percentageChange: '-18.50%', // LLM-supplied, wrong denominator
+        newStake: '6,853',
+        previousStake: '7,779',
+        transactions: [
+          {
+            code: 'S',
+            type: 'Sale',
+            shares: 926,
+            pricePerShare: '$604.57',
+            sharesOwnedFollowing: 6853,
+            securityType: 'Class A Common Stock',
+            ownershipForm: 'D',
+            date: '2026-05-11',
+          },
+        ],
+      });
+      expect(data!.previousStake).toBe('7,779');
+      expect(data!.newStake).toBe('6,853');
+      expect(data!.percentageChange).toBe('-11.90%');
+    });
+
+    it('formats positive change with leading +', () => {
+      const data = normalizeForm4Data({
+        company: 'X',
+        summary: 'X',
+        filerName: 'X',
+        newStake: '1,100',
+        previousStake: '1,000',
+        transactions: [],
+      });
+      expect(data!.percentageChange).toBe('+10.00%');
+    });
+
+    it('leaves LLM value untouched when previousStake is missing', () => {
+      const data = normalizeForm4Data({
+        company: 'X',
+        summary: 'X',
+        filerName: 'X',
+        percentageChange: '-5%',
+        newStake: '1,000',
+        transactions: [],
+      });
+      // No previousStake derivable → no override
+      expect(data!.percentageChange).toBe('-5%');
+    });
+  });
 });
