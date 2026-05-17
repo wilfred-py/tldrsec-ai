@@ -48,6 +48,7 @@ jest.mock('@/lib/ai/openrouter-client', () => ({
 jest.mock('@/lib/ai/enrichment-flags', () => ({
   isWhyItMattersEnabled: jest.fn(),
   isProviderEnabled: jest.fn(),
+  isEarningsMiniDeepDiveEnabled: jest.fn(async () => false),
 }));
 
 jest.mock('@/lib/ai/web-search-context', () => ({
