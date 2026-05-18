@@ -2,6 +2,64 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.35.0] - 2026-05-17
+
+Waitlist launch infrastructure for the Wed 2026-05-20 broadcast to 124
+subscribers. The admin send route gains a region-mode path so the cron-fired
+EU + US batches can target geo-classified subscribers without disturbing the
+existing cohort-mode flow. A new launch-hero renderer composes the VRT Q1 2026
+10-Q summary with a left-aligned founder note via the new
+`founderNoteVariant: 'letter'` prop. Onboarding replies now route to the
+founder inbox instead of a black-hole `no-reply` alias.
+
+### Added
+
+- **Region-mode send** in `app/api/admin/campaign/send/route.ts` — POST
+  `{ region: 'us' | 'eu', emailNumber, dryRun? }` filters subscribers in-memory
+  via `classifyRegion()` and slots `campaign_sends.cohort_id` under
+  `region-us` / `region-eu` so the existing
+  `UNIQUE (campaign_id, cohort_id, email_id, variant)` idempotency constraint
+  still applies. Cohort-mode (legacy) is untouched.
+- **Region classifier** (`lib/email/region-classifier.ts`) — deterministic
+  TLD + regional-domain bucketing for the 124-subscriber waitlist. Defaults
+  to US for ambiguous gmail/yahoo, EU for `.co.uk`, `.de`, `.fr`, `btinternet`,
+  `gmx.de`, `googlemail.com`, and 11 other regional domains.
+- **`LAUNCH_ARMED` env-flag gate + Bearer-token cron auth path** on the send
+  route. Cron-fired sends authenticate via `Authorization: Bearer
+  $LAUNCH_CRON_TOKEN` and no-op until `LAUNCH_ARMED=true` is set in Vercel
+  prod. Admin-clicked sends bypass the gate (the click is the arm). Constant-
+  time token compare via `crypto.timingSafeEqual`.
+- **`founderNoteVariant: 'letter'`** prop on `CampaignDemoTemplate`. Splits
+  `founderNote` on blank lines into multi-paragraph left-aligned 14px prose;
+  preserves `\n` within a paragraph as `<br>` so the
+  `Founder, tldrSEC` / `Wilf` signoff renders on two lines.
+- **VRT Q1 2026 10-Q launch payload** (`lib/email/__fixtures__/launch-2026-05-vrt.ts`)
+  and **launch-hero renderer** (`lib/email/launch-hero-renderer.ts`). Locked
+  subject: `"The AI 10-Q most investors missed: Vertiv's backlog doubled to
+  $15B"`. Numbers verified against Vertiv's Q1 2026 press release.
+- **`FOUNDER_REPLY_TO` constant** in `lib/email/config.ts`. Single source of
+  truth for `wilf@tldrsec.app`, referenced from the resend config default,
+  both welcome-service paths, and the route's `reply_to`.
+- **91 new tests:** region-classifier (54), region-send + cron-auth (14),
+  launch-hero renderer (6), reply-to regression (5), founderNoteVariant (6),
+  plus content fact-check tests.
+
+### Changed
+
+- `EMAIL_DEFAULT_REPLY_TO` env fallback in `lib/email/config.ts` now defaults
+  to `wilf@tldrsec.app` (was `no-reply@tldrsec.app`). Replies to onboarding
+  and campaign emails now land in a real inbox.
+- `welcome-service.ts` sets `replyTo` explicitly on both `queueWelcomeEmail`
+  and `sendWelcomeEmail` so the founder reply address survives any future
+  config rollback.
+- From address branding in the admin send route updated to `tldrSEC` (was
+  `TLDRSec`) to match the canonical spelling everywhere else.
+
+### Fixed
+
+- Onboarding welcome emails previously bounced any reply because the route
+  fell through to `no-reply@tldrsec.app`. Replies now reach the founder inbox.
+
 ## [0.0.34.0] - 2026-05-17
 
 The earnings mini deep-dive — PR1 of the rollout — lands. 10-K and 10-Q
