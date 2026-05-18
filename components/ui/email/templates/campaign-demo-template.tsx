@@ -23,6 +23,14 @@ interface CampaignDemoTemplateProps {
   }>;
   unsubscribeUrl: string;
   founderNote?: string;
+  /**
+   * Layout for the founder-note slot.
+   * - 'compact' (default): centered italic 13px, single line. Backwards compatible.
+   * - 'letter': left-aligned 14px non-italic, multi-paragraph. Splits `founderNote`
+   *   on blank lines into paragraphs, and `\n` within a paragraph into `<br/>`s
+   *   so a "Founder, tldrSEC\nWilf" signoff renders on two lines.
+   */
+  founderNoteVariant?: 'compact' | 'letter';
   signupUrl?: string;
 }
 
@@ -59,8 +67,12 @@ export function CampaignDemoTemplate({
   transactions,
   unsubscribeUrl,
   founderNote,
+  founderNoteVariant = 'compact',
   signupUrl = 'https://tldrsec.app/sign-up',
 }: CampaignDemoTemplateProps) {
+  const founderParagraphs = founderNote && founderNoteVariant === 'letter'
+    ? founderNote.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+    : null;
   const signal = SignalColors[signalLevel];
   const signalIcon = signalIcons[signalLevel];
 
@@ -196,8 +208,31 @@ export function CampaignDemoTemplate({
       <table width="100%" cellPadding="0" cellSpacing="0">
         <tbody>
           <tr>
-            <td style={{ padding: '16px 15px 8px', borderTop: `1px solid ${EmailColors.structure.border}`, textAlign: 'center' }}>
-              {founderNote ? (
+            <td style={{
+              padding: founderParagraphs ? '20px 20px 8px' : '16px 15px 8px',
+              borderTop: `1px solid ${EmailColors.structure.border}`,
+              textAlign: founderParagraphs ? 'left' as const : 'center' as const,
+            }}>
+              {founderParagraphs ? (
+                founderParagraphs.map((para, i) => {
+                  const lines = para.split('\n');
+                  return (
+                    <p key={i} style={{
+                      margin: i === 0 ? '0 0 14px' : '0 0 14px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.65',
+                    }}>
+                      {lines.map((line, j) => (
+                        <React.Fragment key={j}>
+                          {line}
+                          {j < lines.length - 1 && <br />}
+                        </React.Fragment>
+                      ))}
+                    </p>
+                  );
+                })
+              ) : founderNote ? (
                 <p style={{ margin: 0, fontSize: '13px', color: EmailColors.text.body, lineHeight: '1.5', fontStyle: 'italic' }}>
                   {founderNote}
                 </p>
