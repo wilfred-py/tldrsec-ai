@@ -10,7 +10,6 @@ import { logger } from '../logging';
 const costValidationLogger = logger.child('cost-validation');
 
 // Cost validation constants - centralized configuration
-// Updated to match CronBudgetService normalized tiers for consistency
 export const DAILY_COST_LIMITS = {
   // Normalized two-tier system
   PRO: Number(process.env.PRO_COST_LIMIT) || 0.40,
