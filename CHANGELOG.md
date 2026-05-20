@@ -2,6 +2,60 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.35.2] - 2026-05-21
+
+Polish pass on the 2026-05 waitlist launch hero after Wilf's visual critique
+on the v0.0.35.0 template. Wednesday send was cancelled; new target TBD.
+
+### Changed
+
+- `Form10QMinimalistTemplate` — moved founder note to AFTER the SEC link
+  + materiality rationale, moved the X sentiment block to AFTER the SEC
+  link rationale (so the analyst content closes first and sentiment lands
+  as its own section), left-aligned the launch CTA button, reduced padding
+  after Why-It-Matters and after the SEC link block, increased breathing
+  room between the CTA and the founder signoff. SEC link now flows through
+  `getSecFilingViewerUrl()` so it routes to the actual filing rather than
+  the EDGAR search results page (regression of the `ce087d2e` fix from
+  campaign + production paths into this template's inline SEC link).
+- `PillDelta` — YoY/QoQ pill values no longer pad trailing zeros. `+30%`
+  stays `+30%`, `+3.8%` stays `+3.8%`, `0%` stays `0%`. Integers no longer
+  display as `X.00%`. Real fractional precision preserved.
+- `XSentimentSection` — `renderTextWithCitations` now honors inline
+  `**bold**` markdown in the discussion synthesis (Bloomberg-style lead
+  bolding). Strong runs render as `<strong>`. Citation markers and bold
+  runs compose cleanly.
+- 2026-05 launch fixture — replaced "Full-Year EPS Guide" scorecard row
+  (which only said "raised") with **Adj Op Profit** ($551M Latest, $347M
+  Previous, +59.2% YoY, -17.5% QoQ — direct dollar measure of earnings
+  power, better long-term correlate). Scorecard deltas now use 1-decimal
+  precision computed from real Q1 2026 / Q1 2025 / Q4 2025 actuals. WIM
+  + summary prose rewritten with Bloomberg-style bold paragraph leads
+  and explicit `+`/`-` signs on every delta so inline pills color
+  correctly. X sentiment synthesis rewritten with `**Bulls**` / `**Bears**`
+  / `**Sell-side**` lead bolding. Twitter references removed (X is X).
+  Founder note trimmed (multibagger paragraph dropped) with more
+  paragraphing for skim-ability.
+
+## [0.0.35.1] - 2026-05-20
+
+Adds the Stripe documentation skills to `.agents/skills/` so AI coding agents
+working in this repo have inline guidance for Stripe integration decisions
+(API selection, Connect, billing, security) and Stripe API/SDK upgrades.
+Tooling-only — no runtime or product changes.
+
+### Added
+
+- `.agents/skills/stripe-best-practices/` — Stripe integration guidance
+  (Checkout vs PaymentIntents, Connect Accounts v2, billing/subscriptions,
+  Treasury, restricted keys, webhook security).
+- `.agents/skills/stripe-projects/` — provisioning Stripe services via
+  projects.dev.
+- `.agents/skills/upgrade-stripe/` — Stripe API version and SDK upgrade
+  playbook.
+- `skills-lock.json` — manifest tracking the three installed skills and
+  their content hashes, sourced from `docs.stripe.com` via the `skills` CLI.
+
 ## [0.0.35.0] - 2026-05-17
 
 Waitlist launch infrastructure for the Wed 2026-05-20 broadcast to 124

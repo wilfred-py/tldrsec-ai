@@ -7,9 +7,26 @@
  *
  * Search (via /api/companies?q=) covers the full SEC universe
  * for companies not in this list.
+ *
+ * Sector taxonomy: GICS (Global Industry Classification Standard) — the 11
+ * top-level sectors maintained by MSCI & S&P Dow Jones Indices.
  */
 
-import { SectorId } from '@/lib/sec-edgar/sic-sector-map';
+export const SECTOR_DEFINITIONS = [
+  { id: 'energy', name: 'Energy' },
+  { id: 'materials', name: 'Materials' },
+  { id: 'industrials', name: 'Industrials' },
+  { id: 'consumer-discretionary', name: 'Consumer Discretionary' },
+  { id: 'consumer-staples', name: 'Consumer Staples' },
+  { id: 'health-care', name: 'Health Care' },
+  { id: 'financials', name: 'Financials' },
+  { id: 'information-technology', name: 'Information Technology' },
+  { id: 'communication-services', name: 'Communication Services' },
+  { id: 'utilities', name: 'Utilities' },
+  { id: 'real-estate', name: 'Real Estate' },
+] as const;
+
+export type SectorId = (typeof SECTOR_DEFINITIONS)[number]['id'];
 
 export interface PopularCompany {
   symbol: string;
