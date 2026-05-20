@@ -85,3 +85,13 @@ A new Stripe `Price` is created under the existing MAX `Product`. `getPlanTypeFr
 A future review pass would look at the `checkout.session.completed` handler with two branches (`mode === 'subscription'` and `mode === 'payment'`) and naturally want to refactor them into one path. This ADR exists to record that the two paths handle structurally different Stripe events with different field availability. `mode: 'payment'` sessions have NO `session.subscription` field, line items must be fetched separately via `stripe.checkout.sessions.listLineItems()`, and the entitlement write differs in shape (sentinel-end row vs rolling-end row). The split is intentional.
 
 A future review would also see the `9999-12-31` sentinel and want to model it differently (separate enum, nullable column, etc.). The boring approach of "named constant + sentinel value" was chosen explicitly over more elaborate alternatives because every existing entitlement reader already works against `UserSubscription.currentPeriodEnd > now()`, and changing that invariant for one cohort would force changes across many readers.
+
+## Cross-reference: enrichment coverage for the Lifetime Seat cohort
+
+The Lifetime Seat offer copy claims "Enriched summaries with live X search" as one of four features. The implementation that backs this claim is the **x_sentiment** branch in `lib/ai/summarize.ts` (around line 877), not the why-it-matters branch above it. Coverage:
+
+- x_sentiment fires for 10-K, 10-K/A, 10-Q, 10-Q/A, 8-K, 20-F, 40-F, Form 4, 144, SC 13D, DEF 14A, S-1/3/4, F-1/3/4 (see `HIGH_IMPORTANCE_FORMS` in `lib/ai/x-sentiment-eligibility.ts:28`)
+- Constrained by the S&P 100 ticker allowlist (`ALLOWLIST_BASE`), extensible via `X_SENTIMENT_ALLOWLIST_EXTRA` env var
+- Returns sentiment + label + 500-char context, validated through `validateXSentiment`, sanitized for F3 prompt injection risks
+
+The why-it-matters branch above it (`ENRICHMENT_FORM_TYPES`) was deliberately NOT expanded to cover 10-K/10-Q/Form 4 in PR1.5 because all five existing providers are item-pattern-gated to 8-K and 424B-family forms. Adding form types to the outer Set without first building matching item-pattern providers would be a no-op. Building 10-K/10-Q/Form 4 why-it-matters providers is captured as a separate follow-up if the S&P 100 allowlist coverage proves insufficient for the Founding cohort.

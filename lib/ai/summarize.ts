@@ -839,6 +839,16 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     // PostHog flag + daily spend cap. Tier check is first so non-Max requests
     // never burn PostHog evaluations or budget for enrichment they can't see —
     // see review item 16A in tasks/x-search-max-only.md.
+    //
+    // SCOPE NOTE (Lifetime Seat / Founding cohort): the why-it-matters enrichment
+    // here is intentionally limited to 8-K/424B/FWP because all five providers
+    // in `web-search-context.ts` are item-pattern-gated to those form types
+    // (counterparty checks `Item 1.01`, governance checks `Item 5.02`, etc.).
+    // 10-K, 10-Q, Form 4 enrichment for the Founding cohort is delivered via
+    // the x_sentiment branch below, which runs on a broader form set defined
+    // in `x-sentiment-eligibility.ts:28` (`HIGH_IMPORTANCE_FORMS`) for tickers
+    // in the S&P 100 allowlist. Adding form types to this Set without first
+    // building matching providers would be a no-op. See ADR-0004 for context.
     const ENRICHMENT_FORM_TYPES = new Set(['8-K', '8-K/A', '424B2', '424B3', 'FWP']);
     if (enrichmentApplied && ENRICHMENT_FORM_TYPES.has(filingRecordFromDB.formType) && !process.env.ENRICHMENT_FORCE_DISABLE) {
       const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol || 'unknown';
