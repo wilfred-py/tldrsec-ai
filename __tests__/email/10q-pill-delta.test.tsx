@@ -63,39 +63,44 @@ const PILL = {
 };
 
 describe('Form10QMinimalistTemplate — PillDelta', () => {
-  it('renders a green pill for a positive YoY delta (2 decimal places)', () => {
+  it('renders a green pill for a positive YoY delta (preserves real precision)', () => {
+    // v6 (Wilf 2026-05-21): rounded YoY/QoQ no longer pads trailing zeros.
+    // 6.1 stays 6.1, not 6.10. Integers stay integers, not X.00.
     const html = renderHtml(makeFiling([
       { label: 'Revenue', value: '$94B', change: '+6.1%' },
     ]));
     expect(html).toContain(PILL.positiveBg);
     expect(html).toContain(PILL.positiveFg);
-    expect(html).toContain('+6.10%');
+    expect(html).toContain('+6.1%');
+    expect(html).not.toContain('+6.10%');
   });
 
-  it('renders a red pill for a negative YoY delta with a unicode minus (2 decimal places)', () => {
+  it('renders a red pill for a negative YoY delta with a unicode minus', () => {
     const html = renderHtml(makeFiling([
       { label: 'EPS', value: '$1.65', change: '-3.5%' },
     ]));
     expect(html).toContain(PILL.negativeBg);
     expect(html).toContain(PILL.negativeFg);
-    expect(html).toContain('\u22123.50%');
+    expect(html).toContain('\u22123.5%');
+    expect(html).not.toContain('\u22123.50%');
   });
 
-  it('renders a gray pill for a zero delta (2 decimal places)', () => {
+  it('renders a gray pill for a zero delta', () => {
     const html = renderHtml(makeFiling([
       { label: 'Buybacks', value: '$0', change: '0%' },
     ]));
     expect(html).toContain(PILL.neutralBg);
     expect(html).toContain(PILL.neutralFg);
-    expect(html).toContain('0.00%');
+    expect(html).toContain('0%');
+    expect(html).not.toContain('0.00%');
   });
 
-  it('pads single-digit integer percentages to 2 decimal places', () => {
+  it('integer percentages render without padded decimals (per Wilf v6 critique)', () => {
     const html = renderHtml(makeFiling([
       { label: 'Revenue', value: '$611M', change: '+7%' },
     ]));
-    expect(html).toContain('+7.00%');
-    expect(html).not.toContain('+7%</span>');
+    expect(html).toContain('+7%');
+    expect(html).not.toContain('+7.00%');
   });
 
   it('rounds long-decimal percentages to 2 decimal places', () => {
@@ -140,13 +145,13 @@ describe('Form10QMinimalistTemplate — PillDelta', () => {
       { label: 'Op Margin', value: '30%', change: '+0.5 pts' },
     ]));
     expect(ptsHtml).toContain(PILL.positiveBg);
-    expect(ptsHtml).toContain('+0.50%');
+    expect(ptsHtml).toContain('+0.5%');
 
     const pointsHtml = renderHtml(makeFiling([
       { label: 'Op Margin', value: '30%', change: '-2 points' },
     ]));
     expect(pointsHtml).toContain(PILL.negativeBg);
-    expect(pointsHtml).toContain('\u22122.00%');
+    expect(pointsHtml).toContain('\u22122%');
   });
 
   it('formats short dollar magnitudes to 2 decimal places ("$94B" → "$94.00B")', () => {
@@ -235,8 +240,8 @@ describe('Form10QMinimalistTemplate — PillDelta', () => {
     const html = renderHtml(makeFiling([
       { label: 'EPS', value: '$1.65', change: '+13.7%', qoqChange: '-3.5%' },
     ]));
-    expect(html).toContain('+13.70%');
-    expect(html).toContain('\u22123.50%');
+    expect(html).toContain('+13.7%');
+    expect(html).toContain('\u22123.5%');
     expect(html).toContain(PILL.positiveBg);
     expect(html).toContain(PILL.negativeBg);
   });

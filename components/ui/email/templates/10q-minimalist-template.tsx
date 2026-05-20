@@ -13,6 +13,7 @@ import {
   buildMaterialityFeedbackMailto,
 } from '../../../../lib/email/materiality';
 import { wrapPercentsInPills } from '../../../../lib/email/pill-pct';
+import { getSecFilingViewerUrl } from '../../../../lib/email/url-utils';
 
 /**
  * Coerce a possibly-non-string array entry into a clean string.
@@ -49,6 +50,38 @@ function coerceStoryItem(item: unknown): string | null {
 
 interface Form10QMinimalistTemplateProps {
   filing: FilingTemplateData;
+  /**
+   * Optional founder-letter body rendered AFTER the SEC link + materiality
+   * rationale block. Used by the 2026-05 waitlist launch broadcast to attach
+   * a personal note to a curated filing summary.
+   *
+   * When set with `founderNoteVariant='letter'`, blank lines split into
+   * multiple <p> paragraphs. Do NOT include the signoff in this string —
+   * pass it via `founderNoteSignoff` so the CTA button can slot between
+   * body and signoff.
+   */
+  founderNote?: string;
+  founderNoteVariant?: 'letter';
+  /**
+   * Signoff lines (e.g. "Founder, tldrSEC\nWilf") rendered AFTER the
+   * launchCta button. Single `\n` becomes `<br/>` so the two signoff lines
+   * stack correctly. Ignored unless `founderNote` is also set.
+   */
+  founderNoteSignoff?: string;
+  /**
+   * Launch CTA button rendered between the founder-note body and the signoff.
+   * When set, suppresses the EmailFooter's generic `marketingCta` so the
+   * launch broadcast has exactly one button. The URL should already be
+   * per-subscriber (built via `buildCampaignUrl`).
+   */
+  launchCta?: { text: string; url: string };
+  /**
+   * Suppress the StalenessBanner regardless of filing age. Default false
+   * (banner renders for filings ≥7 days old). Set to true for marketing
+   * broadcasts where the filing was deliberately chosen historical content
+   * (e.g. the 2026-05 launch uses Vertiv's Q1 2026 10-Q from April 22).
+   */
+  suppressStaleness?: boolean;
 }
 
 const MONO_FONT = '"JetBrains Mono", "SF Mono", Monaco, Consolas, "Courier New", monospace';
@@ -182,7 +215,20 @@ function formatValue(raw: string): string {
  * synthesis-of-the-whole-email closer, not a metric restatement above
  * the scorecard.
  */
-export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateProps) {
+export function Form10QMinimalistTemplate({
+  filing,
+  founderNote,
+  founderNoteVariant,
+  founderNoteSignoff,
+  launchCta,
+  suppressStaleness,
+}: Form10QMinimalistTemplateProps) {
+  const founderParagraphs = founderNote && founderNoteVariant === 'letter'
+    ? founderNote.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+    : null;
+  const signoffLines = founderNoteSignoff
+    ? founderNoteSignoff.split('\n').map(s => s.trim()).filter(Boolean)
+    : null;
   const {
     companyName,
     symbol,
@@ -400,8 +446,9 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
         {preheaderText}
       </div>
 
-      {/* Staleness warning (above header) */}
-      {filingDate && (
+      {/* Staleness warning (above header). Suppressed for marketing broadcasts
+          where the filing was deliberately chosen historical content. */}
+      {filingDate && !suppressStaleness && (
         <div style={{ padding: '0 15px' }}>
           <StalenessBanner filingDate={new Date(filingDate)} />
         </div>
@@ -548,14 +595,11 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
             </tr>
           )}
 
-          {/* X (Twitter) sentiment — standalone section above WIM.
-              v12 removed the "What to Watch" section; the forward-looking
-              risks are now folded into the whyItMatters synthesis. */}
-          <tr>
-            <td>
-              <XSentimentBlock rawData={summaryData} formType="10-Q" />
-            </td>
-          </tr>
+          {/* X (Twitter) sentiment was previously rendered here (between
+              scorecard and WIM). Moved 2026-05-21 to AFTER the SEC link
+              + materiality rationale block so the analyst content closes
+              before the sentiment context lands. See section near the
+              bottom for the new position. */}
 
           {/* Fallback: full summary text when no structured data and no
               summary lede already rendered above */}
@@ -621,7 +665,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
               </td>
             </tr>
             <tr>
-              <td style={{ padding: '14px 15px 18px' }}>
+              <td style={{ padding: '14px 15px 10px' }}>
                 {typeof whyItMatters === 'string' ? (
                   <div
                     style={EmailStyles.prose}
@@ -655,7 +699,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                 <tr>
                   <td style={{ padding: '0 15px 8px', fontSize: '13px' }}>
                     <a
-                      href={filingUrl}
+                      href={getSecFilingViewerUrl(filingUrl, filingType || '10-Q')}
                       style={{
                         color: EmailColors.semantic.accent,
                         textDecoration: 'underline',
@@ -671,7 +715,7 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
                 <tr>
                   {/* v13: bump padding-bottom 16 → 32 so "Wrong call?" has
                       breathing room before the CTA divider line below. */}
-                  <td style={{ padding: '0 15px 32px', fontSize: '11px', color: EmailColors.text.muted }}>
+                  <td style={{ padding: '0 15px 14px', fontSize: '11px', color: EmailColors.text.muted }}>
                     <em>{materialitySignal.rationale}</em>{' '}
                     <a
                       href={feedbackUrl}
@@ -687,13 +731,123 @@ export function Form10QMinimalistTemplate({ filing }: Form10QMinimalistTemplateP
         );
       })()}
 
-      {/* Footer with marketing CTA — "Want more filings like this?" links
-          to the landing page. SEC filing link sits above as a blue
-          hyperlink. */}
+      {/* X (Twitter) sentiment — new position 2026-05-21. Sits AFTER the
+          SEC link + materiality rationale block so the analyst content +
+          technical materiality close first, then sentiment context lands as
+          its own section, then the founder note. Was previously between the
+          scorecard and WIM. */}
+      <XSentimentBlock rawData={summaryData} formType="10-Q" />
+
+      {/* Founder note (optional). Placed AFTER the SEC link + materiality
+          rationale block so the analyst content closes first and the personal
+          voice lands last. Renders in order:
+            1. Black bar "A NOTE FROM THE FOUNDER"
+            2. Body paragraphs (split on blank lines)
+            3. launchCta button (if set) — centered, accent color
+            4. Signoff lines (if set) — italic, two-line via \n -> <br/>
+          When launchCta is set we suppress EmailFooter's marketingCta so the
+          launch broadcast has exactly one CTA — the personal one. */}
+      {founderParagraphs && founderParagraphs.length > 0 && (
+        <table width="100%" cellPadding="0" cellSpacing="0" style={{ marginTop: '20px' }}>
+          <tbody>
+            <tr>
+              <td style={{ backgroundColor: '#000000', padding: '11px 15px' }}>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  letterSpacing: '1.2px',
+                  textTransform: 'uppercase' as const,
+                }}>
+                  A Note From the Founder
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style={{ padding: '16px 15px 8px' }}>
+                {founderParagraphs.map((para, i) => {
+                  const lines = para.split('\n');
+                  return (
+                    <p key={i} style={{
+                      margin: '0 0 14px',
+                      fontSize: '14px',
+                      color: EmailColors.text.body,
+                      lineHeight: '1.65',
+                    }}>
+                      {lines.map((line, j) => (
+                        <React.Fragment key={j}>
+                          {line}
+                          {j < lines.length - 1 && <br />}
+                        </React.Fragment>
+                      ))}
+                    </p>
+                  );
+                })}
+              </td>
+            </tr>
+            {launchCta && (
+              <tr>
+                {/* Left-aligned per Wilf 2026-05-21 — the button reads as part
+                    of the founder voice's natural flow rather than as a
+                    free-standing centered CTA. */}
+                <td style={{ padding: '8px 15px 16px', textAlign: 'left' as const }}>
+                  <a
+                    href={launchCta.url}
+                    style={{
+                      display: 'inline-block',
+                      padding: '14px 28px',
+                      backgroundColor: EmailColors.semantic.accent,
+                      color: '#FFFFFF',
+                      textDecoration: 'none',
+                      borderRadius: '8px',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      letterSpacing: '0.2px',
+                    }}
+                  >
+                    {launchCta.text}
+                  </a>
+                </td>
+              </tr>
+            )}
+            {signoffLines && signoffLines.length > 0 && (
+              <tr>
+                {/* Top padding bumped 0 -> 16px per Wilf v7 critique — more
+                    breathing room between the CTA button and the signoff so
+                    the founder's name doesn't sit too close to the button. */}
+                <td style={{ padding: '16px 15px 16px' }}>
+                  <p style={{
+                    margin: 0,
+                    fontSize: '14px',
+                    color: EmailColors.text.body,
+                    lineHeight: '1.5',
+                    fontStyle: 'italic' as const,
+                  }}>
+                    {signoffLines.map((line, i) => (
+                      <React.Fragment key={i}>
+                        {line}
+                        {i < signoffLines.length - 1 && <br />}
+                      </React.Fragment>
+                    ))}
+                  </p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
+
+      {/* Footer. When launchCta is set:
+          - marketingCta is OFF (the founder-note button is the only CTA)
+          - filingUrl is empty so EmailFooter doesn't render a competing
+            "View Full Filing on SEC.gov" button (the SEC hyperlink above
+            the founder note already covers that)
+          Standard production filing emails leave launchCta undefined and
+          keep both. */}
       <EmailFooter
-        filingUrl={filingUrl}
+        filingUrl={launchCta ? '' : filingUrl}
         formType={filingType || '10-Q'}
-        marketingCta
+        marketingCta={!launchCta}
       />
     </div>
   );
