@@ -466,12 +466,20 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 
   let priceId: string | undefined;
   let sessionId: string | undefined;
+  let sessionCustomerId: string | undefined;
+  let sessionClientReference: string | undefined;
   try {
     const sessions = await stripe.checkout.sessions.list({
       payment_intent: paymentIntentId,
       limit: 1,
     });
-    sessionId = sessions.data[0]?.id;
+    const session = sessions.data[0];
+    sessionId = session?.id;
+    sessionCustomerId =
+      typeof session?.customer === 'string'
+        ? (session?.customer as string)
+        : session?.customer?.id;
+    sessionClientReference = session?.client_reference_id ?? undefined;
     if (!sessionId) {
       console.log(`[webhook] No checkout session found for refunded payment_intent ${paymentIntentId}; ignoring`);
       return;
@@ -488,21 +496,42 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     return;
   }
 
-  const customerId = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
-  if (!customerId) {
-    console.error(`[webhook] charge.refunded for Founding price without customer id: charge ${charge.id}`);
+  // Three resolution paths to find the affected User:
+  //   1. charge.customer (the production happy path)
+  //   2. session.customer (production edge: charge object missing it)
+  //   3. session.client_reference_id, which our checkout route always sets to the
+  //      lowercased email (legacy data, manual refunds, or test fixtures where
+  //      the Customer object never got created).
+  // Only one path needs to succeed.
+  const chargeCustomerId =
+    typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
+  const customerId = chargeCustomerId || sessionCustomerId;
+
+  let userId: string | undefined;
+  if (customerId) {
+    const userSub = await prisma.userSubscription.findFirst({
+      where: { stripeCustomerId: customerId },
+      select: { userId: true },
+    });
+    userId = userSub?.userId;
+  }
+  if (!userId && sessionClientReference) {
+    const userByEmail = await prisma.user.findFirst({
+      where: { email: sessionClientReference.toLowerCase(), foundingMember: true },
+      select: { id: true },
+    });
+    userId = userByEmail?.id;
+  }
+  if (!userId) {
+    console.error(
+      `[webhook] charge.refunded for Founding price; could not resolve user. ` +
+        `charge=${charge.id} session=${sessionId} chargeCustomer=${chargeCustomerId} ` +
+        `sessionCustomer=${sessionCustomerId} clientReference=${sessionClientReference}`,
+    );
     return;
   }
 
-  const userSub = await prisma.userSubscription.findFirst({
-    where: { stripeCustomerId: customerId },
-    select: { userId: true },
-  });
-
-  if (!userSub) {
-    console.error(`[webhook] charge.refunded for Founding price; no UserSubscription for customer ${customerId}`);
-    return;
-  }
+  const userSub = { userId };
 
   try {
     await revokeLifetimeSeat(userSub.userId, 'charge.refunded');
