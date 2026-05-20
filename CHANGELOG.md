@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.35.1] - 2026-05-20
+
+Adds the Stripe documentation skills to `.agents/skills/` so AI coding agents
+working in this repo have inline guidance for Stripe integration decisions
+(API selection, Connect, billing, security) and Stripe API/SDK upgrades.
+Tooling-only — no runtime or product changes.
+
+### Added
+
+- `.agents/skills/stripe-best-practices/` — Stripe integration guidance
+  (Checkout vs PaymentIntents, Connect Accounts v2, billing/subscriptions,
+  Treasury, restricted keys, webhook security).
+- `.agents/skills/stripe-projects/` — provisioning Stripe services via
+  projects.dev.
+- `.agents/skills/upgrade-stripe/` — Stripe API version and SDK upgrade
+  playbook.
+- `skills-lock.json` — manifest tracking the three installed skills and
+  their content hashes, sourced from `docs.stripe.com` via the `skills` CLI.
+
 ## [0.0.35.0] - 2026-05-17
 
 Waitlist launch infrastructure for the Wed 2026-05-20 broadcast to 124
