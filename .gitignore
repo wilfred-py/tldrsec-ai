@@ -83,6 +83,8 @@ scripts/*
 !scripts/vercel-build.sh
 !scripts/founding/
 !scripts/founding/*
+# Local PII (waitlist emails + Resend send IDs) from send-founding-batch.ts
+scripts/founding/sent.jsonl
 
 # Prisma generated files
 lib/generated/

@@ -30,7 +30,7 @@ We explicitly rejected:
 
 ### 2. Stripe `Price` is one-time, not recurring
 
-The Lifetime Seat is purchased via a Stripe Checkout Session with `mode: 'payment'` and a Price object with `recurring: null`. Env var: `STRIPE_FOUNDING_LIFETIME_PRICE_ID`. The Price lives under the existing MAX `Product` (not a new Product); receipts show "MAX (Lifetime)" with the $499 line item.
+The Lifetime Seat is purchased via a Stripe Checkout Session with `mode: 'payment'` and a Price object with `recurring: null`. Env var: `STRIPE_FOUNDING_LIFETIME_PRICE_ID`. A dedicated Stripe `Product` named "tldrSEC Lifetime" (id `prod_UYDWpMfEx7LNJF` in live mode) holds the Price; receipts show "tldrSEC Lifetime" as the product name. An earlier draft of this ADR proposed nesting the Price under the existing MAX `Product`, but tldrsec-ai's Stripe layout uses one Product per billing variant (separate Products for "Pro Monthly", "Pro Annual", "Max Monthly", "Max Annual"), so a separate "tldrSEC Lifetime" Product matched that pattern better and produces clearer customer-facing receipt labels.
 
 We deliberately do not add a Lifetime entry to `SUBSCRIPTION_PLANS` in `lib/stripe/plans.ts`. That constant exists to describe publicly-marketable recurring plans; Lifetime Seat is a one-off cohort that doesn't appear on the public pricing page.
 
@@ -58,9 +58,9 @@ On lifetime payment, the webhook writes a `UserSubscription` row with:
 
 We chose this over "skip the UserSubscription row" because every existing entitlement reader (billing page, cron handlers, `lib/billing/`) queries `UserSubscription`. Writing the row preserves "all paid users have a UserSubscription" as an invariant. The 9999-12-31 sentinel is greppable and named.
 
-### 5. Founding `Price` lives under the existing MAX Stripe `Product`
+### 5. Founding `Price` lives under a dedicated "tldrSEC Lifetime" Stripe `Product`
 
-A new Stripe `Price` is created under the existing MAX `Product`. `getPlanTypeFromPriceId` in `lib/stripe/index.ts` is extended to map this priceId to `'MAX'`. `syncSubscriptionFromStripeData` (and the new `handleCheckoutCompleted` `mode === 'payment'` branch) sets `User.foundingMember = true` in the same write that sets `subscriptionTier`.
+A new Stripe `Product` (`prod_UYDWpMfEx7LNJF`) holds the $499 one-time Price. `getPlanTypeFromPriceId` in `lib/stripe/index.ts` is extended to map the Lifetime priceId to `'MAX'` so entitlement code paths treat lifetime holders as MAX. `syncSubscriptionFromStripeData` (and the new `handleCheckoutCompleted` `mode === 'payment'` branch) sets `User.foundingMember = true` in the same write that sets `subscriptionTier`. The dedicated Product matches tldrsec-ai's existing pattern of one Stripe Product per billing variant.
 
 ## Consequences
 
