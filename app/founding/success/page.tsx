@@ -29,17 +29,24 @@ export default async function FoundingSuccessPage() {
         <ol className="mb-6 list-none space-y-3">
           <li className="relative pl-9 text-base leading-relaxed text-gray-700">
             <span className="absolute left-0 top-0 font-bold text-black">1.</span>
-            Check your inbox for the Stripe receipt and your tldrSEC welcome email within the next few minutes.
+            Check your inbox for the Stripe receipt within the next few minutes.
           </li>
           <li className="relative pl-9 text-base leading-relaxed text-gray-700">
             <span className="absolute left-0 top-0 font-bold text-black">2.</span>
-            If you don&apos;t already have a tldrSEC account, the welcome email contains a signup link. Use the same email address you paid with.
+            Sign up below using the same email address you paid with. Your seat is already activated and waiting; signing up just creates your login.
           </li>
           <li className="relative pl-9 text-base leading-relaxed text-gray-700">
             <span className="absolute left-0 top-0 font-bold text-black">3.</span>
-            Sign in to add your tickers and start receiving real-time alerts on every SEC filing.
+            Add your tickers and start receiving real-time alerts on every SEC filing.
           </li>
         </ol>
+
+        <a
+          href="/sign-up"
+          className="mt-2 block w-full rounded-lg bg-violet-600 px-4 py-4 text-center text-base font-semibold text-white transition-colors hover:bg-violet-700"
+        >
+          Sign up to access your seat
+        </a>
 
         <hr className="my-8 border-gray-200" />
 

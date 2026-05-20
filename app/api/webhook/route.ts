@@ -121,19 +121,53 @@ async function handleClerkWebhook(req: Request) {
             }
           }
 
-          const newUser = await prisma.user.create({
-            data: {
-              id: userData.id,
-              email: primaryEmail,
-              authProvider: 'clerk',
-              authProviderId: userData.id,
-              name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : undefined,
-              subscriptionTier: 'FREE',
-              onboardingCompleted: false,
-              signupIpAddress: ipAddress !== 'unknown' ? ipAddress : undefined,
-            }
+          // Pre-populated waitlist users (created by
+          // scripts/founding/pre-populate-waitlist-users.ts) already have a
+          // User row keyed on email with `authProvider='pending'`. When the
+          // real Clerk signup arrives, link the Clerk identity to that row
+          // instead of creating a duplicate which would crash on the
+          // `email @unique` constraint. We deliberately do NOT change `User.id`
+          // because existing FK relations (UserSubscription, Ticker, AuditLog,
+          // anything created by the Founding payment webhook) point at it.
+          const existing = await prisma.user.findUnique({
+            where: { email: primaryEmail },
+            select: { id: true, authProvider: true },
           });
-          console.log(`User created in database: ${newUser.id}`);
+          const computedName = userData.first_name
+            ? `${userData.first_name} ${userData.last_name || ''}`.trim()
+            : undefined;
+          let resolvedUserId: string;
+          if (existing) {
+            await prisma.user.update({
+              where: { id: existing.id },
+              data: {
+                authProvider: 'clerk',
+                authProviderId: userData.id,
+                ...(computedName ? { name: computedName } : {}),
+                ...(ipAddress !== 'unknown' ? { signupIpAddress: ipAddress } : {}),
+              },
+            });
+            resolvedUserId = existing.id;
+            console.log(
+              `[clerk-webhook] Linked Clerk identity ${userData.id} to existing User ${existing.id} (was authProvider=${existing.authProvider})`,
+            );
+          } else {
+            const newUser = await prisma.user.create({
+              data: {
+                id: userData.id,
+                email: primaryEmail,
+                authProvider: 'clerk',
+                authProviderId: userData.id,
+                name: computedName,
+                subscriptionTier: 'FREE',
+                onboardingCompleted: false,
+                signupIpAddress: ipAddress !== 'unknown' ? ipAddress : undefined,
+              },
+            });
+            resolvedUserId = newUser.id;
+            console.log(`User created in database: ${newUser.id}`);
+          }
+          void resolvedUserId;
         } else {
           console.error('Missing required user data in webhook:', { id: userData.id, email: primaryEmail });
         }
@@ -396,20 +430,43 @@ async function handlePaymentModeCheckout(session: Stripe.Checkout.Session) {
     return;
   }
 
-  const dbUser = await prisma.user.findFirst({
-    where: { email: candidateEmail.toLowerCase() },
-    select: { id: true },
+  // Resolve OR auto-create the User. Most waitlist members (122/124 today)
+  // do not have a User row because they never completed Clerk signup. When
+  // they pay, we create a placeholder User keyed on email with sentinel
+  // `authProvider='pending'`. Later, when they complete Clerk signup using
+  // the same email, the patched Clerk webhook (`handleClerkWebhook`,
+  // `user.created` branch) finds this row by email and links the real
+  // Clerk identity onto it without disturbing FK relations.
+  let dbUser = await prisma.user.findFirst({
+    where: { email: candidateEmail.toLowerCase(), deletedAt: null },
+    select: { id: true, authProvider: true },
   });
 
   if (!dbUser) {
-    // The user must already exist (created during waitlist signup). If not,
-    // log loudly. Manual reconciliation needed. We do NOT auto-create users
-    // here because the founding cohort comes from a pre-existing waitlist.
-    console.error(
-      `[webhook] Lifetime Seat payment for unknown user ${candidateEmail}; ` +
-        `session ${session.id}, priceId ${priceId}. Manual reconciliation required.`,
-    );
-    return;
+    try {
+      const created = await prisma.user.create({
+        data: {
+          email: candidateEmail.toLowerCase(),
+          authProvider: 'pending',
+          authProviderId: `pending-lifetime-${session.id}`,
+          subscriptionTier: 'FREE', // syncLifetimeSeat below flips to MAX in the same write
+          foundingMember: false,
+          onboardingCompleted: false,
+        },
+        select: { id: true, authProvider: true },
+      });
+      dbUser = created;
+      console.log(
+        `[webhook] Auto-created placeholder User for Lifetime payment: id=${created.id} email=${candidateEmail}`,
+      );
+    } catch (createErr) {
+      console.error(
+        `[webhook] Failed to auto-create User for Lifetime payment ${candidateEmail}; ` +
+          `session ${session.id}. Manual reconciliation required.`,
+        createErr,
+      );
+      return;
+    }
   }
 
   const customerId = session.customer as string;
