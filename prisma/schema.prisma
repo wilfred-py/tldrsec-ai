@@ -34,6 +34,9 @@ model User {
   tierProcessingCount Int              @default(0)
   lastTierUpgrade     DateTime?
 
+  // Lifetime Seat cohort flag. See docs/adr/0004-lifetime-seat-entitlement-and-one-time-payment.md
+  foundingMember Boolean @default(false)
+
   // Trial tracking fields
   trialStartedAt  DateTime?
   trialEndsAt     DateTime?

@@ -23,3 +23,6 @@ A user's saved interest in a [Filing] type or ticker. Drives which [Summary] pay
 
 ### Onboarding
 The first-run flow that turns a new signup into an engaged subscriber: ticker selection, preview email, account creation, first cached [Summary] delivery.
+
+### Lifetime Seat
+A user who claimed one of the first 25 lifetime seats via a one-time $499 payment. Entitled to all MAX-tier features (see `lib/stripe/plans.ts`) forever, with no recurring subscription. Modeled as a `User.foundingMember: Boolean` flag rather than a new `SubscriptionTier` value, since the entitlement set is identical to MAX. Purchased via a one-time Stripe `Price` (env: `STRIPE_FOUNDING_LIFETIME_PRICE_ID`) under the existing MAX `Product`, not a recurring subscription. Not to be confused with [Subscription] (watchlist interest) or `UserSubscription` (Stripe-side recurring plan record, which Lifetime Seat holders do not have).
