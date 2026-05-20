@@ -81,6 +81,8 @@ scripts/*
 !scripts/send-pr1-test-email.ts
 !scripts/backfill-enrichment-applied.ts
 !scripts/vercel-build.sh
+!scripts/founding/
+!scripts/founding/*
 
 # Prisma generated files
 lib/generated/

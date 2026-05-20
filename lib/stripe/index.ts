@@ -35,6 +35,7 @@ const requiredEnvVars = {
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   STRIPE_PRO_MONTHLY_PRICE_ID: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
   STRIPE_MAX_MONTHLY_PRICE_ID: process.env.STRIPE_MAX_MONTHLY_PRICE_ID,
+  STRIPE_FOUNDING_LIFETIME_PRICE_ID: process.env.STRIPE_FOUNDING_LIFETIME_PRICE_ID,
 } as const;
 
 // Check for missing environment variables (server-side only)
@@ -377,6 +378,11 @@ export async function listActiveSubscriptions(
 /**
  * Derive plan type from Stripe price ID.
  * Returns FREE if price ID doesn't match any configured plan.
+ *
+ * Lifetime Seat priceId (`STRIPE_FOUNDING_LIFETIME_PRICE_ID`) maps to MAX
+ * because Lifetime Seat holders are entitled to MAX features. The Founding
+ * identity is tracked separately via `User.foundingMember`, not via planType.
+ * See ADR-0004 for rationale.
  */
 export function getPlanTypeFromPriceId(priceId: string | undefined): 'FREE' | 'PRO' | 'MAX' {
   if (!priceId) return 'FREE';
@@ -385,13 +391,28 @@ export function getPlanTypeFromPriceId(priceId: string | undefined): 'FREE' | 'P
   const proAnnualPriceId = process.env.STRIPE_PRO_ANNUAL_PRICE_ID;
   const maxMonthlyPriceId = process.env.STRIPE_MAX_MONTHLY_PRICE_ID;
   const maxAnnualPriceId = process.env.STRIPE_MAX_ANNUAL_PRICE_ID;
+  const foundingLifetimePriceId = process.env.STRIPE_FOUNDING_LIFETIME_PRICE_ID;
 
   if (priceId === proMonthlyPriceId || priceId === proAnnualPriceId) {
     return 'PRO';
   }
-  if (priceId === maxMonthlyPriceId || priceId === maxAnnualPriceId) {
+  if (
+    priceId === maxMonthlyPriceId ||
+    priceId === maxAnnualPriceId ||
+    priceId === foundingLifetimePriceId
+  ) {
     return 'MAX';
   }
 
   return 'FREE';
+}
+
+/**
+ * Returns true if the given priceId is the Founding Lifetime Seat price.
+ * Used by webhook handlers to distinguish lifetime payments from recurring
+ * subscriptions when both fan into the same `handleCheckoutCompleted` path.
+ */
+export function isFoundingLifetimePriceId(priceId: string | undefined): boolean {
+  if (!priceId) return false;
+  return priceId === process.env.STRIPE_FOUNDING_LIFETIME_PRICE_ID;
 }

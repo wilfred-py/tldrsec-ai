@@ -11,8 +11,8 @@ import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
-import { validateWebhookSignature, getPlanTypeFromPriceId, stripe } from '@/lib/stripe';
-import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod } from '@/lib/stripe/sync-subscription';
+import { validateWebhookSignature, getPlanTypeFromPriceId, isFoundingLifetimePriceId, stripe } from '@/lib/stripe';
+import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod, syncLifetimeSeat, revokeLifetimeSeat } from '@/lib/stripe/sync-subscription';
 import Stripe from 'stripe';
 import { waitUntil } from '@vercel/functions';
 import { captureServerEvent, shutdownServerPostHog } from '@/lib/analytics/posthog-server';
@@ -200,6 +200,9 @@ async function handleStripeWebhook(request: Request) {
       case 'invoice.payment_failed':
         await handlePaymentFailed(event.data.object as Stripe.Invoice);
         break;
+      case 'charge.refunded':
+        await handleChargeRefunded(event.data.object as Stripe.Charge);
+        break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
@@ -220,6 +223,15 @@ async function handleStripeWebhook(request: Request) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('Processing checkout completion:', session.id);
+
+  // Lifetime Seat purchases use mode: 'payment' (one-time), not 'subscription'.
+  // Branch here because line_items must be fetched separately for payment-mode
+  // sessions (Stripe doesn't include them on the session object by default) and
+  // the entitlement write differs from the recurring path. See ADR-0004.
+  if (session.mode === 'payment') {
+    await handlePaymentModeCheckout(session);
+    return;
+  }
 
   if (session.mode !== 'subscription') return;
 
@@ -326,6 +338,188 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   } catch (error) {
     console.error('Failed to process checkout completion:', error);
+  }
+}
+
+/**
+ * Handle `checkout.session.completed` for `mode: 'payment'` sessions.
+ *
+ * Currently only the Founding Lifetime Seat purchase flows through here.
+ * Any other payment-mode checkout is logged and ignored. When new
+ * one-time products are added, extend the priceId-routing logic below.
+ *
+ * Differs from the subscription-mode handler (above) in three ways:
+ *   1. Line items must be fetched separately (Stripe doesn't include them
+ *      on the session object by default for payment-mode sessions).
+ *   2. There is no `session.subscription`; entitlement is anchored on the
+ *      Founding flag + sentinel UserSubscription row written by
+ *      `syncLifetimeSeat`.
+ *   3. User resolution prefers `client_reference_id` (set by the founding
+ *      checkout route to the email) over the email fields, because the
+ *      founding flow always populates it.
+ */
+async function handlePaymentModeCheckout(session: Stripe.Checkout.Session) {
+  if (!stripe) {
+    console.error('[webhook] Stripe client not configured; cannot process payment-mode checkout');
+    return;
+  }
+
+  let priceId: string | undefined;
+  try {
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+    priceId = lineItems.data[0]?.price?.id;
+  } catch (err) {
+    console.error('[webhook] Failed to list payment-mode line items:', err);
+    return;
+  }
+
+  if (!priceId) {
+    console.error('[webhook] Payment-mode session missing priceId:', session.id);
+    return;
+  }
+
+  if (!isFoundingLifetimePriceId(priceId)) {
+    console.log(`[webhook] Payment-mode checkout with non-Founding priceId ${priceId}; ignoring`);
+    return;
+  }
+
+  // Resolve user. Prefer client_reference_id (always email for founding flow),
+  // fall back to customer_details.email, then session.customer_email.
+  const candidateEmail =
+    session.client_reference_id ||
+    session.customer_details?.email ||
+    session.customer_email ||
+    null;
+
+  if (!candidateEmail) {
+    console.error('[webhook] No email found on payment-mode session:', session.id);
+    return;
+  }
+
+  const dbUser = await prisma.user.findFirst({
+    where: { email: candidateEmail.toLowerCase() },
+    select: { id: true },
+  });
+
+  if (!dbUser) {
+    // The user must already exist (created during waitlist signup). If not,
+    // log loudly. Manual reconciliation needed. We do NOT auto-create users
+    // here because the founding cohort comes from a pre-existing waitlist.
+    console.error(
+      `[webhook] Lifetime Seat payment for unknown user ${candidateEmail}; ` +
+        `session ${session.id}, priceId ${priceId}. Manual reconciliation required.`,
+    );
+    return;
+  }
+
+  const customerId = session.customer as string;
+  try {
+    await syncLifetimeSeat(dbUser.id, priceId, customerId);
+    console.log(`[webhook] Lifetime Seat granted: user=${dbUser.id} session=${session.id}`);
+
+    try {
+      const amountCents = typeof session.amount_total === 'number' ? session.amount_total : 0;
+      const currency = session.currency?.toUpperCase() || 'USD';
+      const batch = session.metadata?.batch || undefined;
+      captureServerEvent(dbUser.id, EVENTS.LIFETIME_SEAT_CLAIMED, {
+        amount_cents: amountCents,
+        currency,
+        ...(batch ? { batch } : {}),
+      });
+    } catch (analyticsErr) {
+      console.error('[webhook] PostHog capture failed (non-fatal):', analyticsErr);
+    }
+  } catch (syncErr) {
+    console.error('[webhook] syncLifetimeSeat failed:', syncErr);
+  }
+}
+
+/**
+ * Handle `charge.refunded` for Lifetime Seat refunds.
+ *
+ * Within the 30-day refund window, any refund issued against a Founding
+ * Lifetime payment triggers `revokeLifetimeSeat`, which atomically clears
+ * the founding flag, downgrades the tier to FREE, deactivates the sentinel
+ * UserSubscription row, and writes an AuditLog entry.
+ *
+ * Refunds against non-Founding charges (e.g., a subscription invoice refund)
+ * are logged and ignored. Those flows are owned by the existing
+ * subscription handlers.
+ */
+async function handleChargeRefunded(charge: Stripe.Charge) {
+  if (!stripe) {
+    console.error('[webhook] Stripe client not configured; cannot process charge.refunded');
+    return;
+  }
+
+  // Charges from payment-mode checkouts have a payment_intent we can trace
+  // back to the original checkout session. We look up that session's line
+  // items to determine if the refunded charge corresponds to a Founding price.
+  const paymentIntentId = typeof charge.payment_intent === 'string'
+    ? charge.payment_intent
+    : charge.payment_intent?.id;
+
+  if (!paymentIntentId) {
+    console.log('[webhook] charge.refunded without payment_intent; ignoring');
+    return;
+  }
+
+  let priceId: string | undefined;
+  let sessionId: string | undefined;
+  try {
+    const sessions = await stripe.checkout.sessions.list({
+      payment_intent: paymentIntentId,
+      limit: 1,
+    });
+    sessionId = sessions.data[0]?.id;
+    if (!sessionId) {
+      console.log(`[webhook] No checkout session found for refunded payment_intent ${paymentIntentId}; ignoring`);
+      return;
+    }
+    const lineItems = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 1 });
+    priceId = lineItems.data[0]?.price?.id;
+  } catch (err) {
+    console.error('[webhook] Failed to trace refunded charge to session:', err);
+    return;
+  }
+
+  if (!isFoundingLifetimePriceId(priceId)) {
+    console.log(`[webhook] charge.refunded for non-Founding priceId ${priceId}; ignoring`);
+    return;
+  }
+
+  const customerId = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
+  if (!customerId) {
+    console.error(`[webhook] charge.refunded for Founding price without customer id: charge ${charge.id}`);
+    return;
+  }
+
+  const userSub = await prisma.userSubscription.findFirst({
+    where: { stripeCustomerId: customerId },
+    select: { userId: true },
+  });
+
+  if (!userSub) {
+    console.error(`[webhook] charge.refunded for Founding price; no UserSubscription for customer ${customerId}`);
+    return;
+  }
+
+  try {
+    await revokeLifetimeSeat(userSub.userId, 'charge.refunded');
+    console.log(`[webhook] Lifetime Seat revoked via charge.refunded: user=${userSub.userId} charge=${charge.id}`);
+
+    try {
+      const created = charge.created ? new Date(charge.created * 1000) : null;
+      const daysSince = created ? Math.floor((Date.now() - created.getTime()) / (24 * 60 * 60 * 1000)) : undefined;
+      captureServerEvent(userSub.userId, EVENTS.LIFETIME_SEAT_REVOKED, {
+        reason: 'charge.refunded',
+        ...(daysSince !== undefined ? { days_since_purchase: daysSince } : {}),
+      });
+    } catch (analyticsErr) {
+      console.error('[webhook] PostHog capture failed (non-fatal):', analyticsErr);
+    }
+  } catch (revokeErr) {
+    console.error('[webhook] revokeLifetimeSeat failed:', revokeErr);
   }
 }
 
