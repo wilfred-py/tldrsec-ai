@@ -1,23 +1,35 @@
 /**
  * 2026-05 launch hero renderer.
  *
- * The admin /campaign/send route's default path uses getCampaignEmailContent
- * (inline HTML strings, no founderNote slot). The Wed 2026-05-20 launch needs
- * a different shape: render React Email's CampaignDemoTemplate to HTML so the
- * 'letter' founderNoteVariant + per-subscriber tldrsec.app trial CTA both wire
- * through. This module is the seam.
+ * Routes the Wed-or-later waitlist broadcast through Form10QMinimalistTemplate
+ * (the actual PR1 design language signed off on with NVIDIA 10-K + Chipotle
+ * 10-Q test sends) instead of the generic admin send route's inline-HTML path.
  *
- * Only invoked when the route is in region mode AND emailNumber === 1.
+ * The template's new props:
+ *   - `founderNote` + `founderNoteVariant='letter'` attach a personal letter
+ *     after the SEC link + materiality rationale block.
+ *   - `founderNoteSignoff` renders "Founder, tldrSEC / Wilf" on two lines
+ *     AFTER the launchCta button.
+ *   - `launchCta` renders the per-subscriber "Start your 7-day free trial"
+ *     button between body and signoff, AND suppresses the generic
+ *     "Want more filings like this?" CTA so the broadcast has exactly one
+ *     button.
+ *   - `suppressStaleness` skips the StalenessBanner (filing is 28+ days old
+ *     by deliberate choice for the launch, not a delivery delay).
+ *
+ * Only invoked when the admin send route is in region mode AND emailNumber === 1.
  */
 
 import * as React from 'react';
 import { renderAsync } from '@react-email/render';
-import { CampaignDemoTemplate } from '@/components/ui/email/templates/campaign-demo-template';
+import { Form10QMinimalistTemplate } from '@/components/ui/email/templates/10q-minimalist-template';
 import { buildCampaignUrl } from '@/lib/email/url-utils';
 import {
-  LAUNCH_VRT_PAYLOAD,
+  LAUNCH_VRT_FILING,
   LAUNCH_SUBJECT,
   LAUNCH_FOUNDER_NOTE,
+  LAUNCH_FOUNDER_SIGNOFF,
+  LAUNCH_CTA_TEXT,
 } from '@/lib/email/__fixtures__/launch-2026-05-vrt';
 
 export interface RenderLaunchHeroOptions {
@@ -36,7 +48,7 @@ export interface RenderedLaunchHero {
 
 /**
  * Render the VRT 10-Q hero email for one subscriber. Subject is constant;
- * HTML body is personalized via subscriberId in the trial CTA URL.
+ * HTML body is personalized via subscriberId in the CTA URL.
  */
 export async function renderLaunchHero(
   options: RenderLaunchHeroOptions,
@@ -47,41 +59,56 @@ export async function renderLaunchHero(
     path: '/sign-up',
   });
 
-  const element = React.createElement(CampaignDemoTemplate, {
-    ticker: LAUNCH_VRT_PAYLOAD.ticker,
-    companyName: LAUNCH_VRT_PAYLOAD.companyName,
-    filingType: LAUNCH_VRT_PAYLOAD.filingType,
-    filingDate: LAUNCH_VRT_PAYLOAD.filingDate,
-    filerName: LAUNCH_VRT_PAYLOAD.filerName,
-    filerRole: LAUNCH_VRT_PAYLOAD.filerRole,
-    signalLevel: LAUNCH_VRT_PAYLOAD.signalLevel,
-    signalVerdict: LAUNCH_VRT_PAYLOAD.signalVerdict,
-    signalDescription: LAUNCH_VRT_PAYLOAD.signalDescription,
-    summaryText: LAUNCH_VRT_PAYLOAD.summaryText,
-    transactions: LAUNCH_VRT_PAYLOAD.transactions,
+  const element = React.createElement(Form10QMinimalistTemplate, {
+    filing: LAUNCH_VRT_FILING,
     founderNote: LAUNCH_FOUNDER_NOTE,
-    founderNoteVariant: 'letter',
-    unsubscribeUrl: options.unsubscribeUrl,
-    signupUrl,
+    founderNoteVariant: 'letter' as const,
+    founderNoteSignoff: LAUNCH_FOUNDER_SIGNOFF,
+    launchCta: { text: LAUNCH_CTA_TEXT, url: signupUrl },
+    suppressStaleness: true,
   });
 
   const html = await renderAsync(element);
 
-  // Plain-text fallback: derive a deterministic, scannable version from the
-  // structured payload + founder note. Resend uses this for clients that
-  // disable HTML and for some spam-filter heuristics.
+  // Plain-text fallback. Matches the rendered structure top-to-bottom so
+  // text-only readers get the same content density.
+  const summaryData = LAUNCH_VRT_FILING.summaryData as {
+    summary?: string;
+    whyItMatters?: string;
+    financialHighlights?: Array<{
+      label: string;
+      value: string;
+      priorValue?: string;
+      change?: string;
+      qoqChange?: string;
+    }>;
+  };
   const text = [
-    `${LAUNCH_VRT_PAYLOAD.ticker} ${LAUNCH_VRT_PAYLOAD.filingType} · ${LAUNCH_VRT_PAYLOAD.filingDate}`,
-    `${LAUNCH_VRT_PAYLOAD.signalLevel} SIGNAL · ${LAUNCH_VRT_PAYLOAD.signalVerdict}`,
-    LAUNCH_VRT_PAYLOAD.signalDescription,
+    `${LAUNCH_VRT_FILING.symbol} ${LAUNCH_VRT_FILING.filingType} · ${LAUNCH_VRT_FILING.filingDate}`,
+    LAUNCH_VRT_FILING.companyName,
     '',
-    LAUNCH_VRT_PAYLOAD.summaryText,
+    'HIGH MATERIALITY',
     '',
-    ...LAUNCH_VRT_PAYLOAD.transactions.map(t => `${t.label}: ${t.value}`),
+    summaryData.summary ?? '',
     '',
+    'EARNINGS SCORECARD',
+    ...(summaryData.financialHighlights ?? []).map((h) =>
+      `  ${h.label}: ${h.priorValue ? `${h.priorValue} -> ` : ''}${h.value}${
+        h.change ? ` (${h.change} YoY` : ''
+      }${h.qoqChange ? `, ${h.qoqChange} QoQ)` : h.change ? ')' : ''}`,
+    ),
+    '',
+    'WHY IT MATTERS',
+    summaryData.whyItMatters ?? '',
+    '',
+    'A NOTE FROM THE FOUNDER',
     LAUNCH_FOUNDER_NOTE,
     '',
-    `Start your 7-day free trial: ${signupUrl}`,
+    `${LAUNCH_CTA_TEXT}: ${signupUrl}`,
+    '',
+    LAUNCH_FOUNDER_SIGNOFF,
+    '',
+    `View original filing: ${LAUNCH_VRT_FILING.filingUrl}`,
     '',
     `Unsubscribe: ${options.unsubscribeUrl}`,
   ].join('\n');
