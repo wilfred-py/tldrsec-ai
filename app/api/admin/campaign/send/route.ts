@@ -19,7 +19,10 @@ import { currentUser } from '@clerk/nextjs/server';
 import { Resend } from 'resend';
 import { generateUnsubscribeUrl } from '@/lib/email/unsubscribe-tokens';
 import { fetchCampaignFilings } from '@/lib/email/campaign-templates';
+import { classifyRegion, regionCohortSlot, type Region } from '@/lib/email/region-classifier';
+import { FOUNDER_REPLY_TO } from '@/lib/email/config';
 import { logger } from '@/lib/logging';
+import { timingSafeEqual } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,64 +49,177 @@ function isAdmin(userId: string): boolean {
   return adminUsers.some(id => id.trim() === userId);
 }
 
-export async function POST(request: NextRequest) {
-  // Auth check
-  const user = await currentUser();
-  if (!user || !isAdmin(user.id)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+/**
+ * Two auth paths into the send route:
+ *   - Clerk admin (interactive, no arm-flag gate): manual sends from the admin UI
+ *   - Bearer token (cron-fired): the /schedule entries that auto-fire the
+ *     2026-05 Wednesday launch. Token compared in constant-ish time to
+ *     LAUNCH_CRON_TOKEN env var. These sends are gated by LAUNCH_ARMED below.
+ */
+type AuthResult =
+  | { ok: false; status: number; error: string }
+  | { ok: true; via: 'admin' | 'cron'; initiatedBy: string };
 
-  let body: { cohort: CohortNumber; emailNumber: EmailNumber; variant?: 'A' | 'B'; dryRun?: boolean };
+async function authenticate(request: NextRequest): Promise<AuthResult> {
+  const authHeader = request.headers.get('authorization') ?? '';
+  const cronToken = process.env.LAUNCH_CRON_TOKEN;
+  if (cronToken && authHeader.startsWith('Bearer ')) {
+    const provided = authHeader.slice('Bearer '.length).trim();
+    // Constant-time compare via Node's timingSafeEqual. Length must match first
+    // (timingSafeEqual throws on length mismatch), so the length check itself
+    // remains a non-secret-data branch that's safe to short-circuit.
+    if (provided.length === cronToken.length) {
+      const a = Buffer.from(provided);
+      const b = Buffer.from(cronToken);
+      if (timingSafeEqual(a, b)) {
+        return { ok: true, via: 'cron', initiatedBy: 'cron' };
+      }
+    }
+  }
+  const user = await currentUser();
+  if (user && isAdmin(user.id)) {
+    return { ok: true, via: 'admin', initiatedBy: user.id };
+  }
+  return { ok: false, status: 401, error: 'Unauthorized' };
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await authenticate(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+  const { via: authVia, initiatedBy } = auth;
+
+  // Two send modes coexist:
+  //   - cohort mode (legacy): targets subscribers pinned to cohort_id ∈ {c1,c2,c3}
+  //   - region mode (added for the 2026-05 launch): targets subscribers whose
+  //     email domain classifies to a Region ('us' | 'eu'); cohort_id is ignored.
+  //
+  // The campaign_sends UNIQUE (campaign_id, cohort_id, email_id, variant)
+  // constraint is preserved by slotting region-mode sends under synthetic
+  // cohort_id values 'region-us' / 'region-eu' (see regionCohortSlot).
+  let body: {
+    cohort?: CohortNumber;
+    region?: Region;
+    emailNumber: EmailNumber;
+    variant?: 'A' | 'B';
+    dryRun?: boolean;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { cohort, emailNumber, variant, dryRun = false } = body;
+  const { cohort, region, emailNumber, variant, dryRun = false } = body;
 
-  // Validate params
-  if (![1, 2, 3].includes(cohort) || ![1, 2, 3].includes(emailNumber)) {
-    return NextResponse.json({ error: 'cohort must be 1-3, emailNumber must be 1-3' }, { status: 400 });
+  // Validate params: exactly one of cohort | region must be set.
+  if ((cohort != null) === (region != null)) {
+    return NextResponse.json(
+      { error: 'Specify exactly one of { cohort } or { region }, not both' },
+      { status: 400 }
+    );
   }
+  if (cohort != null && ![1, 2, 3].includes(cohort)) {
+    return NextResponse.json({ error: 'cohort must be 1-3' }, { status: 400 });
+  }
+  if (region != null && !['us', 'eu'].includes(region)) {
+    return NextResponse.json({ error: "region must be 'us' or 'eu'" }, { status: 400 });
+  }
+  if (![1, 2, 3].includes(emailNumber)) {
+    return NextResponse.json({ error: 'emailNumber must be 1-3' }, { status: 400 });
+  }
+  const sendMode: 'cohort' | 'region' = region != null ? 'region' : 'cohort';
 
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey && !dryRun) {
     return NextResponse.json({ error: 'RESEND_API_KEY not configured' }, { status: 500 });
   }
 
+  // LAUNCH_ARMED safety gate.
+  // Cron-fired sends are gated by an explicit env flag the operator flips
+  // ON after dry-run sign-off. This is the "hard deadline with kill switch"
+  // pattern: the cron will keep trying to fire, but every attempt no-ops
+  // until LAUNCH_ARMED=true is set. Admin-clicked sends (interactive Clerk
+  // path) bypass this check — the click IS the arm.
+  if (authVia === 'cron' && !dryRun) {
+    const armed = process.env.LAUNCH_ARMED === 'true';
+    if (!armed) {
+      campaignLogger.info('Cron send skipped — LAUNCH_ARMED is not true', {
+        sendMode,
+        cohort: cohort ?? null,
+        region: region ?? null,
+        emailNumber,
+        launchArmedEnv: process.env.LAUNCH_ARMED ?? null,
+      });
+      return NextResponse.json({
+        skipped: true,
+        reason: 'LAUNCH_ARMED is not "true"',
+        launchArmed: process.env.LAUNCH_ARMED ?? null,
+      }, { status: 200 });
+    }
+  }
+
   try {
     const supabase = await getSupabaseClient();
 
-    // Fetch sendable subscribers in this cohort. Per email-funnel-tracking
-    // design Review Notes 2A + 5A + 13A:
-    //   - cohort_id is now pinned per subscriber (no more index slicing)
-    //   - filter out unsubscribed AND bounced AND complained addresses
+    // Fetch sendable subscribers. Per email-funnel-tracking design Review Notes
+    // 2A + 5A + 13A:
+    //   - cohort mode filters by stored cohort_id
+    //   - region mode skips cohort_id and filters in-memory via classifyRegion
+    //   - both modes exclude unsubscribed AND bounced AND complained addresses
     //   - SELECT id (the UUID) so we can include it in Resend tags + UTMs
-    const cohortTag = COHORT_TAG[cohort as CohortNumber];
-    const { data: cohortSubscribers, error } = await supabase
+    const cohortSlot: string = sendMode === 'cohort'
+      ? COHORT_TAG[cohort as CohortNumber]
+      : regionCohortSlot(region as Region);
+
+    // Chain order preserves the pre-region cohort-mode chain
+    // (.eq before .is.is.is.order) so the cohort-stability test mock keeps
+    // matching. Region mode skips the .eq leg entirely.
+    interface SubscriberRow {
+      id: string;
+      email: string;
+      subscribed_at: string;
+      cohort_id: string | null;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let subscribersQuery: any = supabase
       .from('newsletter_subscribers')
-      .select('id, email, subscribed_at, cohort_id')
-      .eq('cohort_id', cohortTag)
+      .select('id, email, subscribed_at, cohort_id');
+    if (sendMode === 'cohort') {
+      subscribersQuery = subscribersQuery.eq('cohort_id', cohortSlot);
+    }
+    subscribersQuery = subscribersQuery
       .is('unsubscribed_at', null)
       .is('bounced_at', null)
       .is('complained_at', null)
       .order('subscribed_at', { ascending: false });
+    const { data: fetchedSubscribers, error } = (await subscribersQuery) as {
+      data: SubscriberRow[] | null;
+      error: { message: string } | null;
+    };
 
     if (error) {
       campaignLogger.error('Failed to fetch subscribers', { error: error.message });
       return NextResponse.json({ error: 'Failed to fetch subscribers' }, { status: 500 });
     }
 
+    const cohortSubscribers: SubscriberRow[] = sendMode === 'region'
+      ? (fetchedSubscribers ?? []).filter((s: SubscriberRow) => classifyRegion(s.email) === region)
+      : (fetchedSubscribers ?? []);
+
     if (!cohortSubscribers || cohortSubscribers.length === 0) {
-      return NextResponse.json({
-        error: `Cohort ${cohort} (${cohortTag}) has no sendable subscribers.`,
-      }, { status: 404 });
+      const errMsg = sendMode === 'cohort'
+        ? `Cohort ${cohort} (${cohortSlot}) has no sendable subscribers.`
+        : `Region '${region}' has no sendable subscribers (${cohortSlot}).`;
+      return NextResponse.json({ error: errMsg }, { status: 404 });
     }
 
-    // For A/B testing on cohort 1, split in half
+    // For A/B testing on cohort 1, split in half. Not applied in region mode —
+    // 124 subscribers split by region (8 EU / 116 US) is already below A/B
+    // stat-sig, so we send all targets the same variant.
     let targetSubscribers = cohortSubscribers;
-    if (variant && cohort === 1) {
+    if (sendMode === 'cohort' && variant && cohort === 1) {
       const half = Math.ceil(cohortSubscribers.length / 2);
       targetSubscribers = variant === 'A'
         ? cohortSubscribers.slice(0, half)
@@ -116,9 +232,11 @@ export async function POST(request: NextRequest) {
     if (dryRun) {
       return NextResponse.json({
         dryRun: true,
+        mode: sendMode,
         campaignId: CAMPAIGN_ID,
-        cohort,
-        cohortTag,
+        cohort: cohort ?? null,
+        region: region ?? null,
+        cohortSlot,
         emailNumber,
         emailTag: EMAIL_TAG[emailNumber as EmailNumber],
         variant: variant || null,
@@ -154,11 +272,11 @@ export async function POST(request: NextRequest) {
       .from('campaign_sends')
       .insert({
         campaign_id: CAMPAIGN_ID,
-        cohort_id: cohortTag,
+        cohort_id: cohortSlot,
         email_id: EMAIL_TAG[emailNumber as EmailNumber],
         variant: variantTagValue,
         status: 'pending',
-        initiated_by: user.id,
+        initiated_by: initiatedBy,
       })
       .select('id, status, sent_count, initiated_at')
       .single();
@@ -173,7 +291,7 @@ export async function POST(request: NextRequest) {
           .from('campaign_sends')
           .select('id, status, sent_count, failed_count, initiated_at, completed_at')
           .eq('campaign_id', CAMPAIGN_ID)
-          .eq('cohort_id', cohortTag)
+          .eq('cohort_id', cohortSlot)
           .eq('email_id', EMAIL_TAG[emailNumber as EmailNumber]);
         priorQuery = variantTagValue === null
           ? priorQuery.is('variant', null)
@@ -192,7 +310,7 @@ export async function POST(request: NextRequest) {
     campaignLogger.info('campaign_sends row inserted (pending)', {
       campaignSendId,
       campaignId: CAMPAIGN_ID,
-      cohortTag,
+      cohortSlot,
       emailTag: EMAIL_TAG[emailNumber as EmailNumber],
     });
 
@@ -209,18 +327,31 @@ export async function POST(request: NextRequest) {
     //   - campaign: legacy flat tag preserved for any existing dashboards.
     const emailTag = EMAIL_TAG[emailNumber as EmailNumber];
     const resend = new Resend(resendApiKey);
+
+    // 2026-05 launch path: region + E1 = curated VRT 10-Q hero with founder note.
+    // Rendered via React Email's CampaignDemoTemplate (founderNoteVariant='letter')
+    // because the inline-HTML getCampaignEmailContent path has no founder-note slot.
+    const useLaunchHero = sendMode === 'region' && emailNumber === 1;
+    let renderLaunchHero: typeof import('@/lib/email/launch-hero-renderer').renderLaunchHero | null = null;
+    if (useLaunchHero) {
+      ({ renderLaunchHero } = await import('@/lib/email/launch-hero-renderer'));
+    }
+
     const emails = await Promise.all(targetSubscribers.map(async subscriber => {
       const unsubscribeUrl = generateUnsubscribeUrl(subscriber.email);
-      const content = await getCampaignEmailContent(emailNumber, {
-        unsubscribeUrl,
-        variant,
-        filings: filings || undefined,
-        subscriberId: subscriber.id,
-        emailId: emailTag,
-      });
+      const content = useLaunchHero && renderLaunchHero
+        ? await renderLaunchHero({ subscriberId: subscriber.id, unsubscribeUrl })
+        : await getCampaignEmailContent(emailNumber, {
+            unsubscribeUrl,
+            variant,
+            filings: filings || undefined,
+            subscriberId: subscriber.id,
+            emailId: emailTag,
+          });
 
       return {
-        from: 'TLDRSec <notifications@tldrsec.app>',
+        from: 'tldrSEC <notifications@tldrsec.app>',
+        reply_to: FOUNDER_REPLY_TO,
         to: subscriber.email,
         subject: content.subject,
         html: content.html,
@@ -230,12 +361,22 @@ export async function POST(request: NextRequest) {
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         },
         tags: [
-          { name: 'campaign', value: `cohort${cohort}-email${emailNumber}` },
+          {
+            name: 'campaign',
+            value: sendMode === 'cohort'
+              ? `cohort${cohort}-email${emailNumber}`
+              : `region${region}-email${emailNumber}`,
+          },
           { name: 'campaignId', value: CAMPAIGN_ID },
-          { name: 'cohortId', value: cohortTag },
+          { name: 'cohortId', value: cohortSlot },
           { name: 'emailId', value: emailTag },
           { name: 'subscriberId', value: subscriber.id },
           { name: 'variant', value: variant || 'none' },
+          // Region tag only emitted in region mode — keeps cohort-mode at the
+          // locked 6-tag PostHog schema (see campaign-resend-tags.test.ts).
+          ...(sendMode === 'region'
+            ? [{ name: 'region', value: region as string }]
+            : []),
         ],
       };
     }));
@@ -287,7 +428,8 @@ export async function POST(request: NextRequest) {
       sent: sentCount,
       failed: failedCount,
       total: emails.length,
-      adminUser: user.id,
+      initiatedBy,
+      authVia,
     });
 
     return NextResponse.json({
@@ -305,7 +447,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     campaignLogger.error('Campaign send failed', {
       error: error instanceof Error ? error.message : 'Unknown error',
-      cohort,
+      cohort: cohort ?? null,
+      region: region ?? null,
       emailNumber,
     });
     return NextResponse.json({ error: 'Campaign send failed' }, { status: 500 });

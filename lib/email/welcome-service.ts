@@ -5,6 +5,7 @@ import { getPrismaClient } from '@/lib/db/prisma';
 import { getEmailTemplate } from './templates';
 import { EmailType, EmailMessage } from './types';
 import { sendEmail } from './index';
+import { FOUNDER_REPLY_TO } from './config';
 import { logger } from '../logging';
 import { SecureEmailLogger } from './security-helpers';
 
@@ -50,10 +51,13 @@ export async function queueWelcomeEmail(
         preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
       });
 
-      // Prepare email message
+      // Prepare email message. Explicit replyTo (not just the config default) so
+      // replies route to the founder inbox even if EMAIL_DEFAULT_REPLY_TO is unset
+      // or accidentally rolled back. Belt-and-braces against silent regression.
       const message: EmailMessage = {
         to: email,
         subject: 'Welcome to tldrSEC!',
+        replyTo: FOUNDER_REPLY_TO,
         html,
         text,
         tags: ['type:welcome', 'onboarding:complete'],
@@ -139,10 +143,12 @@ export async function sendWelcomeEmail(): Promise<{ success: boolean; error?: st
       preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`
     });
     
-    // Prepare email message
+    // Prepare email message. Explicit replyTo for the same reason as
+    // queueWelcomeEmail above.
     const message: EmailMessage = {
       to: primaryEmail,
       subject: 'Welcome to tldrSEC!',
+      replyTo: FOUNDER_REPLY_TO,
       html,
       text,
       tags: [

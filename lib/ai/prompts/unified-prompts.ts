@@ -30,6 +30,16 @@ export interface FilingPromptConfig {
   filingDate?: string;
   /** The actual filing content to summarize */
   filingContent?: string;
+  /**
+   * When false/undefined, the materialitySignal field is stripped from
+   * FORM_SCHEMAS['10-K' | '10-Q'] before the model sees it, and the
+   * MATERIALITY SIGNAL section is stripped from the form's extraction
+   * guidance. Production callers gate this via PostHog flag
+   * `enable_earnings_mini_deep_dive` (see `isEarningsMiniDeepDiveEnabled`
+   * in `lib/ai/enrichment-flags.ts`). Autoplan Decision #33 — schema/prompt
+   * is the single feature-flag layer.
+   */
+  enableEarningsMiniDeepDive?: boolean;
 }
 
 /**
@@ -131,6 +141,13 @@ const BASE_SCHEMA_PROPERTIES: Record<string, SchemaProperty> = {
  * Interpretive "why it matters" property reused across target schemas.
  * Opt-in per schema — not in BASE_SCHEMA_PROPERTIES because Form 4, Form 3, Form 144,
  * SC 13D/G, and Generic rely on label-based copy rather than AI interpretation.
+ *
+ * This is the LEGACY 180-char version. For 10-K / 10-Q when the
+ * earnings-mini-deep-dive flag is on, `generateFilingPrompt` swaps in
+ * `WHY_IT_MATTERS_PROPERTY_10K` / `WHY_IT_MATTERS_PROPERTY_10Q` below — both
+ * carry a 400-char cap and form-specific guidance that explicitly forbids
+ * metric restatement and routes the model to X-sentiment + web-search
+ * enrichment context (now wired for 10-K/10-Q in `summarize.ts`).
  */
 const WHY_IT_MATTERS_PROPERTY: SchemaProperty = {
   type: 'string',
@@ -139,15 +156,93 @@ const WHY_IT_MATTERS_PROPERTY: SchemaProperty = {
 };
 
 /**
+ * 10-K-specific whyItMatters property — consolidated synthesis output.
+ *
+ * v12 rewrite per Wilfred 2026-05-17: the WIM field is now the ONE place
+ * the email surfaces investor-grade interpretation. The "What to Watch"
+ * section has been removed from rendering; the forward-looking risks
+ * that used to live there are now folded INTO this prose, alongside the
+ * material context and sentiment framing. Multi-paragraph output
+ * supported. 1000-char cap accommodates real synthesis.
+ *
+ * `riskFactors` and `keyPoints` arrays are still extracted into the
+ * schema for downstream consumers (DB storage, future analytics) but
+ * are no longer rendered as their own email sections.
+ */
+const WHY_IT_MATTERS_PROPERTY_10K: SchemaProperty = {
+  type: 'string',
+  description:
+    'CONSOLIDATED SYNTHESIS (200-1000 chars, 2-3 short paragraphs separated by blank lines). ' +
+    'This is the ONE section in the email that combines material context with forward-looking interpretation. ' +
+    'No standalone "What to Watch" section renders — the risks that would have gone there must be folded into this prose. ' +
+    'STRUCTURE: ' +
+    '(¶1) Material take — the single most important investor read of this filing, citing ONE specific cross-year inflection from MD&A or Item 1A risk factors. Reference dollar amounts, item numbers, named risks. NEVER just restate the scorecard metrics. ' +
+    '(¶2) Forward-looking risks — synthesize the 2-3 most material risk factors / themes (from Item 1A) into a coherent "what bears watching" paragraph. Compare voices: filing\'s tone vs market sentiment (X-sentiment context above) vs peer/sector framing (web-search ENRICHMENT context above). Where do they agree, where do they diverge? ' +
+    '(¶3, optional) Peer or sector framing — only if web-search ENRICHMENT context is provided. ' +
+    'STRICT BAN: do not restate metric deltas already shown in the scorecard. Do not enumerate risks as a list — write prose that synthesizes the connections between them. If you cannot produce specific, non-obvious interpretation, return empty string.',
+  maxLength: 1000,
+};
+
+/**
+ * 10-Q-specific whyItMatters property — consolidated synthesis output.
+ * Same shape as the 10-K variant but tuned for quarterly cadence:
+ * QoQ inflections, management commentary deltas, consensus delta.
+ */
+const WHY_IT_MATTERS_PROPERTY_10Q: SchemaProperty = {
+  type: 'string',
+  description:
+    'CONSOLIDATED SYNTHESIS (200-1000 chars, 2-3 short paragraphs separated by blank lines). ' +
+    'This is the ONE section in the email that combines material context with forward-looking interpretation. ' +
+    'No standalone "What to Watch" section renders — the risks that would have gone there must be folded into this prose. ' +
+    'STRUCTURE: ' +
+    '(¶1) Material take — the single most important investor read of this quarterly print, citing ONE specific QoQ inflection point or management commentary delta from MD&A. Reference dollar amounts, item numbers, named events. NEVER just restate the scorecard metrics. ' +
+    '(¶2) Forward-looking risks — synthesize the 2-3 most material near-term concerns (from the quarter\'s risk factors / management commentary) into a coherent paragraph. Compare voices: management\'s tone in MD&A vs market sentiment (X-sentiment context above) vs consensus expectation (web-search ENRICHMENT context above). Where does the data confirm vs contradict each voice? ' +
+    '(¶3, optional) Consensus or peer framing — only if web-search ENRICHMENT context is provided. Did the print beat/miss consensus? Did peers print similar dynamics this quarter? ' +
+    'STRICT BAN: do not restate metric deltas. Do not enumerate risks — synthesize them as prose. Empty string beats vague prose.',
+  maxLength: 1000,
+};
+
+/**
+ * Materiality signal — 4-tier classification for 10-K and 10-Q filings.
+ *
+ * Optional (not in `required[]`) — extractors default to {score:'noise', rationale:'...'}
+ * when absent to avoid the JSON-schema rejection cliff identified in autoplan
+ * Decision #4. Validated against 30-filing labeled set at 76.7% accuracy via
+ * `lib/ai/calibration/materiality-rubric.ts` calibration harness (gate ≥75%).
+ *
+ * Materiality is SYMMETRIC — a big upside beat is just as material as a big
+ * downside miss. See FORM_EXTRACTION_GUIDANCE['10-K' | '10-Q'] for the full
+ * rubric.
+ */
+const MATERIALITY_SIGNAL_PROPERTY: SchemaProperty = {
+  type: 'object',
+  description: 'Materiality classification using 4-tier scale (high / medium / low / noise). Score MUST be derived from filing evidence — revenue/earnings beats or misses, NEW risk factors vs prior period, guidance changes, leadership changes, control deficiencies, restatements, segment shifts, material acquisitions or divestitures. Materiality is SYMMETRIC: a +20% revenue beat is as material as a -5% miss. Never inflate to feel useful — most routine large-cap filings are LOW, not MEDIUM.',
+  properties: {
+    score: {
+      type: 'string',
+      description: 'One of: "high" | "medium" | "low" | "noise". MUST match exactly.',
+      enum: ['high', 'medium', 'low', 'noise'],
+    },
+    rationale: {
+      type: 'string',
+      description: 'One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NOT generic prose. Example: "FY2025 net income +13% YoY to $30.5B per Item 7; Q4 retrospective accounting method change per Note 1."',
+      maxLength: 400,
+    },
+  },
+  required: ['score', 'rationale'],
+};
+
+/**
  * Financial highlight item schema with label, value, and optional change fields.
  * Used in 10-K and 10-Q schemas for consistent financial metric representation.
  */
 const FINANCIAL_HIGHLIGHT_ITEM: SchemaProperty = {
   type: 'object',
-  description: 'Financial metric with value and change',
+  description: 'Financial metric with current value, prior-period value, and YoY change. The prior value enables side-by-side comparison rendering ([prior] → [current]) in the email scorecard.',
   properties: {
     label: { type: 'string', description: 'Metric name (e.g., "Revenue", "Net Income")', maxLength: 50 },
-    value: { type: 'string', description: withGroundingNote('Value with units (e.g., "$50.5B"). Some 10-Q filings omit certain margins; do NOT compute from other figures or import from prior periods.'), maxLength: 30 },
+    value: { type: 'string', description: withGroundingNote('CURRENT-period value with units (e.g., "$50.5B"). Some 10-Q filings omit certain margins; do NOT compute from other figures or import from prior periods.'), maxLength: 30 },
+    priorValue: { type: 'string', description: withGroundingNote('PRIOR-period value with units, formatted the same as `value` (e.g., "$44.0B" for prior-year revenue, "75.0%" for prior gross margin). The prior-period column is in the SAME table as the current value — for 10-K, prior fiscal year; for 10-Q, prior-year same quarter. Leave null when only the current period is stated.'), maxLength: 30 },
     change: { type: 'string', description: withGroundingNote('YoY change as stated in the filing or trivially computable from two stated period values (e.g., "+15%", "-3%"). Leave null when only one period\'s value is given.'), maxLength: 20 }
   },
   required: ['label', 'value']
@@ -236,7 +331,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         description: 'Additional key takeaways (fallback if financialHighlights sparse)',
         items: KEY_POINT_ITEM
       },
-      whyItMatters: WHY_IT_MATTERS_PROPERTY
+      whyItMatters: WHY_IT_MATTERS_PROPERTY,
+      materialitySignal: MATERIALITY_SIGNAL_PROPERTY
     }
   },
 
@@ -252,12 +348,13 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
       financialHighlights: {
         type: 'array',
         maxItems: 6,
-        description: 'Key quarterly financial metrics with YoY and QoQ changes',
+        description: 'Key quarterly financial metrics with current value, prior-year value, and YoY/QoQ changes. The prior value enables side-by-side comparison rendering ([prior] → [current]) in the email scorecard.',
         items: {
           type: 'object',
           properties: {
             label: { type: 'string', description: 'Metric name (e.g., "Revenue", "EPS")', maxLength: 50 },
-            value: { type: 'string', description: 'Value with units (e.g., "$12.5B")', maxLength: 30 },
+            value: { type: 'string', description: 'CURRENT-quarter value with units (e.g., "$12.5B")', maxLength: 30 },
+            priorValue: { type: 'string', description: 'PRIOR-YEAR same-quarter value with units (e.g., "$10.8B" for prior-year revenue, "30.3%" for prior margin). The prior-quarter column is in the SAME income statement table. Leave null when only the current quarter is stated.', maxLength: 30 },
             change: { type: 'string', description: 'YoY change (e.g., "+15%", "-3%")', maxLength: 20 },
             qoqChange: { type: 'string', description: 'QoQ change (e.g., "+5%", "-2%")', maxLength: 20 }
           },
@@ -296,7 +393,8 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
         description: 'Additional key takeaways (fallback if financialHighlights sparse)',
         items: KEY_POINT_ITEM
       },
-      whyItMatters: WHY_IT_MATTERS_PROPERTY
+      whyItMatters: WHY_IT_MATTERS_PROPERTY,
+      materialitySignal: MATERIALITY_SIGNAL_PROPERTY
     }
   },
 
@@ -1274,7 +1372,22 @@ const FORM_EXTRACTION_GUIDANCE: Record<string, string> = {
 - The summary MUST lead with: company name, total revenue, and profitability highlight
 - DELTA-AWARE: Compare revenue, margins, and key metrics to the PRIOR fiscal year. State the direction and magnitude of change for each metric (e.g., "Revenue $130.5B, up 14% from $114.5B in FY2023")
 - For each financial highlight, include the "change" field with the YoY delta (e.g., "+14.0%", "-2.3pp for margins")
-- If historical context about this company is provided, highlight what is NEW or materially different vs the prior annual report`,
+- If historical context about this company is provided, highlight what is NEW or materially different vs the prior annual report
+
+MATERIALITY SIGNAL (4-tier classification, symmetric — big beats are as material as big misses):
+- HIGH    — Any of: (a) revenue or net income beats OR misses prior year by >10% in either direction, (b) NEW material risk factor not present in the prior 10-K, (c) going-concern language anywhere in Item 1A or auditor's report, (d) control deficiency disclosed in Item 9A, (e) CEO/CFO/Chair departure announced, (f) major segment write-down or impairment >5% of total assets, (g) major restatement of prior-year financials, (h) material acquisition or divestiture announced or closed during the period.
+- MEDIUM  — Any of: (a) noteworthy guidance change or revised outlook in MD&A, (b) segment realignment or new segment introduced, (c) accounting principle change, (d) 5-10% YoY revenue or earnings shift in either direction, (e) new material legal proceeding short of "material adverse effect", (f) auditor change, (g) major new product line launched (not just routine product refresh).
+- LOW     — Routine annual filing. Numbers in line with prior year (<5% variance in either direction). No new risk factors. No leadership change. No accounting change. Boilerplate MD&A.
+- NOISE   — Filings with NO material content. Reserved for: amended 10-K/A correcting a single typo or administrative detail; shell-company or dormant-entity annual; transition reports with no operating results. Do NOT classify a routine large-cap annual as NOISE — that is LOW.
+- RATIONALE: One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NEVER generic.
+
+WHY-IT-MATTERS WRITING RULES (10-K):
+- CRITICAL: whyItMatters is the ONLY interpretive prose in the email. The "What to Watch" section is no longer rendered — the forward-looking risks that would have lived there must be folded INTO this whyItMatters prose. Treat it as the consolidated synthesis section.
+- Multi-paragraph output expected (2-3 short paragraphs separated by blank lines). Paragraph 1: material take (single most important read of the filing). Paragraph 2: forward-looking risks synthesized as prose (NOT a bulleted list). Paragraph 3 (optional): peer/sector framing from ENRICHMENT context.
+- Compare voices across the inputs: the filing's own narrative tone in MD&A, vs market sentiment in the X-SENTIMENT block (factClaims + discussionSynthesis), vs peer/sector framing in the ENRICHMENT block. Note where they agree and where they diverge — that divergence is often the most material signal.
+- Forward-looking risk paragraph: pull 2-3 specific risk factors from Item 1A (especially NEW ones not in the prior 10-K) and synthesize them. Do NOT list them as bullets. Do NOT just restate them. Write prose that connects the risks to the multi-year thesis.
+- BAD: "Revenue grew 65% to $215.9B. Watch out for export controls, customer concentration, open-source models." (restatement + list)
+- GOOD: "The $4.5B H20 write-down (Item 7) — biggest single-product charge in NVIDIA history — turns US-China export policy into a Tier-1 risk for the AI infrastructure thesis. The Street already priced the Data Center beat ($185B vs $172B consensus); bears are now pressing the new H200 25% US import tariff as the next leg of policy headwinds.\n\nThree forward concerns compound. Open-source frontier models appeared in Item 1A for the first time in any NVIDIA 10-K — a tacit admission that proprietary accelerator moats may be narrower than consensus assumes. Hyperscaler customer concentration (still unnamed in Item 1A but visible in the 10-K's revenue concentration disclosures) means a CSP capex pause hits revenue faster than the multi-product diversification narrative suggests. And the $17.5B in FY26 strategic investments in AI model makers is a bet that demand for accelerators is supply-constrained, not demand-constrained — a thesis that breaks if any of the model-maker bets fail to ship at expected scale."`,
 
   '10-Q': `10-Q QUARTERLY REPORT EXTRACTION RULES:
 - DOCUMENT STRUCTURE: 10-Q has 2 parts:
@@ -1325,7 +1438,23 @@ OTHER GUIDANCE:
 - RED FLAGS: Bloated inventory, slower demand signals, supply chain issues, decreasing profit margins
 - For fiscal quarter, format as "Q3 2024" or "Q1 FY2025"
 - The summary MUST lead with: company name, CURRENT quarter revenue, and margin performance
-- Flag any metric that moved more than 10% in either direction, whether that is revenue, margins, or operating metrics`,
+- Flag any metric that moved more than 10% in either direction, whether that is revenue, margins, or operating metrics
+
+MATERIALITY SIGNAL (4-tier classification, symmetric — big beats are as material as big misses):
+- HIGH    — Any of: (a) management cuts OR materially raises forward guidance, (b) quarterly revenue or EPS beats OR misses vs consensus by >5% in either direction (or vs prior quarter if no consensus), (c) NEW risk factor not present in last 10-K or last 10-Q, (d) control deficiency disclosed, (e) segment shutdown, divestiture, business-transfer agreement, or major restructuring announced, (f) material legal proceeding initiated or adverse judgment, (g) acquisition closed during the quarter with cash outflow >5% of revenue, (h) new product or service line launched (not just routine refresh).
+- MEDIUM  — Any of: (a) guidance narrowed or reaffirmed with notable color change, (b) 3-5% YoY miss or beat on revenue/EPS, (c) working-capital flag (DSO or DPO swing >15%), (d) segment narrative shift (e.g., previously bullish segment now described cautiously), (e) accounting estimate change, (f) senior officer transition agreement (CMO, GC, CTO, head of major segment).
+- LOW     — In-line quarter. Numbers within ±3% of prior year in either direction. No guidance change. No new risk factors. Routine MD&A. Standard buybacks and 10b5-1 plan disclosures only.
+- NOISE   — Filings with NO material content beyond mechanical financial restatement. Reserved for: shell-company quarterly with no operations; pre-revenue entity routine submission. Do NOT classify a large-cap quarterly with full operating results as NOISE — that is LOW.
+- RATIONALE: One sentence (40-400 chars) citing specific filing evidence — Item number, named section, or directly-quoted phrase. NEVER generic.
+
+WHY-IT-MATTERS WRITING RULES (10-Q):
+- CRITICAL: whyItMatters is the ONLY interpretive prose in the email. The "What to Watch" section is no longer rendered — forward-looking risks/concerns must fold INTO this whyItMatters prose. Treat it as the consolidated synthesis section.
+- Multi-paragraph output expected (2-3 short paragraphs separated by blank lines). Paragraph 1: material take of the quarterly print (single most important investor read). Paragraph 2: forward-looking risks/concerns synthesized as prose. Paragraph 3 (optional): consensus or peer framing from ENRICHMENT context.
+- Compare voices across the inputs: management's MD&A tone vs market sentiment in the X-SENTIMENT block (factClaims + discussionSynthesis) vs consensus expectation from the ENRICHMENT block. Where do they agree, where do they diverge? Divergence is often the most material signal — e.g., management is reassuring while the market is pressing on the print, or vice versa.
+- Forward-looking risk paragraph: pull 2-3 specific concerns from this quarter's risk factors or MD&A (especially management language shifts vs prior quarter) and synthesize them. Do NOT list as bullets. Do NOT just restate them.
+- BAD: "Comps fell 1.7%. Watch: tariffs, exec departures, slower growth." (restatement + list)
+- GOOD: "Comps swung from +7.4% to -1.7% YoY in a 60-day window where the CMO and GC both filed Transition Agreements and the CEO adopted his first 10b5-1 plan — a coordinated repositioning that the $701M Q1 buyback (vs $378M prior year) reads as management trying to paper over. Street had Q1 comps at +1.2%; this is the first negative-comp print since 2017.\n\nThree near-term concerns compound. The CMO and GC departures in the same week leave brand-marketing and litigation tracks without continuity heading into the H2 comp-recovery pivot the Street is pricing in. 2025 food/beverage/packaging tariffs added 0.2pp to Q1 costs and management guided 15bp scale-up in 2026 — pressuring the gross-margin trajectory just as comps are turning. And the aggressive buyback pace ($701M Q1 alone) means the cash buffer for organic recovery investments is shrinking, raising the stakes on the next two quarters."
+- QoQ DATA REQUIREMENT: When historical context is provided above (prior-quarter summaries), you MUST populate qoqChange on EVERY financialHighlights row. If the prior-quarter value isn't extractable, write "N/A" — never leave qoqChange empty when historical context exists.`,
 
   '3': `FORM 3 INITIAL STATEMENT OF BENEFICIAL OWNERSHIP EXTRACTION RULES:
 - COMPANY FIELD IS REQUIRED: The "company" field must contain the ISSUER name (the company whose securities are held). Extract from "Name of Issuer" field on the form. NEVER leave blank.
@@ -1690,19 +1819,59 @@ OTHER GUIDANCE:
 };
 
 export function generateFilingPrompt(config: FilingPromptConfig): PromptOutput {
-  const { formType: rawFormType, filingContent } = config;
+  const { formType: rawFormType, filingContent, enableEarningsMiniDeepDive } = config;
 
   // Canonicalize form type: '10-K/A' -> '10-K' + isAmendment, 'SCHEDULE 13G' -> 'SC 13G', etc.
   const { type: canonicalType, isAmendment } = canonicalizeFormType(rawFormType);
 
-  // Get the schema for the canonical form type, falling back to Generic
-  const schema = FORM_SCHEMAS[canonicalType] || FORM_SCHEMAS['Generic'];
+  // Get the schema for the canonical form type, falling back to Generic.
+  // Strip materialitySignal when the earnings-mini-deep-dive flag is off —
+  // single feature-flag gate at the prompt/schema layer.
+  let schema = FORM_SCHEMAS[canonicalType] || FORM_SCHEMAS['Generic'];
+  const isEarningsForm = canonicalType === '10-K' || canonicalType === '10-Q';
+  const stripMateriality = isEarningsForm && !enableEarningsMiniDeepDive;
+  if (stripMateriality && schema.properties && 'materialitySignal' in schema.properties) {
+    const { materialitySignal: _omit, ...remainingProps } = schema.properties;
+    schema = { ...schema, properties: remainingProps };
+  }
+
+  // Swap whyItMatters to the per-form upgraded version (400-char cap +
+  // form-specific guidance forbidding metric restatement) when the flag is
+  // on AND the form is 10-K/10-Q. Off-flag earnings filings keep the legacy
+  // 180-char generic description so production behavior is unchanged for
+  // non-cohort users.
+  if (enableEarningsMiniDeepDive && isEarningsForm && schema.properties && 'whyItMatters' in schema.properties) {
+    const upgraded = canonicalType === '10-K'
+      ? WHY_IT_MATTERS_PROPERTY_10K
+      : WHY_IT_MATTERS_PROPERTY_10Q;
+    schema = {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        whyItMatters: upgraded,
+      },
+    };
+  }
 
   // Build the user prompt with schema FIRST, then content
   const schemaDescription = formatSchemaDescription(schema);
 
-  // Get form-specific extraction guidance, using the canonical type
+  // Get form-specific extraction guidance, using the canonical type.
+  // Mirror the schema gate — strip the MATERIALITY SIGNAL rubric section AND
+  // the WHY-IT-MATTERS WRITING RULES section when the flag is off, so the
+  // model doesn't see contradictory guidance for the still-active legacy
+  // 180-char WIM schema description.
   let extractionGuidance = FORM_EXTRACTION_GUIDANCE[canonicalType] || '';
+  if (stripMateriality) {
+    extractionGuidance = extractionGuidance.replace(
+      /\n\nMATERIALITY SIGNAL \(4-tier classification[\s\S]*?\n- RATIONALE:[^`]*?(?=\n\n|$)/g,
+      '',
+    );
+    extractionGuidance = extractionGuidance.replace(
+      /\n\nWHY-IT-MATTERS WRITING RULES \(10-[KQ]\):[\s\S]*?(?=\n\n[A-Z]|$)/g,
+      '',
+    );
+  }
 
   // Append amendment-specific guidance when filing is an amendment (/A)
   if (isAmendment) {

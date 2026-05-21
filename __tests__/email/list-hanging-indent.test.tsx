@@ -144,10 +144,14 @@ describe('Hanging-indent bullet rendering', () => {
       'email',
       'templates'
     );
+    // 10-K removed v0.0.34.0: the earnings-mini-deep-dive consolidation
+    // moved the watch-for section into the WhyItMatters synthesis prose and
+    // replaced numbered/bulleted lists with the black-bar scorecard layout.
+    // The 10-K template no longer renders bulleted lists, so HangingBulletItem
+    // is not imported (and would be dead code if it were).
     const MINIMALIST_FILES = [
       's3-minimalist-template.tsx',
       's1-minimalist-template.tsx',
-      '10k-minimalist-template.tsx',
       '11k-minimalist-template.tsx',
       'def14a-minimalist-template.tsx',
       'form4-minimalist-template.tsx',

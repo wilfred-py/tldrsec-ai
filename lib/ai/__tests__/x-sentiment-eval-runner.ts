@@ -20,14 +20,16 @@
  */
 
 import {
-  checkXSentimentEligibility,
+  _internal as providerInternal,
   type EligibilityReason,
-} from '../x-sentiment-eligibility';
+} from '../x-sentiment-provider';
 import {
   validateXSentiment,
   type SentimentDirection,
   type ValidationStats,
 } from '../parsers/x-sentiment-validator';
+
+const { checkEligibility } = providerInternal;
 
 export type EvalBucket = 1 | 2 | 3 | 4;
 
@@ -109,10 +111,7 @@ const BUCKET_CRITERIA: Record<EvalBucket, { threshold: number; criterion: string
 };
 
 function evaluateBucket1Or2(entry: EvalEntry): EvalOutcome {
-  const eligibility = checkXSentimentEligibility({
-    ticker: entry.ticker,
-    formType: entry.formType,
-  });
+  const eligibility = checkEligibility(entry.ticker, entry.formType);
   if (eligibility.eligible) {
     return {
       entry,
@@ -131,10 +130,7 @@ function evaluateBucket1Or2(entry: EvalEntry): EvalOutcome {
 }
 
 function evaluateBucket3Or4(entry: EvalEntry): EvalOutcome {
-  const eligibility = checkXSentimentEligibility({
-    ticker: entry.ticker,
-    formType: entry.formType,
-  });
+  const eligibility = checkEligibility(entry.ticker, entry.formType);
   if (!eligibility.eligible) {
     // For Bucket 4, an eligibility block is still effectively a no-signal —
     // we never make the call. For Bucket 3 it's a corpus problem.

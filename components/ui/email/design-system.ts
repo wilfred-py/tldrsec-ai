@@ -20,6 +20,9 @@ export const EMAIL_LOGO_HEIGHT = 24;
 /** Hardcoded preferences URL — avoids broken links when NEXT_PUBLIC_APP_URL is empty */
 export const EMAIL_PREFERENCES_URL = 'https://tldrsec.app/dashboard/settings';
 
+/** Marketing landing page for the "Want more filings like this?" CTA. */
+export const EMAIL_LANDING_URL = 'https://tldrsec.app/?utm_source=email&utm_campaign=filing_summary';
+
 export const EmailColors = {
   text: {
     headline: '#000000',      // Pure black for section headings

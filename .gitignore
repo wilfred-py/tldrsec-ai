@@ -81,6 +81,13 @@ scripts/*
 !scripts/send-pr1-test-email.ts
 !scripts/backfill-enrichment-applied.ts
 !scripts/vercel-build.sh
+!scripts/materiality-calibration/
+!scripts/materiality-calibration/sample-filings.ts
+!scripts/materiality-calibration/run-calibration.ts
+!scripts/materiality-calibration/README.md
+# Generated artifacts (re-ignore inside the unignored dir):
+scripts/materiality-calibration/labeling-template.csv
+scripts/materiality-calibration/calibration-report-*.md
 !scripts/founding/
 !scripts/founding/*
 # Local PII (waitlist emails + Resend send IDs) from send-founding-batch.ts

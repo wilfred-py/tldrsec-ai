@@ -2,26 +2,86 @@ import { logger } from '../../../lib/logging';
 import { getPrismaClient } from '../../../lib/db/prisma';
 import { PlanType, UserSubscription as PrismaUserSubscription } from '@prisma/client';
 import { SubscriptionTier, OptimizationLevel, getOptimizationLevelForTier } from './tokenOptimizer';
-import { 
-  validateSubscriptionUpdate, 
-  validateFilingUsage, 
+import {
+  validateSubscriptionUpdate,
+  validateFilingUsage,
   validateUsagePeriod,
   type SubscriptionUpdateInput,
-  type FilingUsageInput 
+  type FilingUsageInput
 } from '../../../lib/validation/subscription-validation';
-import {
-  verifySubscriptionOwnership,
-  verifyUsageRecordingPermission,
-  verifyUserExists,
-  checkSubscriptionRateLimit,
-  SubscriptionAuthError
-} from '../../../lib/auth/subscription-auth';
 
 // Use singleton Prisma client
 const prisma = getPrismaClient();
 
 // Create a module-specific logger
 const subscriptionLogger = logger.child('subscription-service');
+
+// ─── Authorization guards (private) ─────────────────────────────────────────
+// Inlined from lib/auth/subscription-auth.ts: that module had this single
+// caller, and its 386-line test file asserted on the guard predicates rather
+// than on observable Subscription behaviour. Keeping these private here
+// removes the shallow seam — callers of the Subscription module no longer
+// pass through a separate auth interface for what is really one decision:
+// "may this user modify this Subscription?"
+//
+// Three of the original six exports (verifySubscriptionOwnership,
+// getAuthenticatedUserId, verifyActiveSubscription) had zero production
+// callers and have been dropped entirely.
+
+export class SubscriptionAuthError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+    this.name = 'SubscriptionAuthError';
+  }
+}
+
+async function verifyUsageRecordingPermission(userId: string, targetUserId: string): Promise<void> {
+  if (userId !== targetUserId) {
+    subscriptionLogger.warn('Unauthorized usage recording attempt', { userId, targetUserId });
+    throw new SubscriptionAuthError(
+      'Access denied: Cannot record usage for another user',
+      'UNAUTHORIZED_USAGE_RECORDING'
+    );
+  }
+}
+
+async function verifyUserExists(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true }
+  });
+  if (!user) {
+    subscriptionLogger.warn('User not found for subscription operation', { userId });
+    throw new SubscriptionAuthError('User not found', 'USER_NOT_FOUND');
+  }
+}
+
+// In-process counter for subscription operation rate limiting. Resets per
+// process — sufficient for guarding a single recordFilingUsage call site
+// against runaway loops; not a substitute for HTTP-level rate limiting.
+const userOperationCounts = new Map<string, { count: number; resetTime: number }>();
+
+function checkSubscriptionRateLimit(userId: string, maxOperations = 100): void {
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000;
+  const userOps = userOperationCounts.get(userId);
+  if (!userOps || now > userOps.resetTime) {
+    userOperationCounts.set(userId, { count: 1, resetTime: now + windowMs });
+    return;
+  }
+  if (userOps.count >= maxOperations) {
+    subscriptionLogger.warn('Rate limit exceeded for subscription operations', {
+      userId,
+      count: userOps.count,
+      limit: maxOperations
+    });
+    throw new SubscriptionAuthError(
+      'Rate limit exceeded. Too many subscription operations.',
+      'RATE_LIMIT_EXCEEDED'
+    );
+  }
+  userOps.count++;
+}
 
 /**
  * Map Prisma PlanType to our internal SubscriptionTier

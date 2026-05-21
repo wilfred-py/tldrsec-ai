@@ -70,8 +70,26 @@ export async function isProviderEnabled(providerName: string, accessionNumber: s
   return evaluateFlag(flagKey, accessionNumber);
 }
 
+/** Earnings-mini-deep-dive flag — gates the materialitySignal field on 10-K/10-Q
+ * summary prompts. When false, the prompt schema omits materialitySignal entirely
+ * and the rubric section is stripped from extraction guidance. Cohort-gated per
+ * autoplan plan: Day 1 internal users only, Day 4 = 10% of allowlisted-ticker
+ * users, Day 14 = 100%. Kill-switch metric: unsubscribe rate > 1.5x 7-day
+ * baseline triggers auto-rollback. */
+const EARNINGS_MINI_DEEP_DIVE_FLAG = 'enable_earnings_mini_deep_dive';
+
+/**
+ * Gate for the materialitySignal field on 10-K/10-Q summaries.
+ * Uses accessionNumber as distinctId for stable per-filing bucketing.
+ * Returns false on any PostHog error (fail-safe off).
+ */
+export async function isEarningsMiniDeepDiveEnabled(accessionNumber: string): Promise<boolean> {
+  return evaluateFlag(EARNINGS_MINI_DEEP_DIVE_FLAG, accessionNumber);
+}
+
 /** Exposed for tests. */
 export const _internal = {
   TOP_LEVEL_FLAG,
   PROVIDER_FLAGS,
+  EARNINGS_MINI_DEEP_DIVE_FLAG,
 };
