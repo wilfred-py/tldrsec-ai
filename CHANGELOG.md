@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.36.0] - 2026-05-21
+
+Launches the Founding Lifetime Seat offer: 25 one-time $499 payments grant
+permanent MAX-tier access. Hits 124 waitlist members in two regional batches
+on Wednesday morning. Includes the full Stripe integration, the entitlement
+model, the user-resolution backstop (auto-create placeholder rows so the
+122 of 124 waitlist members without Clerk accounts can pay without manual
+reconciliation), and an account-takeover guard on the Clerk webhook.
+
+### Added
+- New private offer page at `/founding` with live seat counter and three states (primary, last-3-seats urgent, sold-out)
+- New checkout route `/api/checkout/founding` with server-side 25-seat gate (returns 410 Gone when sold out) and waitlist allowlist check (`newsletter_subscribers` membership required)
+- New post-checkout page `/founding/success` with Clerk signup CTA
+- New Stripe webhook handlers: `handlePaymentModeCheckout` for one-time Founding payments with auto-create placeholder User if email is not yet in `User`, `handleChargeRefunded` for 30-day refund revocation (guarded against partial refunds)
+- New `User.foundingMember: Boolean` schema field plus migration
+- New `LIFETIME_NEVER_EXPIRES` sentinel constant plus `isLifetimeSentinel()` helper
+- New `syncLifetimeSeat()` and `revokeLifetimeSeat()` atomic transactional helpers
+- New `scripts/founding/send-founding-batch.ts` for one-to-one Resend sends (region-split by email domain heuristic, idempotency via local `sent.jsonl`, dry-run mode)
+- New `scripts/founding/revoke-lifetime-seat.ts` manual revoke escape hatch
+- New `scripts/founding/pre-populate-waitlist-users.ts` alternative path (not used for the launch, kept for future cohorts)
+- New PostHog events `LIFETIME_SEAT_CLAIMED` and `LIFETIME_SEAT_REVOKED`
+- New env var `STRIPE_FOUNDING_LIFETIME_PRICE_ID` (the one-time $499 Stripe Price under the dedicated "tldrSEC Lifetime" Product)
+
+### Changed
+- Clerk webhook (`handleClerkWebhook` `user.created`) now links Clerk identity onto a pre-existing User row only when `authProvider='pending'` (account-takeover guard) and uses lowercased email lookup to match how all other code paths store the email
+- `handleSubscriptionCreated` plus `syncSubscriptionFromStripeData` refuse to overwrite a Lifetime Seat sentinel row, preserving lifetime entitlement if a holder ever triggers a regular subscription flow
+- `/api/user/route.ts` POST (subscribe) rejects callers who already hold a Lifetime Seat with 409 plus "Lifetime Seat active" message
+- Billing page (`app/dashboard/billing/page.tsx`) renders "Lifetime access. Never expires." for Lifetime holders instead of "Renews on December 31, 9999"
+- `getPlanTypeFromPriceId` maps the Founding lifetime priceId to `'MAX'` (the cohort gets MAX features)
+- x_sentiment ticker allowlist expanded from ~107 (S&P 100) to 505 (S&P 500 plus BRK.A and WBA grandfathered) so older retail investors tracking mid/large caps outside the top 100 get enrichment too
+- `/founding` checkout no longer reuses Stripe customers by email (always creates a fresh Customer to avoid attaching payments to the wrong account)
+- `/founding` checkout `success_url` origin pinned to `NEXT_PUBLIC_SITE_URL` to close a Host-header phishing redirect vector
+- ADR-0004 documents the entire entitlement model, sentinel pattern, refund revocation flow, and the rationale for choosing a dedicated "tldrSEC Lifetime" Stripe Product
+
+### Fixed
+- Stripe webhook URL was misconfigured at `https://tldrsec.app/api/webhook/stripe` (returned 404) instead of `https://tldrsec.app/api/webhook?provider=stripe`. Updated via Stripe CLI. Without this fix, every Founding payment would have completed in Stripe and silently failed to update the database.
+- `charge.refunded` event was not subscribed; added to the webhook's enabled events so the new revoke path actually fires
+- Partial refunds no longer trigger full Lifetime Seat revocation
+- `/api/checkout/founding` 500 responses no longer leak raw Stripe and Prisma error messages
+
 ## [0.0.35.1] - 2026-05-20
 
 Adds the Stripe documentation skills to `.agents/skills/` so AI coding agents
