@@ -11,7 +11,7 @@
 import type Stripe from 'stripe';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { getPlanTypeFromPriceId } from '@/lib/stripe';
-import { LIFETIME_NEVER_EXPIRES } from '@/lib/stripe/constants';
+import { LIFETIME_NEVER_EXPIRES, isLifetimeSentinel } from '@/lib/stripe/constants';
 
 /**
  * Extract billing period dates from a Stripe subscription.
@@ -68,6 +68,21 @@ export async function syncSubscriptionFromStripeData(
   const priceId = subscription.items.data[0]?.price.id;
   const planType = getPlanTypeFromPriceId(priceId);
   const period = getSubscriptionPeriod(subscription);
+
+  // Lifetime Seat guard: a holder's existing UserSubscription row carries
+  // the sentinel currentPeriodEnd (9999). Overwriting it with a regular
+  // subscription would silently destroy their lifetime entitlement.
+  // ADR-0004: Lifetime supersedes any later subscription event.
+  const existing = await prisma.userSubscription.findUnique({
+    where: { userId },
+    select: { currentPeriodEnd: true },
+  });
+  if (existing && isLifetimeSentinel(existing.currentPeriodEnd)) {
+    console.error(
+      `[sync] Refusing to sync new subscription ${subscription.id} onto Lifetime Seat row for user ${userId}. Lifetime preserved.`,
+    );
+    return { planType: 'MAX' };
+  }
 
   await prisma.userSubscription.upsert({
     where: { userId },

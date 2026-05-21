@@ -78,20 +78,58 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const origin = new URL(request.url).origin || 'http://localhost:3000';
+      // Waitlist allowlist gate. The Founding offer is only available to
+      // members of the existing waitlist (newsletter_subscribers in Supabase).
+      // Without this, anyone with the URL could pay $499 for someone else's
+      // email and the seat would land on the wrong account. The URL is not
+      // publicized but it's reachable; this gate makes the offer private in
+      // substance, not just in marketing.
+      try {
+        const { createSupabaseServiceClient } = await import('@/lib/supabase/server-client');
+        const supabase = await createSupabaseServiceClient();
+        const lowercaseEmail = email.toLowerCase();
+        const { data: subscriber, error: subscriberErr } = await supabase
+          .from('newsletter_subscribers')
+          .select('email')
+          .eq('email', lowercaseEmail)
+          .maybeSingle();
+        if (subscriberErr) {
+          console.error('[founding/checkout] Waitlist lookup failed:', subscriberErr);
+          return NextResponse.json({ error: 'Unable to verify waitlist membership. Try again shortly.' }, { status: 503 });
+        }
+        if (!subscriber) {
+          console.log(`[founding/checkout] Email not on waitlist: ${lowercaseEmail}`);
+          return NextResponse.json(
+            { error: 'This offer is private to our waitlist. If you signed up at tldrsec.app, use the same email.' },
+            { status: 403 },
+          );
+        }
+      } catch (lookupErr) {
+        console.error('[founding/checkout] Waitlist lookup threw:', lookupErr);
+        return NextResponse.json({ error: 'Unable to verify waitlist membership. Try again shortly.' }, { status: 503 });
+      }
 
-      // Pass through to existing Stripe customer if one exists for this email,
-      // so the customer's payment history is unified.
-      const existingCustomers = await stripe.customers.list({ email, limit: 1 });
-      const existingCustomerId = existingCustomers.data[0]?.id;
+      // Pin origin to NEXT_PUBLIC_SITE_URL rather than the request URL so an
+      // attacker cannot use a forged Host header to redirect Stripe's
+      // success_url to a phishing domain. Fall back to request origin only if
+      // the env var is unset (local dev). In prod, this env var must be set.
+      const envOrigin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, '');
+      const origin = envOrigin || new URL(request.url).origin || 'http://localhost:3000';
+
+      // Always create a fresh Stripe Customer for the Founding flow rather
+      // than reusing one by email. Reusing risks attaching the Lifetime
+      // payment to a Customer that belongs to a different person (e.g., the
+      // payer typed someone else's email, or two unrelated Stripe customers
+      // share an email). The downside is the customer ends up with two
+      // Stripe Customer objects if they later become a PRO/MAX subscriber,
+      // which is acceptable for a one-shot lifetime cohort.
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: `${origin}/founding/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/founding?cancelled=true${batch ? `&batch=${encodeURIComponent(batch)}` : ''}`,
-        customer: existingCustomerId,
-        customer_email: existingCustomerId ? undefined : email,
+        customer_email: email,
         // client_reference_id used by webhook to resolve user when metadata is sparse
         client_reference_id: email.toLowerCase(),
         metadata: {
@@ -113,17 +151,13 @@ export async function POST(request: NextRequest) {
         sessionUrl: session.url,
       });
     } catch (error) {
+      // Log full details server-side; respond with a generic message so
+      // unauthenticated callers don't see Prisma / Stripe internals.
       console.error('[founding/checkout] Error:', error);
       if (error instanceof z.ZodError) {
         return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
       }
-      return NextResponse.json(
-        {
-          error: 'Internal server error',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   });
 }

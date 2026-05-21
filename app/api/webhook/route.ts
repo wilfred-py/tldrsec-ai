@@ -13,6 +13,7 @@ import { getPrismaClient } from '@/lib/db/prisma';
 import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
 import { validateWebhookSignature, getPlanTypeFromPriceId, isFoundingLifetimePriceId, stripe } from '@/lib/stripe';
 import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod, syncLifetimeSeat, revokeLifetimeSeat } from '@/lib/stripe/sync-subscription';
+import { isLifetimeSentinel } from '@/lib/stripe/constants';
 import Stripe from 'stripe';
 import { waitUntil } from '@vercel/functions';
 import { captureServerEvent, shutdownServerPostHog } from '@/lib/analytics/posthog-server';
@@ -122,22 +123,33 @@ async function handleClerkWebhook(req: Request) {
           }
 
           // Pre-populated waitlist users (created by
-          // scripts/founding/pre-populate-waitlist-users.ts) already have a
-          // User row keyed on email with `authProvider='pending'`. When the
-          // real Clerk signup arrives, link the Clerk identity to that row
-          // instead of creating a duplicate which would crash on the
-          // `email @unique` constraint. We deliberately do NOT change `User.id`
-          // because existing FK relations (UserSubscription, Ticker, AuditLog,
-          // anything created by the Founding payment webhook) point at it.
+          // scripts/founding/pre-populate-waitlist-users.ts OR auto-created in
+          // handlePaymentModeCheckout) already have a User row keyed on email
+          // with `authProvider='pending'`. When the real Clerk signup arrives,
+          // link the Clerk identity to THAT row only. We deliberately do NOT
+          // change `User.id` because existing FK relations (UserSubscription,
+          // Ticker, AuditLog, anything created by the Founding payment
+          // webhook) point at it.
+          //
+          // SECURITY: Only link to rows with authProvider='pending'. Linking
+          // to an existing authProvider='clerk' row would let a fresh Clerk
+          // signup overwrite an established account's Clerk identity, which
+          // is an account-takeover primitive. If we encounter a non-pending
+          // row, log+abort and let Clerk's email-uniqueness fail loudly.
+          //
+          // Email lookup is lowercased to match how all other code paths
+          // (handlePaymentModeCheckout, pre-populate script) store the email.
+          // Clerk does not guarantee primaryEmail case.
+          const normalizedEmail = primaryEmail.toLowerCase();
           const existing = await prisma.user.findUnique({
-            where: { email: primaryEmail },
+            where: { email: normalizedEmail },
             select: { id: true, authProvider: true },
           });
           const computedName = userData.first_name
             ? `${userData.first_name} ${userData.last_name || ''}`.trim()
             : undefined;
           let resolvedUserId: string;
-          if (existing) {
+          if (existing && existing.authProvider === 'pending') {
             await prisma.user.update({
               where: { id: existing.id },
               data: {
@@ -149,13 +161,22 @@ async function handleClerkWebhook(req: Request) {
             });
             resolvedUserId = existing.id;
             console.log(
-              `[clerk-webhook] Linked Clerk identity ${userData.id} to existing User ${existing.id} (was authProvider=${existing.authProvider})`,
+              `[clerk-webhook] Linked Clerk identity ${userData.id} to placeholder User ${existing.id}`,
             );
+          } else if (existing) {
+            // Existing row already has a real auth provider. Do NOT overwrite
+            // (account-takeover guard). Let the create below fail on the
+            // email unique constraint so Clerk retries / surfaces the conflict.
+            console.error(
+              `[clerk-webhook] Refusing to link Clerk identity ${userData.id} onto existing User ${existing.id} ` +
+                `with authProvider=${existing.authProvider}. Possible account-takeover attempt or stale Clerk webhook.`,
+            );
+            return NextResponse.json({ success: false, error: 'email already linked' }, { status: 409 });
           } else {
             const newUser = await prisma.user.create({
               data: {
                 id: userData.id,
-                email: primaryEmail,
+                email: normalizedEmail,
                 authProvider: 'clerk',
                 authProviderId: userData.id,
                 name: computedName,
@@ -509,6 +530,21 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     return;
   }
 
+  // Only act on FULL refunds. Partial refunds (e.g., a $50 goodwill refund
+  // on a $499 charge) also fire `charge.refunded` but the customer still
+  // holds 90% of the value and we should not revoke their access.
+  // `charge.refunded === true` and `amount_refunded >= amount` both signal
+  // full refund; we check both for defense-in-depth against Stripe API
+  // inconsistencies.
+  const fullyRefunded =
+    charge.refunded === true || (typeof charge.amount_refunded === 'number' && charge.amount_refunded >= charge.amount);
+  if (!fullyRefunded) {
+    console.log(
+      `[webhook] charge.refunded for partial refund (refunded ${charge.amount_refunded}/${charge.amount}); not revoking`,
+    );
+    return;
+  }
+
   // Charges from payment-mode checkouts have a payment_intent we can trace
   // back to the original checkout session. We look up that session's line
   // items to determine if the refunded charge corresponds to a Founding price.
@@ -637,6 +673,19 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       console.error('[webhook] Email fallback failed for customer:', customerId, error);
     }
     console.error('User not found for customer:', customerId);
+    return;
+  }
+
+  // Lifetime Seat guard: a Lifetime holder's UserSubscription row carries
+  // the sentinel currentPeriodEnd (year 9999) and stripeSubscriptionId=null.
+  // If they ever go through a regular checkout, overwriting that row would
+  // silently destroy their lifetime entitlement. Refuse to overwrite.
+  // ADR-0004 documents that Lifetime tier supersedes any later subscription.
+  if (isLifetimeSentinel(userSubscription.currentPeriodEnd)) {
+    console.error(
+      `[webhook] Refusing to overwrite Lifetime Seat row for user ${userSubscription.userId} ` +
+        `with new subscription ${subscription.id}. The Lifetime entitlement is preserved.`,
+    );
     return;
   }
 
