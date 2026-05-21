@@ -11,8 +11,9 @@ import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
-import { validateWebhookSignature, getPlanTypeFromPriceId, stripe } from '@/lib/stripe';
-import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod } from '@/lib/stripe/sync-subscription';
+import { validateWebhookSignature, getPlanTypeFromPriceId, isFoundingLifetimePriceId, stripe } from '@/lib/stripe';
+import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod, syncLifetimeSeat, revokeLifetimeSeat } from '@/lib/stripe/sync-subscription';
+import { isLifetimeSentinel } from '@/lib/stripe/constants';
 import Stripe from 'stripe';
 import { waitUntil } from '@vercel/functions';
 import { captureServerEvent, shutdownServerPostHog } from '@/lib/analytics/posthog-server';
@@ -121,19 +122,73 @@ async function handleClerkWebhook(req: Request) {
             }
           }
 
-          const newUser = await prisma.user.create({
-            data: {
-              id: userData.id,
-              email: primaryEmail,
-              authProvider: 'clerk',
-              authProviderId: userData.id,
-              name: userData.first_name ? `${userData.first_name} ${userData.last_name || ''}`.trim() : undefined,
-              subscriptionTier: 'FREE',
-              onboardingCompleted: false,
-              signupIpAddress: ipAddress !== 'unknown' ? ipAddress : undefined,
-            }
+          // Pre-populated waitlist users (created by
+          // scripts/founding/pre-populate-waitlist-users.ts OR auto-created in
+          // handlePaymentModeCheckout) already have a User row keyed on email
+          // with `authProvider='pending'`. When the real Clerk signup arrives,
+          // link the Clerk identity to THAT row only. We deliberately do NOT
+          // change `User.id` because existing FK relations (UserSubscription,
+          // Ticker, AuditLog, anything created by the Founding payment
+          // webhook) point at it.
+          //
+          // SECURITY: Only link to rows with authProvider='pending'. Linking
+          // to an existing authProvider='clerk' row would let a fresh Clerk
+          // signup overwrite an established account's Clerk identity, which
+          // is an account-takeover primitive. If we encounter a non-pending
+          // row, log+abort and let Clerk's email-uniqueness fail loudly.
+          //
+          // Email lookup is lowercased to match how all other code paths
+          // (handlePaymentModeCheckout, pre-populate script) store the email.
+          // Clerk does not guarantee primaryEmail case.
+          const normalizedEmail = primaryEmail.toLowerCase();
+          const existing = await prisma.user.findUnique({
+            where: { email: normalizedEmail },
+            select: { id: true, authProvider: true },
           });
-          console.log(`User created in database: ${newUser.id}`);
+          const computedName = userData.first_name
+            ? `${userData.first_name} ${userData.last_name || ''}`.trim()
+            : undefined;
+          let resolvedUserId: string;
+          if (existing && existing.authProvider === 'pending') {
+            await prisma.user.update({
+              where: { id: existing.id },
+              data: {
+                authProvider: 'clerk',
+                authProviderId: userData.id,
+                ...(computedName ? { name: computedName } : {}),
+                ...(ipAddress !== 'unknown' ? { signupIpAddress: ipAddress } : {}),
+              },
+            });
+            resolvedUserId = existing.id;
+            console.log(
+              `[clerk-webhook] Linked Clerk identity ${userData.id} to placeholder User ${existing.id}`,
+            );
+          } else if (existing) {
+            // Existing row already has a real auth provider. Do NOT overwrite
+            // (account-takeover guard). Let the create below fail on the
+            // email unique constraint so Clerk retries / surfaces the conflict.
+            console.error(
+              `[clerk-webhook] Refusing to link Clerk identity ${userData.id} onto existing User ${existing.id} ` +
+                `with authProvider=${existing.authProvider}. Possible account-takeover attempt or stale Clerk webhook.`,
+            );
+            return NextResponse.json({ success: false, error: 'email already linked' }, { status: 409 });
+          } else {
+            const newUser = await prisma.user.create({
+              data: {
+                id: userData.id,
+                email: normalizedEmail,
+                authProvider: 'clerk',
+                authProviderId: userData.id,
+                name: computedName,
+                subscriptionTier: 'FREE',
+                onboardingCompleted: false,
+                signupIpAddress: ipAddress !== 'unknown' ? ipAddress : undefined,
+              },
+            });
+            resolvedUserId = newUser.id;
+            console.log(`User created in database: ${newUser.id}`);
+          }
+          void resolvedUserId;
         } else {
           console.error('Missing required user data in webhook:', { id: userData.id, email: primaryEmail });
         }
@@ -200,6 +255,9 @@ async function handleStripeWebhook(request: Request) {
       case 'invoice.payment_failed':
         await handlePaymentFailed(event.data.object as Stripe.Invoice);
         break;
+      case 'charge.refunded':
+        await handleChargeRefunded(event.data.object as Stripe.Charge);
+        break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
@@ -220,6 +278,15 @@ async function handleStripeWebhook(request: Request) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log('Processing checkout completion:', session.id);
+
+  // Lifetime Seat purchases use mode: 'payment' (one-time), not 'subscription'.
+  // Branch here because line_items must be fetched separately for payment-mode
+  // sessions (Stripe doesn't include them on the session object by default) and
+  // the entitlement write differs from the recurring path. See ADR-0004.
+  if (session.mode === 'payment') {
+    await handlePaymentModeCheckout(session);
+    return;
+  }
 
   if (session.mode !== 'subscription') return;
 
@@ -329,6 +396,255 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 }
 
+/**
+ * Handle `checkout.session.completed` for `mode: 'payment'` sessions.
+ *
+ * Currently only the Founding Lifetime Seat purchase flows through here.
+ * Any other payment-mode checkout is logged and ignored. When new
+ * one-time products are added, extend the priceId-routing logic below.
+ *
+ * Differs from the subscription-mode handler (above) in three ways:
+ *   1. Line items must be fetched separately (Stripe doesn't include them
+ *      on the session object by default for payment-mode sessions).
+ *   2. There is no `session.subscription`; entitlement is anchored on the
+ *      Founding flag + sentinel UserSubscription row written by
+ *      `syncLifetimeSeat`.
+ *   3. User resolution prefers `client_reference_id` (set by the founding
+ *      checkout route to the email) over the email fields, because the
+ *      founding flow always populates it.
+ */
+async function handlePaymentModeCheckout(session: Stripe.Checkout.Session) {
+  if (!stripe) {
+    console.error('[webhook] Stripe client not configured; cannot process payment-mode checkout');
+    return;
+  }
+
+  let priceId: string | undefined;
+  try {
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+    priceId = lineItems.data[0]?.price?.id;
+  } catch (err) {
+    console.error('[webhook] Failed to list payment-mode line items:', err);
+    return;
+  }
+
+  if (!priceId) {
+    console.error('[webhook] Payment-mode session missing priceId:', session.id);
+    return;
+  }
+
+  if (!isFoundingLifetimePriceId(priceId)) {
+    console.log(`[webhook] Payment-mode checkout with non-Founding priceId ${priceId}; ignoring`);
+    return;
+  }
+
+  // Resolve user. Prefer client_reference_id (always email for founding flow),
+  // fall back to customer_details.email, then session.customer_email.
+  const candidateEmail =
+    session.client_reference_id ||
+    session.customer_details?.email ||
+    session.customer_email ||
+    null;
+
+  if (!candidateEmail) {
+    console.error('[webhook] No email found on payment-mode session:', session.id);
+    return;
+  }
+
+  // Resolve OR auto-create the User. Most waitlist members (122/124 today)
+  // do not have a User row because they never completed Clerk signup. When
+  // they pay, we create a placeholder User keyed on email with sentinel
+  // `authProvider='pending'`. Later, when they complete Clerk signup using
+  // the same email, the patched Clerk webhook (`handleClerkWebhook`,
+  // `user.created` branch) finds this row by email and links the real
+  // Clerk identity onto it without disturbing FK relations.
+  let dbUser = await prisma.user.findFirst({
+    where: { email: candidateEmail.toLowerCase(), deletedAt: null },
+    select: { id: true, authProvider: true },
+  });
+
+  if (!dbUser) {
+    try {
+      const created = await prisma.user.create({
+        data: {
+          email: candidateEmail.toLowerCase(),
+          authProvider: 'pending',
+          authProviderId: `pending-lifetime-${session.id}`,
+          subscriptionTier: 'FREE', // syncLifetimeSeat below flips to MAX in the same write
+          foundingMember: false,
+          onboardingCompleted: false,
+        },
+        select: { id: true, authProvider: true },
+      });
+      dbUser = created;
+      console.log(
+        `[webhook] Auto-created placeholder User for Lifetime payment: id=${created.id} email=${candidateEmail}`,
+      );
+    } catch (createErr) {
+      console.error(
+        `[webhook] Failed to auto-create User for Lifetime payment ${candidateEmail}; ` +
+          `session ${session.id}. Manual reconciliation required.`,
+        createErr,
+      );
+      return;
+    }
+  }
+
+  const customerId = session.customer as string;
+  try {
+    await syncLifetimeSeat(dbUser.id, priceId, customerId);
+    console.log(`[webhook] Lifetime Seat granted: user=${dbUser.id} session=${session.id}`);
+
+    try {
+      const amountCents = typeof session.amount_total === 'number' ? session.amount_total : 0;
+      const currency = session.currency?.toUpperCase() || 'USD';
+      const batch = session.metadata?.batch || undefined;
+      captureServerEvent(dbUser.id, EVENTS.LIFETIME_SEAT_CLAIMED, {
+        amount_cents: amountCents,
+        currency,
+        ...(batch ? { batch } : {}),
+      });
+    } catch (analyticsErr) {
+      console.error('[webhook] PostHog capture failed (non-fatal):', analyticsErr);
+    }
+  } catch (syncErr) {
+    console.error('[webhook] syncLifetimeSeat failed:', syncErr);
+  }
+}
+
+/**
+ * Handle `charge.refunded` for Lifetime Seat refunds.
+ *
+ * Within the 30-day refund window, any refund issued against a Founding
+ * Lifetime payment triggers `revokeLifetimeSeat`, which atomically clears
+ * the founding flag, downgrades the tier to FREE, deactivates the sentinel
+ * UserSubscription row, and writes an AuditLog entry.
+ *
+ * Refunds against non-Founding charges (e.g., a subscription invoice refund)
+ * are logged and ignored. Those flows are owned by the existing
+ * subscription handlers.
+ */
+async function handleChargeRefunded(charge: Stripe.Charge) {
+  if (!stripe) {
+    console.error('[webhook] Stripe client not configured; cannot process charge.refunded');
+    return;
+  }
+
+  // Only act on FULL refunds. Partial refunds (e.g., a $50 goodwill refund
+  // on a $499 charge) also fire `charge.refunded` but the customer still
+  // holds 90% of the value and we should not revoke their access.
+  // `charge.refunded === true` and `amount_refunded >= amount` both signal
+  // full refund; we check both for defense-in-depth against Stripe API
+  // inconsistencies.
+  const fullyRefunded =
+    charge.refunded === true || (typeof charge.amount_refunded === 'number' && charge.amount_refunded >= charge.amount);
+  if (!fullyRefunded) {
+    console.log(
+      `[webhook] charge.refunded for partial refund (refunded ${charge.amount_refunded}/${charge.amount}); not revoking`,
+    );
+    return;
+  }
+
+  // Charges from payment-mode checkouts have a payment_intent we can trace
+  // back to the original checkout session. We look up that session's line
+  // items to determine if the refunded charge corresponds to a Founding price.
+  const paymentIntentId = typeof charge.payment_intent === 'string'
+    ? charge.payment_intent
+    : charge.payment_intent?.id;
+
+  if (!paymentIntentId) {
+    console.log('[webhook] charge.refunded without payment_intent; ignoring');
+    return;
+  }
+
+  let priceId: string | undefined;
+  let sessionId: string | undefined;
+  let sessionCustomerId: string | undefined;
+  let sessionClientReference: string | undefined;
+  try {
+    const sessions = await stripe.checkout.sessions.list({
+      payment_intent: paymentIntentId,
+      limit: 1,
+    });
+    const session = sessions.data[0];
+    sessionId = session?.id;
+    sessionCustomerId =
+      typeof session?.customer === 'string'
+        ? (session?.customer as string)
+        : session?.customer?.id;
+    sessionClientReference = session?.client_reference_id ?? undefined;
+    if (!sessionId) {
+      console.log(`[webhook] No checkout session found for refunded payment_intent ${paymentIntentId}; ignoring`);
+      return;
+    }
+    const lineItems = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 1 });
+    priceId = lineItems.data[0]?.price?.id;
+  } catch (err) {
+    console.error('[webhook] Failed to trace refunded charge to session:', err);
+    return;
+  }
+
+  if (!isFoundingLifetimePriceId(priceId)) {
+    console.log(`[webhook] charge.refunded for non-Founding priceId ${priceId}; ignoring`);
+    return;
+  }
+
+  // Three resolution paths to find the affected User:
+  //   1. charge.customer (the production happy path)
+  //   2. session.customer (production edge: charge object missing it)
+  //   3. session.client_reference_id, which our checkout route always sets to the
+  //      lowercased email (legacy data, manual refunds, or test fixtures where
+  //      the Customer object never got created).
+  // Only one path needs to succeed.
+  const chargeCustomerId =
+    typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
+  const customerId = chargeCustomerId || sessionCustomerId;
+
+  let userId: string | undefined;
+  if (customerId) {
+    const userSub = await prisma.userSubscription.findFirst({
+      where: { stripeCustomerId: customerId },
+      select: { userId: true },
+    });
+    userId = userSub?.userId;
+  }
+  if (!userId && sessionClientReference) {
+    const userByEmail = await prisma.user.findFirst({
+      where: { email: sessionClientReference.toLowerCase(), foundingMember: true },
+      select: { id: true },
+    });
+    userId = userByEmail?.id;
+  }
+  if (!userId) {
+    console.error(
+      `[webhook] charge.refunded for Founding price; could not resolve user. ` +
+        `charge=${charge.id} session=${sessionId} chargeCustomer=${chargeCustomerId} ` +
+        `sessionCustomer=${sessionCustomerId} clientReference=${sessionClientReference}`,
+    );
+    return;
+  }
+
+  const userSub = { userId };
+
+  try {
+    await revokeLifetimeSeat(userSub.userId, 'charge.refunded');
+    console.log(`[webhook] Lifetime Seat revoked via charge.refunded: user=${userSub.userId} charge=${charge.id}`);
+
+    try {
+      const created = charge.created ? new Date(charge.created * 1000) : null;
+      const daysSince = created ? Math.floor((Date.now() - created.getTime()) / (24 * 60 * 60 * 1000)) : undefined;
+      captureServerEvent(userSub.userId, EVENTS.LIFETIME_SEAT_REVOKED, {
+        reason: 'charge.refunded',
+        ...(daysSince !== undefined ? { days_since_purchase: daysSince } : {}),
+      });
+    } catch (analyticsErr) {
+      console.error('[webhook] PostHog capture failed (non-fatal):', analyticsErr);
+    }
+  } catch (revokeErr) {
+    console.error('[webhook] revokeLifetimeSeat failed:', revokeErr);
+  }
+}
+
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
   const priceId = subscription.items.data[0]?.price.id;
@@ -357,6 +673,19 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       console.error('[webhook] Email fallback failed for customer:', customerId, error);
     }
     console.error('User not found for customer:', customerId);
+    return;
+  }
+
+  // Lifetime Seat guard: a Lifetime holder's UserSubscription row carries
+  // the sentinel currentPeriodEnd (year 9999) and stripeSubscriptionId=null.
+  // If they ever go through a regular checkout, overwriting that row would
+  // silently destroy their lifetime entitlement. Refuse to overwrite.
+  // ADR-0004 documents that Lifetime tier supersedes any later subscription.
+  if (isLifetimeSentinel(userSubscription.currentPeriodEnd)) {
+    console.error(
+      `[webhook] Refusing to overwrite Lifetime Seat row for user ${userSubscription.userId} ` +
+        `with new subscription ${subscription.id}. The Lifetime entitlement is preserved.`,
+    );
     return;
   }
 

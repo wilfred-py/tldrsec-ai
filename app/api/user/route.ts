@@ -501,6 +501,29 @@ async function handlePostSubscription(request: NextRequest) {
       );
     }
 
+    // Lifetime Seat guard: holders have an inactive sentinel UserSubscription
+    // row (currentPeriodEnd=9999) when they're refunded, or an active one
+    // when they're current. Either way, do NOT let them start a new paid
+    // subscription via this route. Their MAX entitlement is already covered
+    // by the sentinel row. Without this guard, /subscribe would treat
+    // stripeSubscriptionId=null as "first-time customer" and grant a free
+    // trial, AND handleSubscriptionCreated would later overwrite the
+    // sentinel (now guarded webhook-side too). See ADR-0004.
+    const { isLifetimeSentinel } = await import('@/lib/stripe/constants');
+    if (
+      existingSubscription &&
+      isLifetimeSentinel(existingSubscription.currentPeriodEnd)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'You hold a Lifetime Seat with permanent MAX access. Contact support if you need to make billing changes.',
+          isLifetimeSeat: true,
+        },
+        { status: 409 }
+      );
+    }
+
     // Create or get Stripe customer
     let stripeCustomerId = existingSubscription?.stripeCustomerId;
 

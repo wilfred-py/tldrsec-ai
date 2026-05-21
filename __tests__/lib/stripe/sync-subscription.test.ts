@@ -8,11 +8,18 @@
 
 const mockUserUpdate = jest.fn();
 const mockUserSubscriptionUpsert = jest.fn();
+// findUnique is consulted by syncSubscriptionFromStripeData to detect a
+// Lifetime Seat sentinel row before overwriting (see ADR-0004 guard). Default
+// to returning null so existing test cases for non-Lifetime flows pass through.
+const mockUserSubscriptionFindUnique = jest.fn().mockResolvedValue(null);
 
 jest.mock('@/lib/db/prisma', () => ({
   getPrismaClient: jest.fn(() => ({
     user: { update: mockUserUpdate },
-    userSubscription: { upsert: mockUserSubscriptionUpsert },
+    userSubscription: {
+      upsert: mockUserSubscriptionUpsert,
+      findUnique: mockUserSubscriptionFindUnique,
+    },
   })),
 }));
 

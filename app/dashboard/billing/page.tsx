@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useUser } from '@clerk/nextjs';
 import { SUBSCRIPTION_PLANS } from '@/lib/stripe/plans';
+import { isLifetimeSentinel } from '@/lib/stripe/constants';
 import type { UserSubscription } from '@/lib/types/subscription';
 
 // useSearchParams() requires either a Suspense boundary or a dynamic page.
@@ -231,16 +232,23 @@ export default function BillingPage() {
               </p>
             </div>
 
-            {!isFree && (
+            {!isFree && subscription && isLifetimeSentinel(new Date(subscription.currentPeriodEnd)) ? (
               <div className="text-sm">
                 <p className="text-gray-500">Billing Period</p>
-                <p className="font-medium">
-                  Renews on {format(new Date(subscription.currentPeriodEnd), 'MMMM d, yyyy')}
-                </p>
+                <p className="font-medium">Lifetime access. Never expires.</p>
               </div>
+            ) : (
+              !isFree && (
+                <div className="text-sm">
+                  <p className="text-gray-500">Billing Period</p>
+                  <p className="font-medium">
+                    Renews on {format(new Date(subscription.currentPeriodEnd), 'MMMM d, yyyy')}
+                  </p>
+                </div>
+              )
             )}
 
-            {subscription.cancelAtPeriodEnd && (
+            {subscription.cancelAtPeriodEnd && !isLifetimeSentinel(new Date(subscription.currentPeriodEnd)) && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                 <div className="flex items-center gap-2 text-yellow-800">
                   <Clock className="h-4 w-4" />

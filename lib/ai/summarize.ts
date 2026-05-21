@@ -868,6 +868,10 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     // explicitly leaning on this context, the routing is now wired through.
     // Cost: ~$0.003/filing × MAX-tier users on allowlisted tickers; latency:
     // up to 45s total / 20s per-provider budget (enforced inside runEnrichment).
+    //
+    // Lifetime Seat / Founding cohort note: Form 4 enrichment is delivered via
+    // the x_sentiment branch below (broader HIGH_IMPORTANCE_FORMS set + S&P 500
+    // ticker allowlist), not via the why-it-matters providers above. See ADR-0004.
     const ENRICHMENT_FORM_TYPES = new Set(['8-K', '8-K/A', '424B2', '424B3', 'FWP', '10-K', '10-K/A', '10-Q', '10-Q/A']);
     if (enrichmentApplied && ENRICHMENT_FORM_TYPES.has(filingRecordFromDB.formType) && !process.env.ENRICHMENT_FORCE_DISABLE) {
       const accession = filingRecordFromDB.accessionNumber || filingRecordFromDB.id || tickerSymbol || 'unknown';

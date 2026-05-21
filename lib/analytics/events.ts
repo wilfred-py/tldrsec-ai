@@ -26,6 +26,10 @@ export const EVENTS = {
   TRIAL_STARTED: 'trial_started',
   TRIAL_CONVERTED: 'trial_converted',
 
+  // Founding Lifetime Seat cohort (one-time payment; see ADR-0004)
+  LIFETIME_SEAT_CLAIMED: 'lifetime_seat_claimed',
+  LIFETIME_SEAT_REVOKED: 'lifetime_seat_revoked',
+
   // Engagement
   SUMMARY_VIEWED: 'summary_viewed',
   FILING_CHAT_MESSAGE_SENT: 'filing_chat_message_sent',
@@ -96,6 +100,15 @@ export type EventProps = {
   [EVENTS.TRIAL_CONVERTED]: {
     plan: PlanTier;
     billing_period: BillingPeriod;
+  };
+  [EVENTS.LIFETIME_SEAT_CLAIMED]: {
+    amount_cents: number;
+    currency: string;
+    batch?: string;
+  };
+  [EVENTS.LIFETIME_SEAT_REVOKED]: {
+    reason: string;
+    days_since_purchase?: number;
   };
   [EVENTS.SUMMARY_VIEWED]: {
     filing_type: string;

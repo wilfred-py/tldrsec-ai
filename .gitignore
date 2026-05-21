@@ -88,6 +88,10 @@ scripts/*
 # Generated artifacts (re-ignore inside the unignored dir):
 scripts/materiality-calibration/labeling-template.csv
 scripts/materiality-calibration/calibration-report-*.md
+!scripts/founding/
+!scripts/founding/*
+# Local PII (waitlist emails + Resend send IDs) from send-founding-batch.ts
+scripts/founding/sent.jsonl
 
 # Prisma generated files
 lib/generated/
