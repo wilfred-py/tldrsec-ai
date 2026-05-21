@@ -19,6 +19,19 @@ type DeltaTone = 'positive' | 'negative' | 'zero' | 'unparseable';
  * scorecard reads consistently across revenue (% relative) and margin
  * (% point) rows. Disambiguation lives in the column label, not the unit.
  */
+/**
+ * Render a percent value compactly. Drops trailing `.00` so an integer
+ * value reads as "30%" instead of "30.00%". Preserves real fractional
+ * precision (e.g. "3.8%" stays "3.8%"). Per Wilf's 2026-05-21 critique:
+ * rounded YoY/QoQ values look odd showing fake decimal precision.
+ */
+function formatPercent(num: number): string {
+  if (Number.isInteger(num)) return `${num}%`;
+  // toFixed(2) then strip trailing zeros / dot
+  const fixed = num.toFixed(2);
+  return `${fixed.replace(/\.?0+$/, '')}%`;
+}
+
 export function parseDelta(value: string | number | undefined): { tone: DeltaTone; text: string } | null {
   if (value === undefined || value === null) return null;
   const raw = String(value).trim();
@@ -28,22 +41,22 @@ export function parseDelta(value: string | number | undefined): { tone: DeltaTon
   if (ppMatch) {
     const num = parseFloat(ppMatch[1]);
     if (isNaN(num)) return { tone: 'unparseable', text: raw };
-    if (num === 0) return { tone: 'zero', text: '0.00%' };
+    if (num === 0) return { tone: 'zero', text: '0%' };
     const isNegative = num < 0;
     const abs = Math.abs(num);
     const sign = isNegative ? '−' : '+';
-    return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${abs.toFixed(2)}%` };
+    return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${formatPercent(abs)}` };
   }
 
   const stripped = raw.replace(/[%+,$\s]/g, '');
   if (!/^-?\d+(\.\d+)?$/.test(stripped)) return { tone: 'unparseable', text: raw };
   const num = parseFloat(stripped);
   if (isNaN(num)) return { tone: 'unparseable', text: raw };
-  if (num === 0) return { tone: 'zero', text: '0.00%' };
+  if (num === 0) return { tone: 'zero', text: '0%' };
   const isNegative = num < 0;
   const abs = Math.abs(num);
   const sign = isNegative ? '−' : '+';
-  return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${abs.toFixed(2)}%` };
+  return { tone: isNegative ? 'negative' : 'positive', text: `${sign}${formatPercent(abs)}` };
 }
 
 /**

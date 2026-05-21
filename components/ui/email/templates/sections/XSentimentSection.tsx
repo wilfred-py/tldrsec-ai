@@ -22,6 +22,30 @@ const MONO_FONT = '"JetBrains Mono", "SF Mono", Monaco, Consolas, "Courier New",
  * only `[N]` and `[N, M, ...]` — trailing `(...)` is parsed as plain text.
  * See test T14 in `__tests__/XSentimentSection-citations.test.tsx`.
  */
+/**
+ * Render a text segment with inline `**bold**` markers honored. Splits on the
+ * non-greedy `**(.+?)**` pattern; even-indexed pieces are plain, odd-indexed
+ * are wrapped in <strong>. Used by `renderTextWithCitations` so the
+ * discussionSynthesis can use Bloomberg-style lead bolding (e.g.
+ * "**Bulls** anchor to..."). No other markdown is processed — just bold.
+ */
+function renderTextWithBold(text: string, keyPrefix: string): React.ReactNode[] {
+  if (!text.includes('**')) {
+    return [<React.Fragment key={`${keyPrefix}-0`}>{text}</React.Fragment>];
+  }
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  const out: React.ReactNode[] = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    const piece = parts[i];
+    if (i % 2 === 1) {
+      out.push(<strong key={`${keyPrefix}-${i}`}>{piece}</strong>);
+    } else if (piece) {
+      out.push(<React.Fragment key={`${keyPrefix}-${i}`}>{piece}</React.Fragment>);
+    }
+  }
+  return out;
+}
+
 function renderTextWithCitations(
   text: string,
   citationUrls: readonly string[],
@@ -31,7 +55,9 @@ function renderTextWithCitations(
   for (let segIdx = 0; segIdx < segments.length; segIdx += 1) {
     const seg = segments[segIdx];
     if (seg.type === 'text') {
-      out.push(<React.Fragment key={`t-${segIdx}`}>{seg.value}</React.Fragment>);
+      // Pass through `**bold**` markdown so the discussionSynthesis can use
+      // Bloomberg-style lead bolding ("**Bulls** anchor to...").
+      out.push(<React.Fragment key={`t-${segIdx}`}>{renderTextWithBold(seg.value, `t-${segIdx}`)}</React.Fragment>);
       continue;
     }
     // Resolve each index to a URL; drop indices with no URL at the position.
