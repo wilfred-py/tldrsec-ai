@@ -7,6 +7,8 @@
  * the human-readable thank-you + next-steps surface.
  */
 
+import Link from 'next/link';
+
 export const dynamic = 'force-dynamic';
 
 export default async function FoundingSuccessPage() {
@@ -41,12 +43,12 @@ export default async function FoundingSuccessPage() {
           </li>
         </ol>
 
-        <a
+        <Link
           href="/sign-up"
           className="mt-2 block w-full rounded-lg bg-violet-600 px-4 py-4 text-center text-base font-semibold text-white transition-colors hover:bg-violet-700"
         >
           Sign up to access your seat
-        </a>
+        </Link>
 
         <hr className="my-8 border-gray-200" />
 
