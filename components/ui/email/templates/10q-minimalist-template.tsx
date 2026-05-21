@@ -544,11 +544,14 @@ export function Form10QMinimalistTemplate({
                   <table width="100%" cellPadding="0" cellSpacing="0" style={{ borderCollapse: 'collapse' as const }}>
                     <thead>
                       <tr>
+                        {/* Column order (Wilf v8 2026-05-21): QoQ is the
+                            change adjacent to Latest because Q-over-Q is the
+                            more recent comparison; YoY sits one column over. */}
                         <th style={fin.headMetric}>Metric</th>
                         <th style={fin.headNum}>Previous</th>
                         <th style={fin.headNum}>Latest</th>
-                        <th style={fin.headNum}>YoY</th>
-                        <th style={fin.headNumLast}>QoQ</th>
+                        <th style={fin.headNum}>QoQ</th>
+                        <th style={fin.headNumLast}>YoY</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -566,11 +569,13 @@ export function Form10QMinimalistTemplate({
                             <td style={fin.cellValue}>
                               <MetricPill value={formatValue(row.value)} tone="latest" />
                             </td>
+                            {/* Order matches the header swap above: QoQ next
+                                to Latest, YoY in the rightmost column. */}
                             <td style={fin.cellDelta}>
-                              {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
+                              {row.qoqChange ? <PillDelta value={row.qoqChange} /> : <span style={fin.dash}>—</span>}
                             </td>
                             <td style={fin.cellDeltaLast}>
-                              {row.qoqChange ? <PillDelta value={row.qoqChange} /> : <span style={fin.dash}>—</span>}
+                              {row.change ? <PillDelta value={row.change} /> : <span style={fin.dash}>—</span>}
                             </td>
                           </tr>
                         );
