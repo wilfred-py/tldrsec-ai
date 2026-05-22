@@ -61,6 +61,23 @@ const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || 'https://tldrsec.app';
 
 function parseArgs(argv: string[]): CliArgs {
   const args = argv.slice(2);
+
+  // Reject unknown flags. Without this, a typo like `--dryrun` (missing
+  // dash) silently evaluates to dryRun=false; combined with an exported
+  // FOUNDING_ARMED=true in the operator's shell from a prior session,
+  // that fires a live send to 124 people. Hard-fail on the typo instead.
+  const knownFlags = new Set(['--batch', '--dry-run', '--limit']);
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a.startsWith('--')) continue;
+    if (!knownFlags.has(a)) {
+      throw new Error(
+        `Unknown flag: ${a}. Known flags: ${[...knownFlags].join(', ')}`,
+      );
+    }
+    if (a === '--batch' || a === '--limit') i++; // skip value
+  }
+
   const batch = args.includes('--batch') ? args[args.indexOf('--batch') + 1] : null;
   if (batch !== 'us' && batch !== 'eu') {
     throw new Error('Required: --batch us|eu');
@@ -78,7 +95,13 @@ function loadSentEmails(): Set<string> {
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
-      if (entry.email) sent.add(entry.email.toLowerCase());
+      // Only treat successful sends as "already sent". Failed entries
+      // (missing resendId or with error) stay in the log for forensics
+      // but should retry on the next run — otherwise a transient Resend
+      // 429 / 5xx permanently drops a $499 Lifetime target.
+      if (entry.email && entry.resendId && !entry.error) {
+        sent.add(entry.email.toLowerCase());
+      }
     } catch {
       // skip malformed lines
     }
@@ -225,16 +248,33 @@ async function main() {
         text,
         html,
       });
-      const id = (res as { data?: { id?: string } }).data?.id ?? null;
-      recordSent(r.email, args.batch, id);
-      sent++;
-      console.log(`  ✓ ${r.email} (resend id: ${id})`);
+      // Resend SDK returns { data, error } — it does NOT throw on API
+      // errors (429 rate-limit, 4xx validation, 5xx). Check res.error
+      // explicitly so a transient failure doesn't get recorded as a
+      // "successful" send (which would poison the dedup set in
+      // loadSentEmails and permanently skip that recipient on retry).
+      const resErr = (res as { error?: { message?: string; name?: string } | null }).error;
+      if (resErr) {
+        const msg = resErr.message ?? resErr.name ?? JSON.stringify(resErr);
+        recordSent(r.email, args.batch, null, msg);
+        failed++;
+        console.error(`  ✗ ${r.email}: ${msg}`);
+      } else {
+        const id = (res as { data?: { id?: string } }).data?.id ?? null;
+        recordSent(r.email, args.batch, id);
+        sent++;
+        console.log(`  ✓ ${r.email} (resend id: ${id})`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       recordSent(r.email, args.batch, null, msg);
       failed++;
       console.error(`  ✗ ${r.email}: ${msg}`);
     }
+    // Inter-send delay keeps us under Resend's default 10 req/s rate
+    // limit with margin. 250ms = 4 req/s. ~30 seconds total for 116
+    // US recipients — fine for an operator-watched send.
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
   console.log(`\nBatch ${args.batch} complete: ${sent} sent, ${failed} failed.`);
