@@ -7,13 +7,12 @@
  * - '10-K/A' (amendment) vs '10-K' (parent)
  *
  * This utility normalizes all variants to canonical form type strings
- * that match the keys in FORM_SCHEMAS and schemaMap.
+ * that match the keys in FORM_SCHEMAS.
  */
 
 /**
  * Maps non-canonical form type strings to their canonical equivalents.
- * Canonical types are the keys used in FORM_SCHEMAS (unified-prompts.ts)
- * and schemaMap (schema-validators.ts).
+ * Canonical types are the keys used in FORM_SCHEMAS (unified-prompts.ts).
  */
 const FORM_TYPE_ALIASES: Record<string, string> = {
   // Amendments -> parent type (isAmendment flag tracks the /A suffix separately)
