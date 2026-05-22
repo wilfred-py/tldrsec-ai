@@ -2,24 +2,52 @@
  * Send Founding Lifetime Seat outreach to a batch of waitlist members.
  *
  * Usage:
- *   bun run scripts/founding/send-founding-batch.ts --batch us [--dry-run] [--limit 25]
- *   bun run scripts/founding/send-founding-batch.ts --batch eu [--dry-run] [--limit 8]
+ *   FOUNDING_ARMED=true bun run scripts/founding/send-founding-batch.ts --batch us [--limit 25]
+ *   FOUNDING_ARMED=true bun run scripts/founding/send-founding-batch.ts --batch eu [--limit 8]
+ *   bun run scripts/founding/send-founding-batch.ts --batch us --dry-run
  *
  * Reads `newsletter_subscribers` from Supabase, filters by region heuristic
- * (us vs eu by email domain), skips addresses already in
- * `scripts/founding/sent.jsonl`, and sends one-to-one Resend emails from the
- * founder address. Each email includes a unique link with batch + UTM params
- * the webhook can correlate back via `client_reference_id` and
+ * (us vs eu by email domain — uses the canonical `classifyRegion` from
+ * `lib/email/region-classifier.ts` so EU/US splits stay aligned with the
+ * cron-fired VRT 10-Q campaign), skips addresses already in
+ * `scripts/founding/sent.jsonl`, and sends one-to-one Resend emails from
+ * the founder address. Each email includes a unique link with batch + UTM
+ * params the webhook can correlate back via `client_reference_id` and
  * `session.metadata.batch`.
  *
  * Dry-run prints the recipient list and the rendered email body for one
- * recipient without sending anything.
+ * recipient without sending anything. `--dry-run` bypasses the
+ * `FOUNDING_ARMED` env gate; real sends require `FOUNDING_ARMED=true`.
+ *
+ * REGION TIMING (derived from the 2026-05 waitlist audience analysis;
+ * see lib/email/region-classifier.ts:1-28 for the full rationale):
+ *
+ *   124-person waitlist, ~75% US prior, Boomer-leaning audience that
+ *   reads email first-thing-in-the-morning. Email domain is the only
+ *   reliable geo signal we have — the stored subscriber_ip column is
+ *   broken (every value is a Cloudflare edge IP; see waitlist-route.ts).
+ *
+ *   - EU batch:  07:30 UTC = 09:30 CEST (~mid-morning EU). ~8 recipients.
+ *   - US batch:  11:00 UTC = 07:00 AM EDT (peak Boomer open window).
+ *                ~116 recipients.
+ *
+ *   Mis-classification budget: ~4 EU users hidden in gmail.com /
+ *   yahoo.com default to US. They'll read at lunchtime in their TZ —
+ *   acceptable.
+ *
+ *   NOTE: an earlier draft of the PR 563 runbook claimed "12 UTC = 7 AM
+ *   ET", which was correct in EST (UTC-5) but wrong in EDT (UTC-4).
+ *   May 2026 is EDT. Use 11 UTC for the US batch to land at 7 AM EDT —
+ *   matches PR 562's cron-fired VRT send and the lib classifier's
+ *   documented audience analysis.
  */
 
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { classifyRegion } from '@/lib/email/region-classifier';
+import { FOUNDER_REPLY_TO } from '@/lib/email/config';
 
 interface CliArgs {
   batch: 'us' | 'eu';
@@ -28,19 +56,8 @@ interface CliArgs {
 }
 
 const SENT_LOG_PATH = 'scripts/founding/sent.jsonl';
-const SENDER = 'Wilf <wilfred@tldrsec.app>';
-const REPLY_TO = 'wilfred@tldrsec.app';
+const SENDER = `Wilf <${FOUNDER_REPLY_TO}>`;
 const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || 'https://tldrsec.app';
-
-const EU_DOMAINS = new Set([
-  'btinternet.com', 'hotmail.co.uk', 'yahoo.co.uk', 'live.co.uk',
-  'googlemail.com', 'live.fr', 'live.de', 'web.de', 'gmx.de',
-  'wanadoo.fr', 'orange.fr', 'free.fr',
-]);
-const EU_TLDS = new Set([
-  'co.uk', 'uk', 'de', 'fr', 'it', 'es', 'nl', 'se', 'no', 'fi',
-  'dk', 'pl', 'ch', 'at', 'be', 'ie', 'pt', 'cz', 'gr',
-]);
 
 function parseArgs(argv: string[]): CliArgs {
   const args = argv.slice(2);
@@ -52,16 +69,6 @@ function parseArgs(argv: string[]): CliArgs {
   const limitIdx = args.indexOf('--limit');
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : undefined;
   return { batch, dryRun, limit };
-}
-
-function classifyRegion(email: string): 'us' | 'eu' {
-  const lower = email.toLowerCase();
-  const domain = lower.split('@')[1] || '';
-  if (EU_DOMAINS.has(domain)) return 'eu';
-  for (const tld of EU_TLDS) {
-    if (domain.endsWith('.' + tld)) return 'eu';
-  }
-  return 'us';
 }
 
 function loadSentEmails(): Set<string> {
@@ -137,6 +144,18 @@ function buildEmailBody(email: string, batch: string): { subject: string; text: 
 async function main() {
   const args = parseArgs(process.argv);
 
+  // Kill-switch gate. The $499 Lifetime offer is irreversible and goes to
+  // 124 people — require explicit FOUNDING_ARMED=true on real sends so a
+  // half-typed command can't fire. --dry-run bypasses this. Independent
+  // from LAUNCH_ARMED (which gates the cron-fired VRT campaign) so the
+  // two campaigns can be armed and disarmed separately.
+  if (!args.dryRun && process.env.FOUNDING_ARMED !== 'true') {
+    throw new Error(
+      'FOUNDING_ARMED=true required for non-dry-run sends. ' +
+      'Re-run with FOUNDING_ARMED=true prefix, or add --dry-run.',
+    );
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -201,7 +220,7 @@ async function main() {
       const res = await resend.emails.send({
         from: SENDER,
         to: r.email,
-        replyTo: REPLY_TO,
+        replyTo: FOUNDER_REPLY_TO,
         subject,
         text,
         html,
