@@ -29,6 +29,7 @@ jest.mock('@/lib/db/prisma', () => {
   const mockClient = {
     summary: {
       findUnique: jest.fn(async () => null),
+      findMany: jest.fn(async () => []),
       update: jest.fn(async () => ({})),
     },
     secFiling: {
@@ -57,11 +58,6 @@ jest.mock('@/lib/ai/web-search-context', () => ({
 
 jest.mock('@/lib/ai/x-sentiment-provider', () => ({
   getXSentiment: jest.fn(),
-}));
-
-jest.mock('@/lib/ai/historical-context', () => ({
-  getHistoricalSummaries: jest.fn(async () => []),
-  buildContextEnrichedPrompt: jest.fn((content) => content),
 }));
 
 jest.mock('@/lib/monitoring', () => ({
