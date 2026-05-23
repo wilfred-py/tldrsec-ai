@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { PreferenceService } from '@/lib/user/preference-service';
 import { auth } from '@clerk/nextjs/server';
-import { NotificationPreference } from '@/lib/email/notification-service';
+import { NotificationPreference } from '@/lib/email/notification-types';
 import { UserPreferences } from '@/lib/user/preference-types';
 import { GET, PATCH } from '@/app/api/user/route';
 import { getPrismaClient } from '@/lib/db/prisma';

@@ -1,4 +1,4 @@
-import { NotificationPreference } from '@/lib/email/notification-service';
+import { NotificationPreference } from '@/lib/email/notification-types';
 import { DEFAULT_USER_PREFERENCES, NotificationPreferences, UserPreferences } from '@/lib/user/preference-types';
 
 // Define mocks before imports
