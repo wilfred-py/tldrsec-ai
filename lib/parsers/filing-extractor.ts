@@ -126,9 +126,99 @@ class WorkerPool {
 const workerPool = new WorkerPool();
 
 /**
+ * Strip inline-XBRL noise so cheerio's .text() yields readable financial data.
+ *
+ * Modern SEC 10-Q/10-K filings are iXBRL: visible HTML interleaved with
+ * <ix:nonFraction>, <ix:nonNumeric>, <ix:hidden>, and XBRL schema tags.
+ * Without preprocessing, the cleaner returns either tag soup or naked numbers
+ * stripped of their currency symbols and labels — which is the NVDA
+ * "no extractable metrics" failure mode.
+ *
+ * Transformations:
+ *   - <ix:hidden>…</ix:hidden>            → removed entirely (not for display)
+ *   - <ix:references>…</ix:references>    → removed
+ *   - <ix:resources>…</ix:resources>      → removed
+ *   - <ix:relationship>…</ix:relationship>→ removed
+ *   - <ix:nonFraction …>$VALUE</…>        → $VALUE (unwrapped)
+ *   - <ix:nonNumeric …>TEXT</…>           → TEXT (unwrapped)
+ *   - <ix:continuation …>TEXT</…>         → TEXT (unwrapped)
+ *   - <ix:header>…</ix:header>            → removed
+ *   - <xbrli:* …>…</…>                    → removed (XBRL instance)
+ *   - <link:* …>…</…>                     → removed (linkbase)
+ *   - <xlink:* …>…</…>                    → removed (XLink)
+ *
+ * Idempotent on non-iXBRL input (no ix:* tags = no changes).
+ */
+export function preprocessIxbrl(html: string): string {
+  let out = html;
+
+  // Block-level iXBRL containers that hold metadata, not display content.
+  const blockTags = ['hidden', 'header', 'references', 'resources', 'relationship'];
+  for (const tag of blockTags) {
+    const re = new RegExp(`<ix:${tag}\\b[^>]*>[\\s\\S]*?</ix:${tag}>`, 'gi');
+    out = out.replace(re, '');
+  }
+
+  // Self-closing iXBRL markers.
+  out = out.replace(/<ix:[a-zA-Z][a-zA-Z0-9_-]*\b[^>]*\/>/gi, '');
+
+  // Unwrap value-bearing tags: preserve inner text, drop the wrapper.
+  // Matches <ix:nonFraction …>$81,600</ix:nonFraction> → $81,600
+  const unwrapTags = ['nonFraction', 'nonNumeric', 'continuation', 'fraction', 'numerator', 'denominator'];
+  for (const tag of unwrapTags) {
+    const re = new RegExp(`<ix:${tag}\\b[^>]*>([\\s\\S]*?)</ix:${tag}>`, 'gi');
+    out = out.replace(re, '$1');
+  }
+
+  // XBRL instance / linkbase / XLink namespace elements — schema noise, not human content.
+  // Elements can nest deeply (xbrli:context > xbrli:entity > xbrli:identifier), so we
+  // (1) match opening and closing tags of the SAME name via backreference (`\1`),
+  // (2) iterate to a fixed point in case of same-name nesting (rare in iXBRL but possible).
+  const noiseNamespaces = ['xbrli', 'link', 'xlink', 'xbrldi'];
+  for (const ns of noiseNamespaces) {
+    const re = new RegExp(`<(${ns}:[a-zA-Z][a-zA-Z0-9_-]*)\\b[^>]*>[\\s\\S]*?</\\1>`, 'gi');
+    let prev;
+    do {
+      prev = out;
+      out = out.replace(re, '');
+    } while (out !== prev);
+    // Self-closing variants.
+    const reSelf = new RegExp(`<${ns}:[a-zA-Z][a-zA-Z0-9_-]*\\b[^>]*\\/>`, 'gi');
+    out = out.replace(reSelf, '');
+    // Orphaned closing tags (in case backref left any due to malformed input).
+    const reOrphan = new RegExp(`</${ns}:[a-zA-Z][a-zA-Z0-9_-]*>`, 'gi');
+    out = out.replace(reOrphan, '');
+  }
+
+  return out;
+}
+
+/**
+ * Promote SEC's de-facto section headers to markdown headings so downstream
+ * section-aware chunking can split on them. The 10-Q/10-K sections never
+ * use <h1>-<h6>; they use centered bold paragraphs with text like
+ * "PART I", "Item 1.", "Item 1A. Risk Factors", etc.
+ *
+ * Applied to the post-cheerio plain text. Matches whole lines only.
+ */
+export function promoteSecHeadings(text: string): string {
+  return text
+    // PART I / PART II / PART III  →  # PART I
+    .replace(/^[ \t]*(PART\s+(?:I|II|III|IV|V))\b[\s.:-]*(.*)$/gim,
+      (_m, part: string, rest: string) => `\n# ${part}${rest ? ' ' + rest.trim() : ''}\n`)
+    // Item 1. / Item 1A. / Item 2. …  →  ## Item 1. Financial Statements
+    .replace(/^[ \t]*(Item\s+\d+[A-Z]?)\.\s*([^\n]{0,200})$/gim,
+      (_m, item: string, rest: string) => `\n## ${item}. ${rest.trim()}\n`);
+}
+
+/**
  * Clean HTML content by stripping scripts, styles, comments, and other
  * non-content elements. Preserves table structure (pipe-delimited rows),
  * list structure (bulleted), and headings (markdown-style).
+ *
+ * iXBRL-aware: SEC 10-Q/10-K filings since 2019 use inline XBRL. This
+ * function preprocesses <ix:*> tags so visible financial figures survive
+ * the cheerio .text() extraction. See preprocessIxbrl().
  *
  * Exported because callers outside the filing-extraction pipeline use the
  * cleaner directly (e.g. token-saving preprocessors).
@@ -137,6 +227,14 @@ export function cleanHtmlContent(html: string, options: { preserveFormatting?: b
   if (!html) return '';
 
   try {
+    // iXBRL preprocessing: SEC filings since 2019 are inline XBRL. The financial
+    // figures live inside <ix:nonFraction>NUM</ix:nonFraction> tags, and a large
+    // <ix:hidden> block at the top of the doc holds metadata not meant for display.
+    // Cheerio's HTML parser treats namespaced tags as opaque elements — without
+    // this preprocessing, .text() either drops the values or extracts them stripped
+    // of their surrounding "$" and label context.
+    html = preprocessIxbrl(html);
+
     const $ = cheerio.load(html);
 
     // Remove scripts, styles, and comments
@@ -149,6 +247,13 @@ export function cleanHtmlContent(html: string, options: { preserveFormatting?: b
     });
 
     const bodyContent = $('body').length ? $('body') : $.root();
+
+    // NL: Unicode Information Separator One (\x1F) — a non-whitespace control
+    // character we use as a structural-break sentinel. Under jsdom (Jest's
+    // testEnvironment), cheerio's .text() normalizes literal \n into spaces,
+    // destroying table/heading/paragraph structure. The sentinel survives
+    // .text() because regex \s doesn't match it; we swap it back to \n after.
+    const NL = '\x1F';
 
     // Handle tables specially to preserve structure
     bodyContent.find('table').each(function() {
@@ -166,7 +271,7 @@ export function cleanHtmlContent(html: string, options: { preserveFormatting?: b
       });
 
       if (rows.length > 0) {
-        $table.replaceWith(rows.join('\n'));
+        $table.replaceWith(rows.join(NL));
       }
     });
 
@@ -180,25 +285,36 @@ export function cleanHtmlContent(html: string, options: { preserveFormatting?: b
       });
 
       if (items.length > 0) {
-        $list.replaceWith(items.join('\n'));
+        $list.replaceWith(items.join(NL));
       }
     });
 
     if (!options.preserveFormatting) {
       bodyContent.find('div, p, br, hr').each(function() {
-        $(this).replaceWith('\n' + $(this).text() + '\n');
+        $(this).replaceWith(NL + $(this).text() + NL);
       });
     }
 
     bodyContent.find('h1, h2, h3, h4, h5, h6').each(function() {
       const level = this.name.charAt(1);
       const prefix = '#'.repeat(parseInt(level));
-      $(this).replaceWith('\n' + prefix + ' ' + $(this).text() + '\n');
+      $(this).replaceWith(NL + prefix + ' ' + $(this).text() + NL);
     });
 
     let text = bodyContent.text();
-    text = text.replace(/\s+/g, ' ').trim();
+
+    // Restore structural breaks: NL sentinel → \n.
+    text = text.replace(new RegExp(NL, 'g'), '\n');
+
+    // Collapse horizontal whitespace but PRESERVE newlines so downstream
+    // section detection (markdown-style heading splits) works. Cap consecutive
+    // newlines at 2.
+    text = text.replace(/[ \t\r\f\v]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
     text = text.replace(/\.\s+([A-Z])/g, '.\n\n$1');
+
+    // Promote SEC's de-facto section headers (PART I, Item 1., Item 1A. …) to
+    // markdown so the section-aware chunker downstream can split on them.
+    text = promoteSecHeadings(text);
 
     return text;
   } catch (error) {

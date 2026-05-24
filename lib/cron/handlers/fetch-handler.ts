@@ -21,6 +21,7 @@ import { createHash } from 'crypto';
 import { SECEdgarClient } from '../../sec-edgar/client';
 import { verifyFilingContent, type FilingMetadata, type ContentVerificationResult } from '../../validation/filing-content-verifier';
 import { getPriorityForTier } from '../tier-priority';
+import { cleanHtmlContent } from '../../parsers/filing-extractor';
 
 const fetchLogger = logger.child('fetch-handler');
 
@@ -248,6 +249,23 @@ export async function handleFetch(
     // Calculate content hash for deduplication
     const contentHash = createHash('sha256').update(content).digest('hex');
 
+    // iXBRL-aware cleaning: strip <ix:hidden>, unwrap <ix:nonFraction>, promote
+    // SEC headings (Item 1., Part I) to markdown. Best-effort: if cleaning throws,
+    // we store null and the summarizer falls back to raw `content`.
+    // Without this, the summarizer sees XBRL tag soup and produces "no extractable
+    // financial metrics" summaries (the NVDA 2026-05-20 failure).
+    let cleanedContent: string | null = null;
+    try {
+      const cleaned = cleanHtmlContent(content);
+      cleanedContent = cleaned && cleaned.length > 0 ? cleaned : null;
+    } catch (cleanErr) {
+      fetchLogger.warn(`[${executionId}] cleanHtmlContent threw — storing null, summarizer will use raw content`, {
+        accessionNumber: filing.accessionNumber,
+        error: cleanErr instanceof Error ? cleanErr.message : String(cleanErr)
+      });
+    }
+    const cleanedAt = cleanedContent ? new Date() : null;
+
     // Store in cache with 24h TTL
     const fetchDuration = Date.now() - startTime;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
@@ -264,7 +282,9 @@ export async function handleFetch(
         primaryDocUrl,  // Store direct document URL for better email UX
         expiresAt,
         fetchDuration,
-        status: 'CACHED'
+        status: 'CACHED',
+        cleanedContent,
+        cleanedAt
       },
       update: {
         content,
@@ -275,8 +295,19 @@ export async function handleFetch(
         fetchDuration,
         fetchError: null,
         status: 'CACHED',
-        fetchedAt: new Date()
+        fetchedAt: new Date(),
+        cleanedContent,
+        cleanedAt
       }
+    });
+
+    fetchLogger.info(`[${executionId}] Content cleaned`, {
+      accessionNumber: filing.accessionNumber,
+      rawBytes: content.length,
+      cleanedBytes: cleanedContent?.length ?? 0,
+      reductionPct: cleanedContent
+        ? Math.round((1 - cleanedContent.length / content.length) * 100)
+        : null
     });
 
     fetchLogger.info(`[${executionId}] Content cached successfully`, {

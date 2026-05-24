@@ -439,6 +439,11 @@ model FilingContentCache {
   fetchDuration   Int
   fetchError      String?
   status          String   @default("CACHED")
+  // Cleaned text extracted from `content` via cleanHtmlContent + iXBRL preprocessing.
+  // Nullable for incremental rollout: existing rows backfill async; new rows populate at fetch time.
+  // When non-null, downstream summarization reads this instead of raw `content`.
+  cleanedContent  String?  @db.Text
+  cleanedAt       DateTime?
 
   @@index([accessionNumber])
   @@index([expiresAt])
