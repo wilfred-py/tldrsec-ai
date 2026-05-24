@@ -2,24 +2,52 @@
  * Send Founding Lifetime Seat outreach to a batch of waitlist members.
  *
  * Usage:
- *   bun run scripts/founding/send-founding-batch.ts --batch us [--dry-run] [--limit 25]
- *   bun run scripts/founding/send-founding-batch.ts --batch eu [--dry-run] [--limit 8]
+ *   FOUNDING_ARMED=true bun run scripts/founding/send-founding-batch.ts --batch us [--limit 25]
+ *   FOUNDING_ARMED=true bun run scripts/founding/send-founding-batch.ts --batch eu [--limit 8]
+ *   bun run scripts/founding/send-founding-batch.ts --batch us --dry-run
  *
  * Reads `newsletter_subscribers` from Supabase, filters by region heuristic
- * (us vs eu by email domain), skips addresses already in
- * `scripts/founding/sent.jsonl`, and sends one-to-one Resend emails from the
- * founder address. Each email includes a unique link with batch + UTM params
- * the webhook can correlate back via `client_reference_id` and
+ * (us vs eu by email domain — uses the canonical `classifyRegion` from
+ * `lib/email/region-classifier.ts` so EU/US splits stay aligned with the
+ * cron-fired VRT 10-Q campaign), skips addresses already in
+ * `scripts/founding/sent.jsonl`, and sends one-to-one Resend emails from
+ * the founder address. Each email includes a unique link with batch + UTM
+ * params the webhook can correlate back via `client_reference_id` and
  * `session.metadata.batch`.
  *
  * Dry-run prints the recipient list and the rendered email body for one
- * recipient without sending anything.
+ * recipient without sending anything. `--dry-run` bypasses the
+ * `FOUNDING_ARMED` env gate; real sends require `FOUNDING_ARMED=true`.
+ *
+ * REGION TIMING (derived from the 2026-05 waitlist audience analysis;
+ * see lib/email/region-classifier.ts:1-28 for the full rationale):
+ *
+ *   124-person waitlist, ~75% US prior, Boomer-leaning audience that
+ *   reads email first-thing-in-the-morning. Email domain is the only
+ *   reliable geo signal we have — the stored subscriber_ip column is
+ *   broken (every value is a Cloudflare edge IP; see waitlist-route.ts).
+ *
+ *   - EU batch:  07:30 UTC = 09:30 CEST (~mid-morning EU). ~8 recipients.
+ *   - US batch:  11:00 UTC = 07:00 AM EDT (peak Boomer open window).
+ *                ~116 recipients.
+ *
+ *   Mis-classification budget: ~4 EU users hidden in gmail.com /
+ *   yahoo.com default to US. They'll read at lunchtime in their TZ —
+ *   acceptable.
+ *
+ *   NOTE: an earlier draft of the PR 563 runbook claimed "12 UTC = 7 AM
+ *   ET", which was correct in EST (UTC-5) but wrong in EDT (UTC-4).
+ *   May 2026 is EDT. Use 11 UTC for the US batch to land at 7 AM EDT —
+ *   matches PR 562's cron-fired VRT send and the lib classifier's
+ *   documented audience analysis.
  */
 
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { classifyRegion } from '@/lib/email/region-classifier';
+import { FOUNDER_REPLY_TO } from '@/lib/email/config';
 
 interface CliArgs {
   batch: 'us' | 'eu';
@@ -28,22 +56,28 @@ interface CliArgs {
 }
 
 const SENT_LOG_PATH = 'scripts/founding/sent.jsonl';
-const SENDER = 'Wilf <wilfred@tldrsec.app>';
-const REPLY_TO = 'wilfred@tldrsec.app';
+const SENDER = `Wilf <${FOUNDER_REPLY_TO}>`;
 const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || 'https://tldrsec.app';
-
-const EU_DOMAINS = new Set([
-  'btinternet.com', 'hotmail.co.uk', 'yahoo.co.uk', 'live.co.uk',
-  'googlemail.com', 'live.fr', 'live.de', 'web.de', 'gmx.de',
-  'wanadoo.fr', 'orange.fr', 'free.fr',
-]);
-const EU_TLDS = new Set([
-  'co.uk', 'uk', 'de', 'fr', 'it', 'es', 'nl', 'se', 'no', 'fi',
-  'dk', 'pl', 'ch', 'at', 'be', 'ie', 'pt', 'cz', 'gr',
-]);
 
 function parseArgs(argv: string[]): CliArgs {
   const args = argv.slice(2);
+
+  // Reject unknown flags. Without this, a typo like `--dryrun` (missing
+  // dash) silently evaluates to dryRun=false; combined with an exported
+  // FOUNDING_ARMED=true in the operator's shell from a prior session,
+  // that fires a live send to 124 people. Hard-fail on the typo instead.
+  const knownFlags = new Set(['--batch', '--dry-run', '--limit']);
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a.startsWith('--')) continue;
+    if (!knownFlags.has(a)) {
+      throw new Error(
+        `Unknown flag: ${a}. Known flags: ${[...knownFlags].join(', ')}`,
+      );
+    }
+    if (a === '--batch' || a === '--limit') i++; // skip value
+  }
+
   const batch = args.includes('--batch') ? args[args.indexOf('--batch') + 1] : null;
   if (batch !== 'us' && batch !== 'eu') {
     throw new Error('Required: --batch us|eu');
@@ -54,16 +88,6 @@ function parseArgs(argv: string[]): CliArgs {
   return { batch, dryRun, limit };
 }
 
-function classifyRegion(email: string): 'us' | 'eu' {
-  const lower = email.toLowerCase();
-  const domain = lower.split('@')[1] || '';
-  if (EU_DOMAINS.has(domain)) return 'eu';
-  for (const tld of EU_TLDS) {
-    if (domain.endsWith('.' + tld)) return 'eu';
-  }
-  return 'us';
-}
-
 function loadSentEmails(): Set<string> {
   if (!existsSync(SENT_LOG_PATH)) return new Set();
   const lines = readFileSync(SENT_LOG_PATH, 'utf-8').split('\n').filter(Boolean);
@@ -71,7 +95,13 @@ function loadSentEmails(): Set<string> {
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
-      if (entry.email) sent.add(entry.email.toLowerCase());
+      // Only treat successful sends as "already sent". Failed entries
+      // (missing resendId or with error) stay in the log for forensics
+      // but should retry on the next run — otherwise a transient Resend
+      // 429 / 5xx permanently drops a $499 Lifetime target.
+      if (entry.email && entry.resendId && !entry.error) {
+        sent.add(entry.email.toLowerCase());
+      }
     } catch {
       // skip malformed lines
     }
@@ -137,6 +167,18 @@ function buildEmailBody(email: string, batch: string): { subject: string; text: 
 async function main() {
   const args = parseArgs(process.argv);
 
+  // Kill-switch gate. The $499 Lifetime offer is irreversible and goes to
+  // 124 people — require explicit FOUNDING_ARMED=true on real sends so a
+  // half-typed command can't fire. --dry-run bypasses this. Independent
+  // from LAUNCH_ARMED (which gates the cron-fired VRT campaign) so the
+  // two campaigns can be armed and disarmed separately.
+  if (!args.dryRun && process.env.FOUNDING_ARMED !== 'true') {
+    throw new Error(
+      'FOUNDING_ARMED=true required for non-dry-run sends. ' +
+      'Re-run with FOUNDING_ARMED=true prefix, or add --dry-run.',
+    );
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -201,21 +243,38 @@ async function main() {
       const res = await resend.emails.send({
         from: SENDER,
         to: r.email,
-        replyTo: REPLY_TO,
+        replyTo: FOUNDER_REPLY_TO,
         subject,
         text,
         html,
       });
-      const id = (res as { data?: { id?: string } }).data?.id ?? null;
-      recordSent(r.email, args.batch, id);
-      sent++;
-      console.log(`  ✓ ${r.email} (resend id: ${id})`);
+      // Resend SDK returns { data, error } — it does NOT throw on API
+      // errors (429 rate-limit, 4xx validation, 5xx). Check res.error
+      // explicitly so a transient failure doesn't get recorded as a
+      // "successful" send (which would poison the dedup set in
+      // loadSentEmails and permanently skip that recipient on retry).
+      const resErr = (res as { error?: { message?: string; name?: string } | null }).error;
+      if (resErr) {
+        const msg = resErr.message ?? resErr.name ?? JSON.stringify(resErr);
+        recordSent(r.email, args.batch, null, msg);
+        failed++;
+        console.error(`  ✗ ${r.email}: ${msg}`);
+      } else {
+        const id = (res as { data?: { id?: string } }).data?.id ?? null;
+        recordSent(r.email, args.batch, id);
+        sent++;
+        console.log(`  ✓ ${r.email} (resend id: ${id})`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       recordSent(r.email, args.batch, null, msg);
       failed++;
       console.error(`  ✗ ${r.email}: ${msg}`);
     }
+    // Inter-send delay keeps us under Resend's default 10 req/s rate
+    // limit with margin. 250ms = 4 req/s. ~30 seconds total for 116
+    // US recipients — fine for an operator-watched send.
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
   console.log(`\nBatch ${args.batch} complete: ${sent} sent, ${failed} failed.`);
