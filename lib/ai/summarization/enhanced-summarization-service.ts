@@ -375,3 +375,10 @@ export class EnhancedSummarizationService extends EventEmitter {
     );
   }
 }
+
+/**
+ * Shared singleton. Callers (and their test mocks) depend on a single
+ * event-emitter instance, so the summarization pipeline keeps one shared
+ * emitter rather than constructing a new service per call.
+ */
+export const enhancedSummarizer = new EnhancedSummarizationService();

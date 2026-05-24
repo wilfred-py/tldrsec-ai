@@ -10,7 +10,7 @@
 
 import { enhancedFilingService, EnhancedFilingEvent } from '../enhancedFilingService';
 import { summaryCache } from '../../lib/ai/cache/summary-cache';
-import { enhancedSummarizer } from '../../lib/ai/enhanced-summarize';
+import { enhancedSummarizer } from '../../lib/ai/summarization/enhanced-summarization-service';
 import { prisma } from '../../lib/db';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -19,7 +19,7 @@ import * as companyInfo from '../filings/companyInfo';
 import * as filingRetrieval from '../filings/filingRetrieval';
 
 // Mock dependencies
-jest.mock('../../lib/ai/enhanced-summarize', () => ({
+jest.mock('../../lib/ai/summarization/enhanced-summarization-service', () => ({
   enhancedSummarizer: {
     summarize: jest.fn().mockResolvedValue({
       summaryId: 'summary-1',
