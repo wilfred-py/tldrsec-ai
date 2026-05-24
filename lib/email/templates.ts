@@ -8,101 +8,16 @@
 import { EmailType, FilingTemplateData } from './types';
 import { escapeHtml } from './security-helpers';
 import { renderAsync } from '@react-email/render';
-import * as SECFilingEmailTemplate from '../../components/email/templates/SECFilingEmailTemplate';
-const { default: _SECFilingEmailTemplateComponent } = SECFilingEmailTemplate;
 import { markdownToHtml } from '../../components/ui/email/design-system';
+import { selectFilingTemplate } from './template-selection';
 
-// Import minimalist templates for Phase 2 design
+// Form 4 minimalist template is rendered directly for the FORM4 email type.
 import { Form4MinimalistTemplate } from '../../components/ui/email/templates/form4-minimalist-template';
-import { Form10KMinimalistTemplate } from '../../components/ui/email/templates/10k-minimalist-template';
-import { Form10QMinimalistTemplate } from '../../components/ui/email/templates/10q-minimalist-template';
-import { Form8KMinimalistTemplate } from '../../components/ui/email/templates/8k-minimalist-template';
-import { Form144MinimalistTemplate } from '../../components/ui/email/templates/form144-minimalist-template';
-import { FormDEF14AMinimalistTemplate } from '../../components/ui/email/templates/def14a-minimalist-template';
-import { Form11KMinimalistTemplate } from '../../components/ui/email/templates/11k-minimalist-template';
-import { FormS1MinimalistTemplate } from '../../components/ui/email/templates/s1-minimalist-template';
-import { FormS3MinimalistTemplate } from '../../components/ui/email/templates/s3-minimalist-template';
-import { GenericMinimalistTemplate } from '../../components/ui/email/templates/generic-minimalist-template';
-import Schedule13DEmailTemplate from '../../components/ui/email/templates/13d-template';
 import {
   OnboardingFallbackNoticeTemplate,
   type OnboardingFallbackNoticeData,
 } from '../../components/ui/email/templates/onboarding-fallback-notice-template';
 import * as React from 'react';
-
-/**
- * Template registry for O(1) lookup - Morning Brew style minimalist templates
- * Each entry pairs a component with a canonical template name used in analytics tags.
- */
-type MinimalistTemplateEntry = {
-  component: React.ComponentType<{ filing: FilingTemplateData }>;
-  name: string;
-};
-
-const FORM4_ENTRY: MinimalistTemplateEntry = { component: Form4MinimalistTemplate, name: 'form4_minimalist' };
-const FORM10K_ENTRY: MinimalistTemplateEntry = { component: Form10KMinimalistTemplate, name: '10k_minimalist' };
-const FORM10Q_ENTRY: MinimalistTemplateEntry = { component: Form10QMinimalistTemplate, name: '10q_minimalist' };
-const FORM8K_ENTRY: MinimalistTemplateEntry = { component: Form8KMinimalistTemplate, name: '8k_minimalist' };
-const FORM144_ENTRY: MinimalistTemplateEntry = { component: Form144MinimalistTemplate, name: 'form144_minimalist' };
-const DEF14A_ENTRY: MinimalistTemplateEntry = { component: FormDEF14AMinimalistTemplate, name: 'def14a_minimalist' };
-const FORM11K_ENTRY: MinimalistTemplateEntry = { component: Form11KMinimalistTemplate, name: '11k_minimalist' };
-const FORMS1_ENTRY: MinimalistTemplateEntry = { component: FormS1MinimalistTemplate, name: 's1_minimalist' };
-const FORMS3_ENTRY: MinimalistTemplateEntry = { component: FormS3MinimalistTemplate, name: 's3_minimalist' };
-const GENERIC_ENTRY: MinimalistTemplateEntry = { component: GenericMinimalistTemplate, name: 'generic_minimalist' };
-// Legacy 13D template — no layout change per Step 9, but routed here so outbound
-// tags carry an accurate `template` value (instead of falling back to generic).
-const SCHEDULE13D_ENTRY: MinimalistTemplateEntry = { component: Schedule13DEmailTemplate, name: '13d_legacy' };
-
-const MINIMALIST_TEMPLATE_REGISTRY: Record<string, MinimalistTemplateEntry> = {
-  'FORM4': FORM4_ENTRY,
-  'FORM 4': FORM4_ENTRY,
-  '4': FORM4_ENTRY,
-  '10-K': FORM10K_ENTRY,
-  '10K': FORM10K_ENTRY,
-  '10-Q': FORM10Q_ENTRY,
-  '10Q': FORM10Q_ENTRY,
-  '8-K': FORM8K_ENTRY,
-  '8K': FORM8K_ENTRY,
-  'FORM 8-K': FORM8K_ENTRY,
-  'FORM8-K': FORM8K_ENTRY,
-  '144': FORM144_ENTRY,
-  'FORM 144': FORM144_ENTRY,
-  'FORM144': FORM144_ENTRY,
-  'DEF 14A': DEF14A_ENTRY,
-  'FORM DEF 14A': DEF14A_ENTRY,
-  '11-K': FORM11K_ENTRY,
-  'FORM 11-K': FORM11K_ENTRY,
-  'S-1': FORMS1_ENTRY,
-  'FORM S-1': FORMS1_ENTRY,
-  'S-3': FORMS3_ENTRY,
-  'FORM S-3': FORMS3_ENTRY,
-  'SCHEDULE 13D': SCHEDULE13D_ENTRY,
-  'SCHEDULE13D': SCHEDULE13D_ENTRY,
-  '13D': SCHEDULE13D_ENTRY,
-  'SC 13D': SCHEDULE13D_ENTRY,
-  'SC13D': SCHEDULE13D_ENTRY,
-};
-
-function lookupMinimalistEntry(filingType: string): MinimalistTemplateEntry {
-  const normalizedType = filingType?.toUpperCase().trim() || '';
-  return MINIMALIST_TEMPLATE_REGISTRY[normalizedType] || GENERIC_ENTRY;
-}
-
-/**
- * Get the appropriate minimalist template for a filing type
- * Falls back to generic template if no specific template exists
- */
-function getMinimalistTemplate(filingType: string): React.ComponentType<{ filing: FilingTemplateData }> {
-  return lookupMinimalistEntry(filingType).component;
-}
-
-/**
- * Canonical template name for a filing type — used in outbound analytics tags
- * so PostHog events carry the actual template that rendered the email.
- */
-export function getMinimalistTemplateName(filingType: string): string {
-  return lookupMinimalistEntry(filingType).name;
-}
 
 // Helper function to generate plain text version of email
 function generatePlainTextEmail(filings: FilingTemplateData[], errors: string[]) {
@@ -989,7 +904,7 @@ export async function getEmailTemplate(
     case EmailType.IMMEDIATE: {
       // Use minimalist template based on filing type
       const filing = data.filing as FilingTemplateData;
-      const MinimalistTemplate = getMinimalistTemplate(filing?.filingType || '');
+      const MinimalistTemplate = selectFilingTemplate(filing?.filingType).component;
       const html = await renderAsync(React.createElement(MinimalistTemplate, { filing }));
       return {
         html,
@@ -1037,7 +952,7 @@ export async function getEmailTemplate(
         summaryData: data.summaryData as FilingTemplateData['summaryData']
       };
       // Use minimalist template based on filing type
-      const MinimalistTemplate = getMinimalistTemplate(filing.filingType);
+      const MinimalistTemplate = selectFilingTemplate(filing.filingType).component;
       const html = await renderAsync(React.createElement(MinimalistTemplate, { filing }));
       return {
         html,

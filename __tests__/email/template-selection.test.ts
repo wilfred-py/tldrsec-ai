@@ -1,139 +1,103 @@
 /**
- * Template Selection Consistency Tests
+ * Filing template-selection tests.
  *
- * Tests for Phase 3 of Summary Generation Accuracy Improvements
- * Ensures correct template selection for all supported form types
+ * Exercises the `selectFilingTemplate` interface — the one seam every email
+ * send path crosses to turn a [Filing] type into a renderable template. Tests
+ * assert on observable outcomes (which template name is selected, that the
+ * selected component renders) rather than on any internal lookup table.
  */
 
-import { TemplateRegistry } from '@/lib/email/template-registry';
+import { render } from '@testing-library/react';
+import * as React from 'react';
+import { selectFilingTemplate } from '@/lib/email/template-selection';
+import { FilingTemplateData } from '@/lib/email/types';
 
-describe('Template Selection Consistency', () => {
-  describe('Template Registry Lookup', () => {
-    it('should select Form4MinimalistTemplate for Form 4 filings', () => {
-      const template = TemplateRegistry.getTemplate('Form 4');
-      expect(template.displayName).toBe('Form4MinimalistTemplate');
-    });
+const baseFiling: FilingTemplateData = {
+  companyName: 'Test Company',
+  symbol: 'TEST',
+  ticker: 'TEST',
+  filingType: '10-K',
+  filingDate: '2025-12-01',
+  filingUrl: 'https://example.com/filing',
+  summaryText: 'Test summary text',
+  summaryData: {},
+};
 
-    it('should select Form4MinimalistTemplate for numeric 4 filings', () => {
-      const template = TemplateRegistry.getTemplate('4');
-      expect(template.displayName).toBe('Form4MinimalistTemplate');
-    });
-
-    it('should select Form10KMinimalistTemplate for 10-K filings', () => {
-      const template = TemplateRegistry.getTemplate('10-K');
-      expect(template.displayName).toBe('Form10KMinimalistTemplate');
-    });
-
-    it('should select Form10QMinimalistTemplate for 10-Q filings', () => {
-      const template = TemplateRegistry.getTemplate('10-Q');
-      expect(template.displayName).toBe('Form10QMinimalistTemplate');
-    });
-
-    it('should select Form8KMinimalistTemplate for 8-K filings', () => {
-      const template = TemplateRegistry.getTemplate('8-K');
-      expect(template.displayName).toBe('Form8KMinimalistTemplate');
-    });
-
-    it('should select Form144MinimalistTemplate for Form 144 filings', () => {
-      const template = TemplateRegistry.getTemplate('Form 144');
-      expect(template.displayName).toBe('Form144MinimalistTemplate');
-    });
-
-    it('should select GenericMinimalistTemplate for unknown form types', () => {
-      const template = TemplateRegistry.getTemplate('UNKNOWN-FORM');
-      expect(template.displayName).toBe('GenericMinimalistTemplate');
-    });
-  });
-
-  describe('Template Registry Comprehensive Mappings', () => {
-    const testCases = [
-      // Form 4 variants
-      { formType: 'Form 4', expected: 'Form4MinimalistTemplate' },
-      { formType: 'FORM 4', expected: 'Form4MinimalistTemplate' },
-      { formType: 'FORM4', expected: 'Form4MinimalistTemplate' },
-      { formType: '4', expected: 'Form4MinimalistTemplate' },
-
-      // Form 3 and 5 (use Form 4 template for insider trading)
-      { formType: 'Form 3', expected: 'Form4MinimalistTemplate' },
-      { formType: '3', expected: 'Form4MinimalistTemplate' },
-      { formType: 'Form 5', expected: 'Form4MinimalistTemplate' },
-      { formType: '5', expected: 'Form4MinimalistTemplate' },
+describe('selectFilingTemplate', () => {
+  describe('selects the right template name per form type', () => {
+    const cases: Array<{ formType: string; expected: string }> = [
+      // Form 4 and related insider-trading forms (3/4/5 share the template)
+      { formType: 'Form 4', expected: 'form4_minimalist' },
+      { formType: 'FORM 4', expected: 'form4_minimalist' },
+      { formType: 'FORM4', expected: 'form4_minimalist' },
+      { formType: '4', expected: 'form4_minimalist' },
+      { formType: 'Form 3', expected: 'form4_minimalist' },
+      { formType: '3', expected: 'form4_minimalist' },
+      { formType: 'Form 5', expected: 'form4_minimalist' },
+      { formType: '5', expected: 'form4_minimalist' },
 
       // 10-K variants
-      { formType: '10-K', expected: 'Form10KMinimalistTemplate' },
-      { formType: '10K', expected: 'Form10KMinimalistTemplate' },
-      { formType: 'Form 10-K', expected: 'Form10KMinimalistTemplate' },
+      { formType: '10-K', expected: '10k_minimalist' },
+      { formType: '10K', expected: '10k_minimalist' },
+      { formType: 'Form 10-K', expected: '10k_minimalist' },
 
       // 10-Q variants
-      { formType: '10-Q', expected: 'Form10QMinimalistTemplate' },
-      { formType: '10Q', expected: 'Form10QMinimalistTemplate' },
-      { formType: 'Form 10-Q', expected: 'Form10QMinimalistTemplate' },
+      { formType: '10-Q', expected: '10q_minimalist' },
+      { formType: '10Q', expected: '10q_minimalist' },
+      { formType: 'Form 10-Q', expected: '10q_minimalist' },
 
       // 8-K variants
-      { formType: '8-K', expected: 'Form8KMinimalistTemplate' },
-      { formType: '8K', expected: 'Form8KMinimalistTemplate' },
-      { formType: 'Form 8-K', expected: 'Form8KMinimalistTemplate' },
-      { formType: 'FORM 8-K', expected: 'Form8KMinimalistTemplate' },
+      { formType: '8-K', expected: '8k_minimalist' },
+      { formType: '8K', expected: '8k_minimalist' },
+      { formType: 'FORM 8-K', expected: '8k_minimalist' },
 
       // Form 144 variants
-      { formType: '144', expected: 'Form144MinimalistTemplate' },
-      { formType: 'Form 144', expected: 'Form144MinimalistTemplate' },
-      { formType: 'FORM 144', expected: 'Form144MinimalistTemplate' },
+      { formType: '144', expected: 'form144_minimalist' },
+      { formType: 'Form 144', expected: 'form144_minimalist' },
+      { formType: 'FORM 144', expected: 'form144_minimalist' },
 
-      // Generic fallback
-      { formType: 'UNKNOWN', expected: 'GenericMinimalistTemplate' },
-      { formType: 'DEF 14A', expected: 'FormDEF14AMinimalistTemplate' },
-      { formType: 'Schedule 13D', expected: 'Schedule13DEmailTemplate' },
+      // Specialized forms that the filings generator previously dropped to
+      // generic — they now resolve consistently on every send path.
+      { formType: 'DEF 14A', expected: 'def14a_minimalist' },
+      { formType: 'Schedule 13D', expected: '13d_legacy' },
+      { formType: 'SC 13D', expected: '13d_legacy' },
+      { formType: 'S-1', expected: 's1_minimalist' },
+      { formType: 'S-3', expected: 's3_minimalist' },
+      { formType: 'Form 11-K', expected: '11k_minimalist' },
+
+      // Unknown -> generic fallback
+      { formType: 'UNKNOWN-FORM', expected: 'generic_minimalist' },
+      { formType: '', expected: 'generic_minimalist' },
     ];
 
-    testCases.forEach(({ formType, expected }) => {
-      it(`should select ${expected} for "${formType}"`, () => {
-        const template = TemplateRegistry.getTemplate(formType);
-        expect(template.displayName).toBe(expected);
+    cases.forEach(({ formType, expected }) => {
+      it(`selects "${expected}" for "${formType}"`, () => {
+        expect(selectFilingTemplate(formType).name).toBe(expected);
       });
     });
   });
 
-  describe('Template Registry Performance', () => {
-    it('should have all required form type mappings registered', () => {
-      const requiredMappings = [
-        'Form 4', '10-K', '10-Q', '8-K', 'Form 144'
-      ];
-
-      requiredMappings.forEach(formType => {
-        expect(TemplateRegistry.hasTemplate(formType)).toBe(true);
-      });
-    });
+  it('is case- and prefix-insensitive: "Form 4" and "FORM 4" select the same template', () => {
+    expect(selectFilingTemplate('Form 4').name).toBe(selectFilingTemplate('FORM 4').name);
+    expect(selectFilingTemplate('Form 4').component).toBe(selectFilingTemplate('FORM 4').component);
   });
 
-  describe('Template Existence Validation', () => {
-    it('should verify all registered templates are importable', () => {
-      const formTypes = ['Form 4', '10-K', '10-Q', '8-K', 'Form 144'];
-
-      formTypes.forEach(formType => {
-        const template = TemplateRegistry.getTemplate(formType);
-        expect(template).toBeDefined();
-        expect(typeof template).toBe('function');
-      });
-    });
+  it('tolerates null/undefined form types via the generic fallback', () => {
+    expect(selectFilingTemplate(undefined).name).toBe('generic_minimalist');
+    expect(selectFilingTemplate(null).name).toBe('generic_minimalist');
   });
 
-  describe('No Duplicate Mappings', () => {
-    it('should not have conflicting template mappings', () => {
-      // Verify that case variations map to the same template
-      const form4Template = TemplateRegistry.getTemplate('Form 4');
-      const form4UpperTemplate = TemplateRegistry.getTemplate('FORM 4');
+  describe('selected component renders without throwing', () => {
+    const formTypes = ['Form 4', '10-K', '10-Q', '8-K', 'Form 144', 'DEF 14A', 'Schedule 13D', 'Unknown'];
 
-      expect(form4Template.displayName).toBe(form4UpperTemplate.displayName);
-    });
-
-    it('should use identical templates for Form 3, 4, and 5 (insider trading)', () => {
-      const form3 = TemplateRegistry.getTemplate('Form 3');
-      const form4 = TemplateRegistry.getTemplate('Form 4');
-      const form5 = TemplateRegistry.getTemplate('Form 5');
-
-      expect(form3.displayName).toBe(form4.displayName);
-      expect(form4.displayName).toBe(form5.displayName);
+    formTypes.forEach((formType) => {
+      it(`renders for "${formType}"`, () => {
+        const { component: Template } = selectFilingTemplate(formType);
+        const filing = { ...baseFiling, filingType: formType };
+        const { container } = render(React.createElement(Template, { filing }));
+        expect(container.innerHTML).toBeTruthy();
+        expect(container.innerHTML.length).toBeGreaterThan(0);
+      });
     });
   });
 });
