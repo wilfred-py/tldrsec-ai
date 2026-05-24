@@ -1,34 +1,14 @@
 name: Quality Gates
 on:
+  # Jobs in this workflow are required status checks (see repo ruleset).
+  # `paths:` filters used to live here, but GitHub treats path-skipped
+  # required checks as "missing" rather than "passed" — silently blocking
+  # any PR that only touches paths outside the filter (e.g. scripts/, docs).
+  # See PR #564 for the case that surfaced it. Now runs on every PR/push.
   push:
     branches: [main]
-    paths:
-      # Only run on code changes, skip docs/config-only changes
-      - 'app/**'
-      - 'lib/**'
-      - 'components/**'
-      - 'services/**'
-      - 'prisma/**'
-      - 'cloudflare-cron/**'
-      - '__tests__/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - 'next.config.js'
   pull_request:
     branches: [main]
-    paths:
-      - 'app/**'
-      - 'lib/**'
-      - 'components/**'
-      - 'services/**'
-      - 'prisma/**'
-      - 'cloudflare-cron/**'
-      - '__tests__/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - 'next.config.js'
 
 concurrency:
   group: quality-gates-${{ github.workflow }}-${{ github.ref }}
