@@ -168,7 +168,9 @@ What I wanted was an equity analyst in my pocket. Someone who reads each filing 
 
 That is what tldrSEC is. An equity analyst who never gets tired, never misses anything, with a 360 degree birds-eye view of a company's industry, peers, and market sentiment.
 
-Cut through the noise.`;
+Cut through the noise.
+
+P.S. Next Wednesday: a founding-member offer, waitlist-only. Watch your inbox.`;
 
 /** Signoff lines, rendered separately so the CTA button can slot above. */
 export const LAUNCH_FOUNDER_SIGNOFF = `Founder, tldrSEC

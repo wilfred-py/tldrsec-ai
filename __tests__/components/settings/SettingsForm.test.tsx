@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { NotificationPreference } from '@/lib/email/notification-service';
+import { NotificationPreference } from '@/lib/email/notification-types';
 import { DEFAULT_USER_PREFERENCES } from '@/lib/user/preference-types';
 
 // Create a mock SettingsForm component for testing

@@ -29,3 +29,6 @@ An enrichment of a [Summary] that captures public discussion on X (Twitter) abou
 
 ### Lifetime Seat
 A user who claimed one of the first 25 lifetime seats via a one-time $499 payment. Entitled to all MAX-tier features (see `lib/stripe/plans.ts`) forever, with no recurring subscription. Modeled as a `User.foundingMember: Boolean` flag rather than a new `SubscriptionTier` value, since the entitlement set is identical to MAX. Purchased via a one-time Stripe `Price` (env: `STRIPE_FOUNDING_LIFETIME_PRICE_ID`) under the existing MAX `Product`, not a recurring subscription. Not to be confused with [Subscription] (watchlist interest) or `UserSubscription` (Stripe-side recurring plan record, which Lifetime Seat holders do not have).
+
+### Historical Context
+A prompt enrichment that folds the most recent prior [Summary] entries for a ticker into the current [Filing] prompt so the model can reference continuity (e.g. "Q3 follows the Q2 guidance cut"). Capped at the last 3 summaries, each truncated to 1500 characters to bound token cost. Implemented as private functions inside the Summarize module (`lib/ai/summarize.ts`) — not a separate module — because the only caller is the summarization pipeline itself and the prior extraction-for-testability split offered no leverage. Failures are non-fatal: a Postgres error logs and proceeds without history.

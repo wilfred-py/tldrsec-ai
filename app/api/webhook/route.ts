@@ -863,9 +863,9 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
  * engagement events that aren't already covered by client-side autocapture:
  * email.opened and email.clicked.
  *
- * Outbound tags are written by notification-service.ts as {name, value} pairs
- * (template, userId, filingId, formType, ticker). Resend hands them back on
- * the event payload as a flat Record<string,string>, which we lift onto the
+ * Outbound tags are written by lib/email/summary-service.ts as {name, value}
+ * pairs (template, userId, filingId, formType, ticker). Resend hands them back
+ * on the event payload as a flat Record<string,string>, which we lift onto the
  * PostHog event so each engagement is fully attributable.
  */
 
