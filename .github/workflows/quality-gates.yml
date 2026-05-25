@@ -112,7 +112,6 @@ jobs:
           NODE_ENV: test
           # Newsletter environment variables
           NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-key
           SUPABASE_SECRET_KEY: test-key
         run: |
           echo "⚡ Performance benchmarks skipped (script removed in cleanup)"
@@ -147,7 +146,6 @@ jobs:
           CI: true
           # Newsletter environment variables  
           NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-key
           SUPABASE_SECRET_KEY: test-key
         run: |
           echo "🧠 Memory stability test skipped (script removed in cleanup)"
@@ -200,7 +198,6 @@ jobs:
           NEXT_PRIVATE_STANDALONE: true
           # Newsletter environment variables
           NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-key
           SUPABASE_SECRET_KEY: test-key
         run: |
           echo "🔨 Running build validation..."
