@@ -145,29 +145,41 @@ describe('extractSections — edge cases', () => {
     expect(extractSections(input, '10-Q')).toEqual([]);
   });
 
-  it('combines repeated sections (Part I Item 1 + Part II Item 1) when canonical buckets collide', () => {
-    // Part I Item 1 = Financial Statements; Part II Item 1 = Legal Proceedings for 10-Q.
-    // Bare "Item 1" without 1A is matched as Legal Proceedings under the Part-II rule.
+  it('routes Part I Item 1. and Part II Item 1. correctly (10-Q has both with period)', () => {
+    // Real 10-Qs literally use "Item 1. Financial Statements" in Part I AND
+    // "Item 1. Legal Proceedings" in Part II — both with periods and uppercase
+    // trailing text. The extractor must distinguish them by trailing keyword,
+    // not by presence/absence of period. Regression for a routing bug caught
+    // in self-review where Part II Legal Proceedings leaked into Financial
+    // Statements.
     const input = `
 ## Item 1. Financial Statements
 
-Q1 revenue numbers.
+Q1 revenue numbers go here.
 
 ## Item 1A. Risk Factors
 
 Risk content.
 
-## Item 1
+## Item 1. Legal Proceedings
 
-Legal proceedings about a pending lawsuit.
+Pending lawsuit details. We are named in patent litigation.
 `.trim();
     const out = extractSections(input, '10-Q');
     const fs = out.find(s => s.section === 'Financial Statements');
     const risk = out.find(s => s.section === 'Risk Factors');
     const legal = out.find(s => s.section === 'Legal Proceedings');
+    expect(fs).toBeDefined();
+    expect(risk).toBeDefined();
+    expect(legal).toBeDefined();
     expect(fs!.content).toContain('Q1 revenue');
     expect(risk!.content).toContain('Risk content');
-    expect(legal!.content).toContain('pending lawsuit');
+    expect(legal!.content).toContain('Pending lawsuit');
+    // Critical assertions: each section is ISOLATED from the others
+    expect(fs!.content).not.toContain('Pending lawsuit');
+    expect(fs!.content).not.toContain('patent litigation');
+    expect(fs!.content).not.toContain('Risk content');
+    expect(legal!.content).not.toContain('Q1 revenue');
   });
 
   it('ignores unrecognized headings, absorbing their content into the previous section', () => {

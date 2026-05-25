@@ -42,6 +42,14 @@ const HEADING_TO_SECTION: Array<{
   // Item 1A. Risk Factors — must match before bare "Item 1." patterns
   { forms: ['all'], pattern: /^Item\s+1A\.?\b/i, section: 'Risk Factors' },
 
+  // 10-Q Part II Item 1: Legal Proceedings.
+  // CRITICAL: must match before the 10-Q Part I Item 1 = Financial Statements
+  // rules below, because both use "Item 1." with period. Real 10-Qs have
+  // "Item 1. Legal Proceedings" in Part II — without this explicit rule, the
+  // generic /^Item\s+1\.\s*[A-Z]/ catchall below would route it to Financial
+  // Statements and pollute that bucket with legal-proceedings text.
+  { forms: ['10-Q'], pattern: /^Item\s+1\.\s*Legal/i, section: 'Legal Proceedings' },
+
   // Item 1. — disambiguated by form type:
   //   10-Q: Item 1 = Financial Statements (Part I)
   //   10-K: Item 1 = Business (which includes Competition subsection)
@@ -72,9 +80,6 @@ const HEADING_TO_SECTION: Array<{
   { forms: ['10-K', '10-K/A' as SECFilingType], pattern: /^Item\s+7\.\s*(?:Management|MD&A)/i, section: 'Management Discussion' },
   { forms: ['10-K', '10-K/A' as SECFilingType], pattern: /^Item\s+7A\.?\b/i, section: 'Quantitative and Qualitative Disclosures' },
   { forms: ['10-K', '10-K/A' as SECFilingType], pattern: /^Item\s+8\.\s*Financial/i, section: 'Financial Statements' },
-
-  // 10-Q Part II items
-  { forms: ['10-Q'], pattern: /^Item\s+1\b(?!A)/i, section: 'Legal Proceedings' }, // Part II Item 1 (Legal)
 
   // Common across both forms
   { forms: ['all'], pattern: /^Item\s+4\.\s*Controls/i, section: 'Controls and Procedures' },
