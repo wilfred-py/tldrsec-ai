@@ -27,8 +27,8 @@ jest.mock('resend', () => {
   };
 });
 
-// Mock unsubscribe-tokens so tests don't depend on CRON_SECRET
-jest.mock('../unsubscribe-tokens', () => ({
+// Mock email-link-token so tests don't depend on CRON_SECRET
+jest.mock('../email-link-token', () => ({
   generateUnsubscribeUrl: jest.fn((email: string) =>
     `https://tldrsec.app/unsubscribe?token=test-token-for-${encodeURIComponent(email)}`
   ),
@@ -303,7 +303,7 @@ describe('ResendClient', () => {
 
     it('skips auto-injection gracefully when generateUnsubscribeUrl throws', async () => {
       const mockSend = installCapturingMock();
-      const { generateUnsubscribeUrl } = require('../unsubscribe-tokens');
+      const { generateUnsubscribeUrl } = require('../email-link-token');
       (generateUnsubscribeUrl as jest.Mock).mockImplementationOnce(() => {
         throw new Error('CRON_SECRET environment variable is not set');
       });

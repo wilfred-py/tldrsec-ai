@@ -296,7 +296,7 @@ export async function sendFilingSummaryEmail(
     let feedbackDownUrl: string | undefined;
     if (filingData.userId && filingData.summaryId) {
       try {
-        const { generateFeedbackToken } = await import('./feedback-tokens');
+        const { generateFeedbackToken } = await import('./email-link-token');
         const token = generateFeedbackToken(filingData.userId, filingData.summaryId);
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app';
         feedbackUpUrl = `${baseUrl}/api/feedback?token=${encodeURIComponent(token)}&vote=up`;

@@ -16,7 +16,7 @@ import { OpenRouterClient } from '../../ai/openrouter-client';
 import { getDefaultModel } from '../../ai/config';
 import { sendEmail } from '../../email/email-core';
 import { resendConfig } from '../../email/config';
-import { generateFeedbackToken } from '../../email/feedback-tokens';
+import { generateFeedbackToken } from '../../email/email-link-token';
 import { escapeHtml } from '../../email/security-helpers';
 import { getActiveTrialCutoffDate } from '../../auth/tier-eligibility';
 

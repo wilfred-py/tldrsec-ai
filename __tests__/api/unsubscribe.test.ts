@@ -26,7 +26,7 @@ jest.mock('next/server', () => {
 
 import type { NextRequest } from 'next/server';
 import { GET } from '@/app/api/unsubscribe/route';
-import { generateUnsubscribeToken } from '@/lib/email/feedback-tokens';
+import { generateUnsubscribeToken } from '@/lib/email/email-link-token';
 
 // Supabase client is the only external dependency. We mock just enough to drive
 // the success / DB-error branches.

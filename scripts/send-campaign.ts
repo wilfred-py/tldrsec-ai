@@ -24,7 +24,7 @@ import { render } from '@react-email/render';
 import React from 'react';
 import { Resend } from 'resend';
 import { getPrismaClient } from '../lib/db/prisma';
-import { generateUnsubscribeToken } from '../lib/email/feedback-tokens';
+import { generateUnsubscribeToken } from '../lib/email/email-link-token';
 import { CampaignDemoTemplate } from '../components/ui/email/templates/campaign-demo-template';
 import { CampaignInviteTemplate } from '../components/ui/email/templates/campaign-invite-template';
 

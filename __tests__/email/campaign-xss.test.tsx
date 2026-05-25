@@ -195,7 +195,7 @@ describe('Campaign email XSS safety', () => {
       // unsubscribeUrl is rendered inside an href — escapeHtml is not the
       // right defense for URL contexts. We rely on URL.canParse / generated
       // tokens upstream. This assertion confirms the fallback path doesn't
-      // crash on hostile input; full URL validation is in unsubscribe-tokens.test.
+      // crash on hostile input; full token validation is in email-link-token.test.
       expect(html).toBeDefined();
       expect(html.length).toBeGreaterThan(100);
     });
