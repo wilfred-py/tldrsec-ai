@@ -14,7 +14,7 @@ import { FormTypeMetadata, getFormMetadata } from '../lib/sec-edgar/form-registr
 import { parseFormContent, extractImportantContent, ParsedContent } from '../lib/parsers/form-parser';
 import { prisma } from '../lib/db';
 import { FilingSummaryResult } from './filingService';
-import { enhancedSummarizer, SummarizationEvent } from '../lib/ai/enhanced-summarize';
+import { enhancedSummarizer, SummarizationEvent } from '../lib/ai/summarization/enhanced-summarization-service';
 import { summaryCache, SummaryCacheKey } from '../lib/ai/cache/summary-cache';
 import { logger } from '../lib/logging';
 import { monitoring } from '../lib/monitoring';

@@ -7,7 +7,7 @@
 
 import { extractForm4Data } from '@/lib/email/form4-data-extractor';
 import { EmailSubjectService } from '@/lib/email/subject-service';
-import { TemplateRegistry } from '@/lib/email/template-registry';
+import { selectFilingTemplate } from '@/lib/email/template-selection';
 
 // Test helper: Create mock trust transfer filing content (as string)
 // Uses patterns that match the form4-data-extractor regex expectations
@@ -65,8 +65,7 @@ describe('End-to-End Summary Generation Workflow', () => {
     });
 
     it('should select correct template for Form 4', () => {
-      const template = TemplateRegistry.getTemplate('Form 4');
-      expect(template.displayName).toBe('Form4MinimalistTemplate');
+      expect(selectFilingTemplate('Form 4').name).toBe('form4_minimalist');
     });
   });
 
@@ -91,24 +90,20 @@ describe('End-to-End Summary Generation Workflow', () => {
   });
 
   describe('Email Template Integration', () => {
-    it('should select Form4MinimalistTemplate for Form 4 filings', () => {
-      const template = TemplateRegistry.getTemplate('Form 4');
-      expect(template.displayName).toBe('Form4MinimalistTemplate');
+    it('should select the Form 4 minimalist template for Form 4 filings', () => {
+      expect(selectFilingTemplate('Form 4').name).toBe('form4_minimalist');
     });
 
-    it('should select Form8KMinimalistTemplate for 8-K filings', () => {
-      const template = TemplateRegistry.getTemplate('8-K');
-      expect(template.displayName).toBe('Form8KMinimalistTemplate');
+    it('should select the 8-K minimalist template for 8-K filings', () => {
+      expect(selectFilingTemplate('8-K').name).toBe('8k_minimalist');
     });
 
-    it('should select Form10KMinimalistTemplate for 10-K filings', () => {
-      const template = TemplateRegistry.getTemplate('10-K');
-      expect(template.displayName).toBe('Form10KMinimalistTemplate');
+    it('should select the 10-K minimalist template for 10-K filings', () => {
+      expect(selectFilingTemplate('10-K').name).toBe('10k_minimalist');
     });
 
-    it('should use GenericMinimalistTemplate for unknown form types', () => {
-      const template = TemplateRegistry.getTemplate('UNKNOWN_FORM_TYPE');
-      expect(template.displayName).toBe('GenericMinimalistTemplate');
+    it('should use the generic minimalist template for unknown form types', () => {
+      expect(selectFilingTemplate('UNKNOWN_FORM_TYPE').name).toBe('generic_minimalist');
     });
   });
 

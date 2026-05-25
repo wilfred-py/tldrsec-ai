@@ -15,7 +15,6 @@ import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
 import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
-import { getHistoricalSummaries, buildContextEnrichedPrompt } from './historical-context';
 import { getEnrichmentContext } from './web-search-context';
 import {
   isWhyItMattersEnabled,
@@ -29,7 +28,7 @@ import { isMaxEligible } from '../auth/tier-eligibility';
 import { logger } from '../logging';
 import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
-import { prisma } from '../db/prisma';
+import { prisma, getPrismaClient } from '../db/prisma';
 import { getSchemaForFormType, JSONSchema } from './prompts/unified-prompts';
 import { validateTickerGroundingInPlace } from './parsers/ticker-grounding';
 import { coerceWhyItMatters } from './parsers/why-it-matters';
@@ -140,6 +139,76 @@ function ensureMinimumFields(
     summary: summary || `Unable to parse ${filingType} filing summary.`,
     filingType
   };
+}
+
+// ─── Historical context (Phase 3) ─────────────────────────────────────────────
+// Pulls the most recent prior Summaries for a ticker and folds them into the
+// current filing prompt so the model can reference continuity (e.g. "Q3 follows
+// the Q2 guidance cut"). Hidden inside the Summarize module — there's exactly
+// one caller (the historical-context enrichment block below) and the prior
+// extraction-for-testability split was a textbook ADR-0002 shape. Coverage now
+// flows through the summarize interface.
+
+interface HistoricalSummary {
+  id: string;
+  filingType: string;
+  filingDate: Date;
+  summaryText: string;
+  ticker: { symbol: string };
+}
+
+const MAX_HISTORICAL_SUMMARIES = 3;
+const MAX_HISTORICAL_SUMMARY_LENGTH = 1500;
+
+async function getHistoricalSummaries(
+  tickerSymbol: string,
+  currentFilingDate: string,
+): Promise<HistoricalSummary[]> {
+  return getPrismaClient().summary.findMany({
+    where: {
+      ticker: { symbol: tickerSymbol },
+      filingDate: { lt: new Date(currentFilingDate) },
+    },
+    select: {
+      id: true,
+      filingType: true,
+      filingDate: true,
+      summaryText: true,
+      ticker: { select: { symbol: true } },
+    },
+    orderBy: { filingDate: 'desc' },
+    take: MAX_HISTORICAL_SUMMARIES,
+  });
+}
+
+function buildContextEnrichedPrompt(
+  currentContent: string,
+  historicalSummaries: HistoricalSummary[],
+): string {
+  if (historicalSummaries.length === 0) {
+    return currentContent;
+  }
+
+  const contextSection = historicalSummaries
+    .map((summary) => {
+      const truncatedText =
+        summary.summaryText.length > MAX_HISTORICAL_SUMMARY_LENGTH
+          ? summary.summaryText.substring(0, MAX_HISTORICAL_SUMMARY_LENGTH) + '...'
+          : summary.summaryText;
+      const dateStr = summary.filingDate.toISOString().split('T')[0];
+      return `### Previous ${summary.filingType} (${dateStr})\n${truncatedText}`;
+    })
+    .join('\n\n');
+
+  return `## Historical Context
+The following are the most recent filings for this company. Use this context to provide continuity and reference relevant patterns:
+
+${contextSection}
+
+---
+
+## Current Filing
+${currentContent}`;
 }
 
 /**

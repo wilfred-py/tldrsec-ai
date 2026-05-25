@@ -13,7 +13,7 @@ import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   DEFAULT_UI_PREFERENCES
 } from '@/lib/user/preference-types';
-import { NotificationPreference } from '@/lib/email/notification-service';
+import { NotificationPreference } from '@/lib/email/notification-types';
 import { queueWelcomeEmail } from '@/lib/email/welcome-service';
 
 // Environment check for API vs mock mode

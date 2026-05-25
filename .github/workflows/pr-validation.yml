@@ -1,35 +1,15 @@
 name: PR Validation Pipeline
 
 on:
+  # Jobs in this workflow are required status checks (see repo ruleset).
+  # `paths:` filters used to live here, but GitHub treats path-skipped
+  # required checks as "missing" rather than "passed" — silently blocking
+  # any PR that only touches paths outside the filter (e.g. scripts/, docs).
+  # See PR #564 for the case that surfaced it. Now runs on every PR/push.
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      # Only run on code changes, skip docs/config-only changes
-      - 'app/**'
-      - 'lib/**'
-      - 'components/**'
-      - 'services/**'
-      - 'prisma/**'
-      - 'cloudflare-cron/**'
-      - '__tests__/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - 'next.config.js'
   push:
     branches: [main]
-    paths:
-      - 'app/**'
-      - 'lib/**'
-      - 'components/**'
-      - 'services/**'
-      - 'prisma/**'
-      - 'cloudflare-cron/**'
-      - '__tests__/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - 'next.config.js'
 
 jobs:
   infrastructure-validation:
@@ -107,7 +87,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test-key' }}
           TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'test-key' }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'test-key' }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'test-key' }}
           CI: true
           
@@ -132,7 +111,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test-key' }}
           TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'test-key' }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'test-key' }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'test-key' }}
           CRON_SECRET: test-secret-key
           NODE_ENV: test

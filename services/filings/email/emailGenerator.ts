@@ -5,12 +5,7 @@ import { getPrismaClient } from '../../../lib/db/index';
 import { monitoring } from '@/lib/monitoring';
 import { renderAsync } from '@react-email/render';
 import * as React from 'react';
-import { Form4MinimalistTemplate } from '../../../components/ui/email/templates/form4-minimalist-template';
-import { Form10KMinimalistTemplate } from '../../../components/ui/email/templates/10k-minimalist-template';
-import { Form10QMinimalistTemplate } from '../../../components/ui/email/templates/10q-minimalist-template';
-import { Form8KMinimalistTemplate } from '../../../components/ui/email/templates/8k-minimalist-template';
-import { Form144MinimalistTemplate } from '../../../components/ui/email/templates/form144-minimalist-template';
-import { GenericMinimalistTemplate } from '../../../components/ui/email/templates/generic-minimalist-template';
+import { selectFilingTemplate } from '../../../lib/email/template-selection';
 import { FilingTemplateData } from '../../../lib/email/types';
 import { EmailColors } from '../../../components/ui/email/design-system';
 import { EmailSubjectService } from '../../../lib/email/subject-service';
@@ -25,34 +20,6 @@ const safeRecordEmailSent = (emailType: string, recipient: string, success: bool
     console.warn('Failed to record email metrics', { error });
   }
 };
-
-/**
- * Template registry for O(1) lookup - Morning Brew style minimalist templates
- */
-const MINIMALIST_TEMPLATE_REGISTRY: Record<string, React.ComponentType<{ filing: FilingTemplateData }>> = {
-  'FORM4': Form4MinimalistTemplate,
-  'FORM 4': Form4MinimalistTemplate,
-  '4': Form4MinimalistTemplate,
-  '10-K': Form10KMinimalistTemplate,
-  '10K': Form10KMinimalistTemplate,
-  '10-Q': Form10QMinimalistTemplate,
-  '10Q': Form10QMinimalistTemplate,
-  '8-K': Form8KMinimalistTemplate,
-  '8K': Form8KMinimalistTemplate,
-  'FORM 8-K': Form8KMinimalistTemplate,
-  'FORM8-K': Form8KMinimalistTemplate,
-  '144': Form144MinimalistTemplate,
-  'FORM 144': Form144MinimalistTemplate,
-  'FORM144': Form144MinimalistTemplate,
-};
-
-/**
- * Get the appropriate minimalist template for a filing type
- */
-function getMinimalistTemplate(filingType: string): React.ComponentType<{ filing: FilingTemplateData }> {
-  const normalizedType = filingType?.toUpperCase().trim() || '';
-  return MINIMALIST_TEMPLATE_REGISTRY[normalizedType] || GenericMinimalistTemplate;
-}
 
 /**
  * Convert FilingSummaryResult to FilingTemplateData for minimalist templates
@@ -85,7 +52,7 @@ export async function generateHtmlEmail(summaries: FilingSummaryResult[], errors
 
   for (const summary of summaries) {
     const filing = toFilingTemplateData(summary);
-    const MinimalistTemplate = getMinimalistTemplate(summary.filingType);
+    const MinimalistTemplate = selectFilingTemplate(summary.filingType).component;
 
     // Render the minimalist template for this filing
     const filingHtml = await renderAsync(React.createElement(MinimalistTemplate, { filing }));

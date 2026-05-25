@@ -121,22 +121,6 @@ jest.mock('@/lib/logging', () => ({
   defaultLogger: mockLoggerMethods
 }), { virtual: true });
 
-// Mock notification service
-jest.mock('@/lib/email/notification-service', () => ({
-  NotificationPreference: {
-    IMMEDIATE: 'immediate',
-    DAILY: 'daily',
-    WEEKLY: 'weekly',
-    NEVER: 'never'
-  },
-  NotificationService: {
-    getInstance: jest.fn().mockReturnValue({
-      sendNotification: jest.fn().mockResolvedValue(true),
-      sendDigest: jest.fn().mockResolvedValue(true)
-    })
-  }
-}), { virtual: true });
-
 // Mock resend client
 jest.mock('@/lib/email/resend-client', () => ({
   ResendClient: jest.fn().mockImplementation(() => ({
