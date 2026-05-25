@@ -11,8 +11,7 @@
 
 ### Required Supabase Variables
 - [ ] `NEXT_PUBLIC_SUPABASE_URL` set in Vercel (Production)
-- [ ] `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` set in Vercel (Production)
-- [ ] `SUPABASE_SECRET_KEY` set in Vercel (Production)
+- [ ] `SUPABASE_SECRET_KEY` set in Vercel (Production) — service-role key, server-side only
 
 ### Required Email Variables
 - [ ] `RESEND_API_KEY` set in Vercel (Production)

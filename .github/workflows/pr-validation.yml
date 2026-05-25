@@ -87,7 +87,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test-key' }}
           TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'test-key' }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'test-key' }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'test-key' }}
           CI: true
           
@@ -112,7 +111,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test-key' }}
           TLDRSEC_AI_SUMMARIZER: ${{ secrets.TLDRSEC_AI_SUMMARIZER || 'test-key' }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'test-key' }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'test-key' }}
           CRON_SECRET: test-secret-key
           NODE_ENV: test
