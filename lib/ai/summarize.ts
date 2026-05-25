@@ -14,7 +14,8 @@ import { modelConfig, getDefaultModel } from './config';
 import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
-import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
+import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig, buildSectionedPrompt } from './prompts/context-manager';
+import { extractSections, hasUsableFinancialSection } from '../parsers/sec-section-extractor';
 import { getEnrichmentContext } from './web-search-context';
 import {
   isWhyItMattersEnabled,
@@ -59,6 +60,13 @@ const ProcessingStatus = {
    * after acceptance. Email is suppressed throughout.
    */
   INSUFFICIENT_CONTENT: 'INSUFFICIENT_CONTENT',
+  /**
+   * Sectionizer ran on cleaned 10-Q/10-K content and could not locate the
+   * Financial Statements section (e.g. Item 1 missing or empty). Different
+   * from INSUFFICIENT_CONTENT (whole filing empty) — here the filing has body
+   * content but the financial-statement region specifically failed to extract.
+   */
+  INSUFFICIENT_FINANCIAL_SECTION: 'INSUFFICIENT_FINANCIAL_SECTION',
   /** Hard failure (API error, validation crash, etc.). */
   FAILED: 'FAILED',
 } as const;
@@ -232,6 +240,7 @@ export function processDocumentContent(content: string, filingType: SECFilingTyp
   chunkCount?: number;
   estimatedTokens: number;
   isMinimalContent?: boolean;
+  isSectioned?: boolean;
 } {
   // Validate content first
   if (!content || content.trim().length === 0) {
@@ -898,7 +907,44 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       // Record the specific filing type for chunked content to track patterns
       monitoring.incrementCounter(`ai.chunked_filing_type.${filingRecordFromDB.formType}`, 1);
     }
-    
+
+    // B3: For 10-Q / 10-K and amendments, override processedContent with a
+    // priority-ordered sectioned prompt — guarantees Financial Statements
+    // survives budget pressure. Layer A produced cleaned text with markdown
+    // headings; Layer B built the extractor + priority budget builder; this
+    // block makes them actually run for the filings that need them.
+    // Fires only when content is non-minimal (C2 above handles the minimal case).
+    const isStrictFinancialForm = (['10-Q', '10-K', '10-Q/A', '10-K/A'] as string[]).includes(
+      filingRecordFromDB.formType
+    );
+    if (isStrictFinancialForm && !processedDoc.isMinimalContent) {
+      const sections = extractSections(content, filingRecordFromDB.formType as SECFilingType);
+      if (!hasUsableFinancialSection(sections)) {
+        componentLogger.warn(
+          `[B3] No usable Financial Statements section in ${filingRecordFromDB.formType} ` +
+            `(${filingId || 'direct'}) — sectionizer found ${sections.length} section(s).`
+        );
+        monitoring.incrementCounter('ai.sectioned_extraction.no_financial_section', 1);
+        throw new SummarizationError(
+          `No Financial Statements section found in ${filingRecordFromDB.formType} filing. ` +
+            `Sectionizer found ${sections.length} section(s) but none matched Financial ` +
+            `Statements with usable content (>=100 chars).`,
+          summaryId || 'direct',
+          filingRecordFromDB.formType,
+          ProcessingStatus.INSUFFICIENT_FINANCIAL_SECTION,
+          false,
+          'no_financial_statements_section'
+        );
+      }
+      processedDoc.processedContent = buildSectionedPrompt(sections, 150000);
+      processedDoc.isSectioned = true;
+      componentLogger.info(
+        `[B3] Sectioned extraction for ${filingRecordFromDB.formType} ` +
+          `(${filingId || 'direct'}): ${sections.length} section(s) assembled.`
+      );
+      monitoring.incrementCounter('ai.sectioned_extraction.success', 1);
+    }
+
     // Use the processed content for the prompt
     const processedContent = processedDoc.processedContent;
 
