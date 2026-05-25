@@ -80,6 +80,7 @@ scripts/*
 !scripts/refresh-landing-fixtures.ts
 !scripts/send-pr1-test-email.ts
 !scripts/backfill-enrichment-applied.ts
+!scripts/backfill-bad-summaries.ts
 !scripts/vercel-build.sh
 !scripts/materiality-calibration/
 !scripts/materiality-calibration/sample-filings.ts
