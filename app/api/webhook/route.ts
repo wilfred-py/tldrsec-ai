@@ -934,7 +934,7 @@ async function handleResendWebhook(req: Request) {
   }
 
   try {
-    if (evt.type === 'email.opened' || evt.type === 'email.clicked') {
+    if (evt.type === 'email.sent' || evt.type === 'email.opened' || evt.type === 'email.clicked') {
       const tagMap = normalizeResendTags(evt.data.tags);
 
       // Dual-key fallback (camelCase + snake_case) — matches the existing
@@ -971,7 +971,9 @@ async function handleResendWebhook(req: Request) {
           is_subscriber: isSubscriber,
         };
 
-        if (evt.type === 'email.opened') {
+        if (evt.type === 'email.sent') {
+          captureServerEvent(distinctId, EVENTS.EMAIL_SENT, baseProps);
+        } else if (evt.type === 'email.opened') {
           captureServerEvent(distinctId, EVENTS.EMAIL_OPENED, baseProps);
         } else {
           captureServerEvent(distinctId, EVENTS.EMAIL_CLICKED, {
@@ -983,11 +985,32 @@ async function handleResendWebhook(req: Request) {
     } else if (evt.type === 'email.bounced' || evt.type === 'email.complained') {
       // Suppression-list updates. Mark the subscriber's row in Supabase so
       // the campaign send route stops shipping to dead/spam-complaining
-      // addresses. We also forward the event to PostHog as diagnostic data
-      // so the funnel-failure investigation has it.
+      // addresses. Also forward to PostHog so the funnel-failure investigation
+      // has the recipient + bounce_type without needing to query Resend.
       await handleResendSuppressionEvent(evt);
+
+      const recipient = Array.isArray(evt.data.to) ? evt.data.to[0] : evt.data.to;
+      if (recipient) {
+        const tagMap = normalizeResendTags(evt.data.tags);
+        const subscriberIdTag = tagMap.subscriberId || tagMap.subscriber_id;
+        const userId = tagMap.userId || tagMap.user_id;
+        const distinctId = userId || (subscriberIdTag ? `sub_${subscriberIdTag}` : recipient);
+        if (evt.type === 'email.bounced') {
+          const bounceType = (evt.data as ResendEmailEventData & { bounce?: { type?: string } }).bounce?.type ?? 'undetermined';
+          captureServerEvent(distinctId, EVENTS.EMAIL_BOUNCED, {
+            email_id: evt.data.email_id || '',
+            recipient,
+            bounce_type: bounceType,
+          });
+        } else {
+          captureServerEvent(distinctId, EVENTS.EMAIL_COMPLAINED, {
+            email_id: evt.data.email_id || '',
+            recipient,
+          });
+        }
+      }
     }
-    // sent / delivered / delivery_delayed: acknowledged but not forwarded —
+    // delivered / delivery_delayed: acknowledged but not forwarded —
     // these don't move the funnel and don't affect deliverability state.
   } catch (err) {
     console.error('[webhook][resend] Handler error (non-fatal, returning 200):', err);

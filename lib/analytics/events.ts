@@ -36,8 +36,11 @@ export const EVENTS = {
   EMAIL_CTA_CLICKED: 'email_cta_clicked',
 
   // Email lifecycle (Resend webhook → PostHog)
+  EMAIL_SENT: 'email_sent',
   EMAIL_OPENED: 'email_opened',
   EMAIL_CLICKED: 'email_clicked',
+  EMAIL_BOUNCED: 'email_bounced',
+  EMAIL_COMPLAINED: 'email_complained',
 
   // Operational telemetry — single carrier event for monitoring metrics that
   // need PostHog dashboards (see lib/monitoring/index.ts allowlist + bridge).
@@ -130,6 +133,17 @@ export type EventProps = {
     form_type?: string;
     campaign: string;
   };
+  [EVENTS.EMAIL_SENT]: {
+    email_id: string;
+    template?: string;
+    form_type?: string;
+    ticker?: string;
+    filing_id?: string;
+    campaign_id?: string;
+    email_position?: string;
+    cohort_id?: string;
+    is_subscriber?: boolean;
+  };
   [EVENTS.EMAIL_OPENED]: {
     email_id: string;
     template?: string;
@@ -144,6 +158,15 @@ export type EventProps = {
     ticker?: string;
     filing_id?: string;
     link?: string;
+  };
+  [EVENTS.EMAIL_BOUNCED]: {
+    email_id: string;
+    recipient: string;
+    bounce_type?: string;
+  };
+  [EVENTS.EMAIL_COMPLAINED]: {
+    email_id: string;
+    recipient: string;
   };
   [EVENTS.MONITORING_METRIC]: {
     /** The metric name as emitted by lib/monitoring (e.g., "ai.x_sentiment_added"). */
