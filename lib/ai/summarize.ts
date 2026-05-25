@@ -1026,7 +1026,11 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     // Reproduces COIN 2026-05-07 regression: parser fed Grok only XBRL
     // namespace headers; Grok returned 6 rows of `value: "$NaN"`.
     if (requiresFinancialContent(filingRecordFromDB.formType)) {
-      const preGate = hasFinancialStatementSignal(enrichedContent);
+      // Layer C C1: pass formType so the gate requires STATEMENT_TITLE_RE for
+      // strict-financial forms (not the 3-of-5 generic threshold). Without this
+      // arg the tightening is dead — iXBRL noise with dollar density + line
+      // items can satisfy 3-of-5 without ever mentioning "Statements of Operations".
+      const preGate = hasFinancialStatementSignal(enrichedContent, filingRecordFromDB.formType);
       if (!preGate.ok) {
         componentLogger.warn(
           `Pre-LLM content gate failed for ${filingRecordFromDB.formType} (summaryId=${summaryId || 'direct'}): ${preGate.reasons.join('; ')}`,
@@ -1050,7 +1054,11 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
           summaryId || 'unknown',
           filingRecordFromDB.formType,
           ErrorCode.AI_INSUFFICIENT_CONTENT,
-          true, // retriable — EDGAR may finish processing shortly after acceptance
+          // Layer C C7: non-retriable on cache-read path. SummarizationError
+          // assigns this directly (not from the isRetriableError global table),
+          // so the per-throw flag must match. Cache reads return the same
+          // bytes on retry; the retry budget is wasted.
+          false,
           'insufficient_content'
         );
       }

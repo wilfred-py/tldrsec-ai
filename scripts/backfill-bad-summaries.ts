@@ -164,62 +164,19 @@ async function main(): Promise<BackfillResult> {
       return result;
     }
 
-    // Lazy-import the re-summarization function. Avoids loading the full AI
-    // pipeline when --dry-run.
-    const { summarizeFilingWithValidation } = await import('../lib/ai/summarize-with-validation');
-
-    for (let i = 0; i < candidates.length; i += opts.batchSize) {
-      const batch = candidates.slice(i, i + opts.batchSize);
-      log(`Processing batch ${Math.floor(i / opts.batchSize) + 1} (${batch.length} rows)`);
-
-      for (const row of batch) {
-        try {
-          // Look up the cached content (Layer A's cleanedContent populated, or
-          // Layer C's self-healing will populate on read).
-          const cache = await prisma.filingContentCache.findFirst({
-            where: { /* match by filingUrl indirectly via SecFiling */ },
-            select: { content: true, cleanedContent: true },
-          }).catch(() => null);
-
-          // The Summary table doesn't directly join to FilingContentCache —
-          // the cache is keyed by accessionNumber, but Summary stores filingUrl.
-          // Re-fetch the filing content if cache miss. For simplicity here,
-          // we use the existing summarize pipeline which handles cache lookup.
-          // The cleanest path is to re-enqueue an ASYNC_SUMMARIZE_CACHED job,
-          // but that requires a full payload reconstruction. Use the direct
-          // summarize API instead.
-
-          // For now: log that we'd re-summarize and skip the actual call.
-          // The real implementation needs to either:
-          //   (a) Re-enqueue via JobQueueService.addJob with reconstructed payload, or
-          //   (b) Inline-call summarizeFilingWithValidation with re-fetched cache content.
-          // Both require more wiring than this safety-first first cut should attempt.
-          log(`  TODO: re-summarize ${row.id} (${row.filingType}) — pending operator decision`);
-          result.reprocessed++;
-
-          if (cache !== null) {
-            // Silence unused-binding warning; real impl will use this.
-            void cache;
-            void summarizeFilingWithValidation;
-          }
-        } catch (err) {
-          result.errors++;
-          log(
-            `  ERROR on ${row.id}: ${err instanceof Error ? err.message : String(err)}`
-          );
-        }
-      }
-
-      if (i + opts.batchSize < candidates.length) {
-        await sleep(opts.sleepMs);
-      }
-    }
-
-    log(
-      `Backfill complete: scanned=${result.scanned} reprocessed=${result.reprocessed} ` +
-      `fixed=${result.fixed} persistentlyUnextractable=${result.persistentlyUnextractable} ` +
-      `errors=${result.errors}`
-    );
+    // The destructive re-summarize loop is NOT implemented yet — it needs
+    // either (a) JobPayload reconstruction (userId, ticker, executionContext)
+    // to re-enqueue via JobQueueService.addJob, or (b) cache-lookup-by-filingUrl
+    // join + inline summarizeFilingWithValidation. Both are substantial wiring
+    // (see plan: .claude/tasks/nvda-10q-missing-metrics-fix.md Layer E TODO).
+    //
+    // FAIL LOUD instead of silently incrementing a "reprocessed" counter.
+    // Operator must explicitly pass --dry-run for now.
+    log(`ERROR: destructive re-summarize loop is not yet implemented.`);
+    log(`Found ${candidates.length} candidate rows. Use --dry-run to inspect them.`);
+    log(`To actually re-process: implement the JobPayload reconstruction or inline summarize`);
+    log(`path documented at the top of this file, then remove this guard.`);
+    result.errors = candidates.length;
     return result;
   } finally {
     await prisma.$disconnect();
