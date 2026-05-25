@@ -52,6 +52,7 @@ export type SECFilingSection =
   | 'Management Discussion'
   | 'Business Overview'
   | 'Financial Statements'
+  | 'Quantitative and Qualitative Disclosures'
   | 'Legal Proceedings'
   | 'Controls and Procedures'
   | 'Corporate Governance'

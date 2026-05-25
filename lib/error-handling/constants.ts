@@ -48,6 +48,15 @@ export enum ErrorCode {
    * (JobQueueService.updateJobStatus at lib/job-queue/index.ts:457).
    */
   AI_INSUFFICIENT_CONTENT = 'AI_INSUFFICIENT_CONTENT',
+  /**
+   * Sectionizer ran on cleaned content and could not locate the
+   * Financial Statements section (e.g. Item 1 missing or empty in a
+   * 10-Q/10-K). Different from AI_INSUFFICIENT_CONTENT (which means
+   * the whole filing was empty) — here the filing has body content
+   * but the financial-statement region specifically failed to extract.
+   * Retriable for the same EDGAR-processing-race reason as INSUFFICIENT_CONTENT.
+   */
+  AI_INSUFFICIENT_FINANCIAL_SECTION = 'AI_INSUFFICIENT_FINANCIAL_SECTION',
   
   // Network errors
   NETWORK_UNAVAILABLE = 'NETWORK_UNAVAILABLE',
@@ -86,6 +95,7 @@ export const errorStatusCodes: Record<ErrorCode, number> = {
   [ErrorCode.AI_MODEL_ERROR]: 500,
   [ErrorCode.AI_PARSING_ERROR]: 422,
   [ErrorCode.AI_INSUFFICIENT_CONTENT]: 422,
+  [ErrorCode.AI_INSUFFICIENT_FINANCIAL_SECTION]: 422,
   [ErrorCode.NETWORK_UNAVAILABLE]: 503,
   [ErrorCode.CONNECTION_RESET]: 503,
   [ErrorCode.RETRY_EXHAUSTED]: 429,
@@ -112,6 +122,7 @@ export const errorCategories: Record<ErrorCode, ErrorCategory> = {
   [ErrorCode.AI_MODEL_ERROR]: ErrorCategory.AI_ERROR,
   [ErrorCode.AI_PARSING_ERROR]: ErrorCategory.AI_ERROR,
   [ErrorCode.AI_INSUFFICIENT_CONTENT]: ErrorCategory.VALIDATION_ERROR,
+  [ErrorCode.AI_INSUFFICIENT_FINANCIAL_SECTION]: ErrorCategory.VALIDATION_ERROR,
   [ErrorCode.NETWORK_UNAVAILABLE]: ErrorCategory.NETWORK_ERROR,
   [ErrorCode.CONNECTION_RESET]: ErrorCategory.NETWORK_ERROR,
   [ErrorCode.RETRY_EXHAUSTED]: ErrorCategory.SERVER_ERROR,
@@ -138,6 +149,7 @@ export const errorSeverityLevels: Record<ErrorCode, ErrorSeverity> = {
   [ErrorCode.AI_MODEL_ERROR]: ErrorSeverity.HIGH,
   [ErrorCode.AI_PARSING_ERROR]: ErrorSeverity.MEDIUM,
   [ErrorCode.AI_INSUFFICIENT_CONTENT]: ErrorSeverity.MEDIUM,
+  [ErrorCode.AI_INSUFFICIENT_FINANCIAL_SECTION]: ErrorSeverity.MEDIUM,
   [ErrorCode.NETWORK_UNAVAILABLE]: ErrorSeverity.HIGH,
   [ErrorCode.CONNECTION_RESET]: ErrorSeverity.MEDIUM,
   [ErrorCode.RETRY_EXHAUSTED]: ErrorSeverity.HIGH,
@@ -164,6 +176,7 @@ export const isRetriableError: Record<ErrorCode, boolean> = {
   [ErrorCode.AI_MODEL_ERROR]: true,
   [ErrorCode.AI_PARSING_ERROR]: false,
   [ErrorCode.AI_INSUFFICIENT_CONTENT]: true,  // Retriable — EDGAR may finish processing the document body shortly after acceptance
+  [ErrorCode.AI_INSUFFICIENT_FINANCIAL_SECTION]: true,  // Same EDGAR-processing-race rationale as AI_INSUFFICIENT_CONTENT
   [ErrorCode.NETWORK_UNAVAILABLE]: true,
   [ErrorCode.CONNECTION_RESET]: true,
   [ErrorCode.RETRY_EXHAUSTED]: false,

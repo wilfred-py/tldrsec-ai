@@ -80,12 +80,14 @@ export const DEFAULT_CONTEXT_CONFIGS: Record<SECFilingType, ContextWindowConfig>
   },
 };
 
-// Section-specific token budgets
-const SECTION_TOKEN_BUDGETS: Record<SECFilingSection, number> = {
+// Section-specific token budgets. Exported so the section-aware prompt builder
+// (`buildSectionedPrompt`) can read per-section budgets when filling a total budget.
+export const SECTION_TOKEN_BUDGETS: Record<SECFilingSection, number> = {
   'Risk Factors': 15000,        // Often lengthy and detailed
   'Management Discussion': 12000, // Substantial analysis
-  'Business Overview': 10000,    // Company description
+  'Business Overview': 10000,    // Company description (10-K Item 1, includes Competition)
   'Financial Statements': 8000,  // Structured data
+  'Quantitative and Qualitative Disclosures': 4000, // 10-Q Item 3 / 10-K Item 7A
   'Legal Proceedings': 6000,     // Usually shorter
   'Controls and Procedures': 4000,
   'Corporate Governance': 5000,
@@ -93,6 +95,104 @@ const SECTION_TOKEN_BUDGETS: Record<SECFilingSection, number> = {
   'Material Changes': 4000,
   'Complete Document': 25000,    // For summarizing the entire filing
 };
+
+/**
+ * Section priority for budget-constrained prompt assembly.
+ *
+ * Lower number = higher priority (1 = most important, never drops). When the
+ * total token budget can't fit all extracted sections, `buildSectionedPrompt`
+ * drops the highest-numbered priority sections first; Financial Statements
+ * (priority 1) is preserved no matter what.
+ *
+ * For 10-Q/10-K:
+ *   1. Financial Statements — the headline numbers the user cares most about
+ *   2. Management Discussion — qualitative narrative on the quarter/year
+ *   3. Risk Factors — material updates
+ *   4. Business Overview — includes Competition (10-K only)
+ *   5. Quantitative and Qualitative Disclosures (Item 3 / Item 7A)
+ *   6+. Everything else
+ */
+export const SECTION_PRIORITY: Record<SECFilingSection, number> = {
+  'Financial Statements': 1,
+  'Management Discussion': 2,
+  'Risk Factors': 3,
+  'Business Overview': 4,
+  'Quantitative and Qualitative Disclosures': 5,
+  'Legal Proceedings': 6,
+  'Material Changes': 7,
+  'Controls and Procedures': 8,
+  'Executive Compensation': 9,
+  'Corporate Governance': 10,
+  'Complete Document': 99, // Sentinel: only used for whole-document summaries
+};
+
+/**
+ * A section extracted from a filing by `sec-section-extractor`. Pairs the
+ * canonical section label with its cleaned text content.
+ */
+export interface ExtractedSection {
+  section: SECFilingSection;
+  content: string;
+}
+
+/**
+ * Assemble a priority-ordered prompt body from extracted sections that fits
+ * within a total token budget.
+ *
+ * Algorithm:
+ *   1. Sort sections by SECTION_PRIORITY ascending (most important first).
+ *   2. For each section, take up to min(SECTION_TOKEN_BUDGETS[section], remaining budget).
+ *   3. If a section overflows remaining budget, truncate the section's content
+ *      from the END (keep the opening — that's where the most-cited values appear
+ *      in financial statements and the topic-setting paragraphs in narrative sections).
+ *   4. Stop when budget is exhausted or all sections placed.
+ *
+ * Financial Statements (priority 1) is preserved in its entirety up to its own
+ * section budget regardless of total-budget pressure — it must NEVER be dropped.
+ * If `totalTokenBudget < SECTION_TOKEN_BUDGETS['Financial Statements']`, the
+ * caller passed a budget too small to fit even the highest priority; we honor
+ * the cap (truncate Financial Statements) rather than overflow.
+ *
+ * Returns the assembled prompt body (a string) with sections joined by
+ * markdown `## Section Name` headers — same shape the section extractor produces,
+ * so downstream code reading the prompt sees consistent structure.
+ *
+ * @param sections   Extracted sections from `sec-section-extractor`. Order
+ *                   doesn't matter; this function sorts by priority.
+ * @param totalTokenBudget  Total tokens available for the assembled body.
+ *                          Uses `estimateTokenCount` (~3.5 chars/token).
+ */
+export function buildSectionedPrompt(
+  sections: ExtractedSection[],
+  totalTokenBudget: number
+): string {
+  if (sections.length === 0) return '';
+
+  // Sort by priority (lower = higher importance)
+  const sorted = [...sections].sort(
+    (a, b) => (SECTION_PRIORITY[a.section] ?? 99) - (SECTION_PRIORITY[b.section] ?? 99)
+  );
+
+  // ~3.5 chars per token — invert estimateTokenCount() to convert budget to chars.
+  const charBudgetFromTokens = (tokens: number) => Math.floor(tokens * 3.5 / 1.1);
+  let remainingChars = charBudgetFromTokens(totalTokenBudget);
+
+  const parts: string[] = [];
+  for (const { section, content } of sorted) {
+    if (remainingChars <= 0) break;
+
+    const sectionBudgetChars = charBudgetFromTokens(SECTION_TOKEN_BUDGETS[section] ?? 4000);
+    const takeChars = Math.min(sectionBudgetChars, remainingChars, content.length);
+
+    // Truncate from the end (preserves the section opening, where headline
+    // values and topic-setting paragraphs live)
+    const slice = content.slice(0, takeChars);
+    parts.push(`## ${section}\n\n${slice}`);
+    remainingChars -= takeChars;
+  }
+
+  return parts.join('\n\n');
+}
 
 /**
  * Get context window configuration based on filing type and section
