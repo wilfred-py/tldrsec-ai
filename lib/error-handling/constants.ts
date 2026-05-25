@@ -175,8 +175,15 @@ export const isRetriableError: Record<ErrorCode, boolean> = {
   [ErrorCode.AI_UNAVAILABLE]: true,
   [ErrorCode.AI_MODEL_ERROR]: true,
   [ErrorCode.AI_PARSING_ERROR]: false,
-  [ErrorCode.AI_INSUFFICIENT_CONTENT]: true,  // Retriable — EDGAR may finish processing the document body shortly after acceptance
-  [ErrorCode.AI_INSUFFICIENT_FINANCIAL_SECTION]: true,  // Same EDGAR-processing-race rationale as AI_INSUFFICIENT_CONTENT
+  // Non-retriable on the cache-read path: Layer C reads cleaned content from
+  // FilingContentCache, which is immutable per accession. Retries hit the same
+  // cached bytes and the gate fails identically — wasted retry budget. The
+  // original EDGAR-processing-race rationale (filing accepted before body
+  // finalized) requires cache invalidation + re-fetch to be meaningful, which
+  // is a separate scope (tracked as follow-up). See
+  // .claude/tasks/nvda-10q-missing-metrics-fix.md C7.
+  [ErrorCode.AI_INSUFFICIENT_CONTENT]: false,
+  [ErrorCode.AI_INSUFFICIENT_FINANCIAL_SECTION]: false,  // Same cache-read-path rationale as INSUFFICIENT_CONTENT
   [ErrorCode.NETWORK_UNAVAILABLE]: true,
   [ErrorCode.CONNECTION_RESET]: true,
   [ErrorCode.RETRY_EXHAUSTED]: false,

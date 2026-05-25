@@ -778,16 +778,40 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     
     // Handle minimal or empty content cases
     if (processedDoc.isMinimalContent) {
+      // Layer C C2: refuse to fall through to the metadata-only minimal-content
+      // prompt for strict-financial forms (10-K, 10-Q, 20-F, 6-K, amendments).
+      // The minimal-content prompt explicitly tells the LLM to "acknowledge the
+      // limited information available" — which is exactly the language that
+      // shipped on the NVDA 2026-05-20 "no extractable financial metrics" email.
+      // For these forms, empty/minimal content is a parser bug, not a legitimate
+      // filing state, and we must NOT ship a degenerate summary. Non-retriable
+      // per C7 — cache reads return the same content on retry.
+      if (requiresFinancialContent(filingRecordFromDB.formType)) {
+        componentLogger.warn(
+          `[C2] Refusing minimal-content fallback for strict-financial form ${filingRecordFromDB.formType} (${filingId || 'direct'}) — treating as INSUFFICIENT_CONTENT.`
+        );
+        monitoring.incrementCounter('ai.minimal_content_refused_strict_form', 1);
+        monitoring.incrementCounter(`ai.minimal_content_refused.${filingRecordFromDB.formType}`, 1);
+        throw new SummarizationError(
+          `Filing has minimal extractable content but ${filingRecordFromDB.formType} requires financial data. Parser likely failed to clean the source HTML.`,
+          summaryId || 'direct',
+          filingRecordFromDB.formType,
+          ProcessingStatus.INSUFFICIENT_CONTENT,
+          false, // non-retriable: cache read returns same content on retry (C7)
+          'minimal_content_strict_form'
+        );
+      }
+
       componentLogger.warn(`Minimal or empty content detected for ${filingId || 'direct'} (${filingRecordFromDB.formType}). Using metadata-based fallback.`);
       monitoring.incrementCounter('ai.minimal_content_detected', 1);
-      
+
       try {
         // For minimal content, we'll create a special prompt that focuses on metadata
         const minimalContentPrompt = generateMinimalContentPrompt(filingRecordFromDB);
-        
+
         // Update the processed content with our minimal content prompt
         processedDoc.processedContent = minimalContentPrompt;
-        
+
         // Record the specific filing type for minimal content cases to track patterns
         monitoring.incrementCounter(`ai.minimal_content_filing_type.${filingRecordFromDB.formType}`, 1);
       } catch (error) {
@@ -1189,7 +1213,14 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         // Marks as COMPLETED_WITH_WARNINGS so the downstream email gate
         // (read by the cron summary handler) skips the send.
         if (requiresFinancialContent(filingRecordFromDB.formType)) {
-          const postGate = hasUsableFinancialHighlights(parsedResult.data);
+          // Layer C C6: pass summaryText so the gate also checks for failure
+          // phrases ("no extractable", "are unavailable", etc.) — catches the
+          // case where the LLM populated highlights but its prose contradicts
+          // them (the NVDA 2026-05-20 failure mode).
+          const postGate = hasUsableFinancialHighlights(
+            parsedResult.data,
+            parsedResult.data?.summary ?? null
+          );
           if (!postGate.ok) {
             componentLogger.warn(
               `Post-LLM content gate failed for ${filingRecordFromDB.formType} (summaryId=${summaryId || 'direct'}): ${postGate.reasons.join('; ')}`,

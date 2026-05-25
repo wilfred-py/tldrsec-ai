@@ -207,6 +207,45 @@ describe('hasFinancialStatementSignal — pre-LLM gate', () => {
       expect(result.ok).toBe(true);
     });
   });
+
+  describe('Layer C C1: strict-financial forms require hasStatementTitle', () => {
+    const baseText = 'Three Months Ended Revenue Net income $1,234 $5,678 $9,012 $3,456 $7,890 $2,345 $4,567 $6,789 $8,901 $1,357 cost of revenue'.padEnd(3500, ' filler');
+
+    it('passes the generic gate (3+ signals) without statement title', () => {
+      const result = hasFinancialStatementSignal(baseText);
+      expect(result.signals.hasStatementTitle).toBe(false);
+      expect(result.ok).toBe(true); // 3-of-5 generic threshold met
+    });
+
+    it('FAILS for 10-Q when statement title is missing (C1 tightening)', () => {
+      const result = hasFinancialStatementSignal(baseText, '10-Q');
+      expect(result.signals.hasStatementTitle).toBe(false);
+      expect(result.ok).toBe(false);
+      expect(result.reasons.some(r => r.includes('Layer C C1'))).toBe(true);
+    });
+
+    it('FAILS for 10-K when statement title is missing (C1 tightening)', () => {
+      const result = hasFinancialStatementSignal(baseText, '10-K');
+      expect(result.ok).toBe(false);
+    });
+
+    it('PASSES for 10-Q when statement title IS present', () => {
+      const text = 'Consolidated Statements of Operations ' + baseText;
+      const result = hasFinancialStatementSignal(text, '10-Q');
+      expect(result.signals.hasStatementTitle).toBe(true);
+      expect(result.ok).toBe(true);
+    });
+
+    it('does NOT apply C1 tightening to non-strict forms (8-K passes 3-of-5)', () => {
+      const result = hasFinancialStatementSignal(baseText, '8-K');
+      expect(result.ok).toBe(true); // 8-K not in STRICT_FINANCIAL_FORMS
+    });
+
+    it('passes formType=undefined as backward-compat (no tightening)', () => {
+      const result = hasFinancialStatementSignal(baseText);
+      expect(result.ok).toBe(true);
+    });
+  });
 });
 
 describe('hasUsableFinancialHighlights — post-LLM gate', () => {
@@ -287,6 +326,63 @@ describe('hasUsableFinancialHighlights — post-LLM gate', () => {
       ],
     });
     expect(result.ok).toBe(true);
+  });
+
+  describe('Layer C C6: summary-text failure-phrase check', () => {
+    const goodHighlights = {
+      financialHighlights: [{ label: 'Revenue', value: '$94B', change: '+6.10%' }],
+    };
+
+    it('passes when summaryText is not provided (backward compat)', () => {
+      const result = hasUsableFinancialHighlights(goodHighlights);
+      expect(result.ok).toBe(true);
+    });
+
+    it('passes when summaryText is clean', () => {
+      const result = hasUsableFinancialHighlights(
+        goodHighlights,
+        'NVIDIA reported record Q1 revenue of $81.6 billion.'
+      );
+      expect(result.ok).toBe(true);
+      expect(result.signals.hasNoFailurePhrase).toBe(true);
+    });
+
+    it('FAILS when summaryText contains "are unavailable" (the NVDA failure language)', () => {
+      const result = hasUsableFinancialHighlights(
+        goodHighlights,
+        'Key metrics including revenue, margins, net income and EPS are unavailable.'
+      );
+      expect(result.ok).toBe(false);
+      expect(result.signals.hasNoFailurePhrase).toBe(false);
+      expect(result.reasons.some(r => r.includes('failure phrase'))).toBe(true);
+      expect(result.reasons.some(r => r.includes('are unavailable'))).toBe(true);
+    });
+
+    it('FAILS when summaryText contains "no extractable"', () => {
+      const result = hasUsableFinancialHighlights(
+        goodHighlights,
+        'NVDA reported no extractable quarterly financial results.'
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it('FAILS when summaryText contains "limited information available"', () => {
+      const result = hasUsableFinancialHighlights(
+        goodHighlights,
+        'The summary reflects the limited information available in the filing.'
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it('FAILS even with good highlights if summary text contradicts them (gate trusts prose)', () => {
+      // This is the failure mode C6 is designed to catch: highlights populated
+      // but the LLM admitted in prose that the extraction was unreliable.
+      const result = hasUsableFinancialHighlights(
+        { financialHighlights: [{ label: 'Revenue', value: '$81B', change: '+5%' }] },
+        'Could not be fully extracted from the filing.'
+      );
+      expect(result.ok).toBe(false);
+    });
   });
 });
 
