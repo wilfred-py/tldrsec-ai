@@ -218,9 +218,11 @@ async function fallbackSecLookup(ticker: string): Promise<{ cik: string; company
     cikLogger.info(`Attempting SEC fallback lookup for ticker ${ticker}`);
     
     // Fetch from SEC's official company_tickers_exchange.json endpoint
+    // Layer D: standardized to SEC's preferred "Name email" format across all
+    // sec.gov fetchers. TODO(post-launch): consolidate into lib/sec-edgar/sec-fetch.ts helper.
     const response = await fetch('https://www.sec.gov/files/company_tickers_exchange.json', {
       headers: {
-        'User-Agent': 'tldrsec.app contact@tldrsec.app',
+        'User-Agent': 'tldrSEC support@tldrsec.app',
         'Accept': 'application/json'
       }
     });

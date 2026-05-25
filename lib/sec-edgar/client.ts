@@ -44,7 +44,9 @@ import {
  * Note: maxRetries=0 means no retry at this level. Job queue handles retries.
  */
 const DEFAULT_CONFIG: SECEdgarConfig = {
-  userAgent: 'TLDRSEC wilfredchen1@gmail.com', // SEC compliant User-Agent format
+  // Layer D: standardized to SEC's preferred "Name email" format across all
+  // sec.gov fetchers. TODO(post-launch): consolidate into lib/sec-edgar/sec-fetch.ts helper.
+  userAgent: 'tldrSEC support@tldrsec.app',
   maxRequestsPerSecond: 10, // SEC fair access policy limit
   baseUrl: 'https://www.sec.gov',
   maxRetries: 0,      // CRITICAL: No retries - single 15s attempt per request

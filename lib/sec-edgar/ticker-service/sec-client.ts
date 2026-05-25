@@ -17,10 +17,12 @@ export class SECDataClient {
     userAgent?: string; 
     maxRequestsPerSecond?: number;
   } = {}) {
-    // SEC requires a legitimate user agent with contact information
-    this.userAgent = options.userAgent || 
-      process.env.SEC_USER_AGENT || 
-      'TLDRSEC-AI-App contact@example.com';
+    // SEC requires a legitimate user agent with contact information.
+    // Layer D: standardized default to SEC's preferred "Name email" format.
+    // TODO(post-launch): consolidate into lib/sec-edgar/sec-fetch.ts helper.
+    this.userAgent = options.userAgent ||
+      process.env.SEC_USER_AGENT ||
+      'tldrSEC support@tldrsec.app';
     
     // SEC fair access policy allows max 10 requests per second
     this.maxRequestsPerSecond = options.maxRequestsPerSecond || 

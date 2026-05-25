@@ -565,9 +565,11 @@ const resolveUrlPath = resolveUrl;
  */
 async function fetchContent(url: string): Promise<string> {
   try {
+    // Layer D: standardized to SEC's preferred "Name email" format across all
+    // sec.gov fetchers. TODO(post-launch): consolidate into lib/sec-edgar/sec-fetch.ts helper.
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'TLDRSec/1.0 (support@tldrsec.app)'
+        'User-Agent': 'tldrSEC support@tldrsec.app'
       }
     });
     
