@@ -14,7 +14,8 @@ import { modelConfig, getDefaultModel } from './config';
 import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
-import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig } from './prompts/context-manager';
+import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig, buildSectionedPrompt } from './prompts/context-manager';
+import { extractSections, hasUsableFinancialSection } from '../parsers/sec-section-extractor';
 import { getEnrichmentContext } from './web-search-context';
 import {
   isWhyItMattersEnabled,
@@ -59,6 +60,13 @@ const ProcessingStatus = {
    * after acceptance. Email is suppressed throughout.
    */
   INSUFFICIENT_CONTENT: 'INSUFFICIENT_CONTENT',
+  /**
+   * Sectionizer ran on cleaned 10-Q/10-K content and could not locate the
+   * Financial Statements section (e.g. Item 1 missing or empty). Different
+   * from INSUFFICIENT_CONTENT (whole filing empty) — here the filing has body
+   * content but the financial-statement region specifically failed to extract.
+   */
+  INSUFFICIENT_FINANCIAL_SECTION: 'INSUFFICIENT_FINANCIAL_SECTION',
   /** Hard failure (API error, validation crash, etc.). */
   FAILED: 'FAILED',
 } as const;
@@ -232,6 +240,7 @@ export function processDocumentContent(content: string, filingType: SECFilingTyp
   chunkCount?: number;
   estimatedTokens: number;
   isMinimalContent?: boolean;
+  isSectioned?: boolean;
 } {
   // Validate content first
   if (!content || content.trim().length === 0) {
@@ -847,16 +856,40 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     
     // Handle minimal or empty content cases
     if (processedDoc.isMinimalContent) {
+      // Layer C C2: refuse to fall through to the metadata-only minimal-content
+      // prompt for strict-financial forms (10-K, 10-Q, 20-F, 6-K, amendments).
+      // The minimal-content prompt explicitly tells the LLM to "acknowledge the
+      // limited information available" — which is exactly the language that
+      // shipped on the NVDA 2026-05-20 "no extractable financial metrics" email.
+      // For these forms, empty/minimal content is a parser bug, not a legitimate
+      // filing state, and we must NOT ship a degenerate summary. Non-retriable
+      // per C7 — cache reads return the same content on retry.
+      if (requiresFinancialContent(filingRecordFromDB.formType)) {
+        componentLogger.warn(
+          `[C2] Refusing minimal-content fallback for strict-financial form ${filingRecordFromDB.formType} (${filingId || 'direct'}) — treating as INSUFFICIENT_CONTENT.`
+        );
+        monitoring.incrementCounter('ai.minimal_content_refused_strict_form', 1);
+        monitoring.incrementCounter(`ai.minimal_content_refused.${filingRecordFromDB.formType}`, 1);
+        throw new SummarizationError(
+          `Filing has minimal extractable content but ${filingRecordFromDB.formType} requires financial data. Parser likely failed to clean the source HTML.`,
+          summaryId || 'direct',
+          filingRecordFromDB.formType,
+          ProcessingStatus.INSUFFICIENT_CONTENT,
+          false, // non-retriable: cache read returns same content on retry (C7)
+          'minimal_content_strict_form'
+        );
+      }
+
       componentLogger.warn(`Minimal or empty content detected for ${filingId || 'direct'} (${filingRecordFromDB.formType}). Using metadata-based fallback.`);
       monitoring.incrementCounter('ai.minimal_content_detected', 1);
-      
+
       try {
         // For minimal content, we'll create a special prompt that focuses on metadata
         const minimalContentPrompt = generateMinimalContentPrompt(filingRecordFromDB);
-        
+
         // Update the processed content with our minimal content prompt
         processedDoc.processedContent = minimalContentPrompt;
-        
+
         // Record the specific filing type for minimal content cases to track patterns
         monitoring.incrementCounter(`ai.minimal_content_filing_type.${filingRecordFromDB.formType}`, 1);
       } catch (error) {
@@ -874,7 +907,44 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
       // Record the specific filing type for chunked content to track patterns
       monitoring.incrementCounter(`ai.chunked_filing_type.${filingRecordFromDB.formType}`, 1);
     }
-    
+
+    // B3: For 10-Q / 10-K and amendments, override processedContent with a
+    // priority-ordered sectioned prompt — guarantees Financial Statements
+    // survives budget pressure. Layer A produced cleaned text with markdown
+    // headings; Layer B built the extractor + priority budget builder; this
+    // block makes them actually run for the filings that need them.
+    // Fires only when content is non-minimal (C2 above handles the minimal case).
+    const isStrictFinancialForm = (['10-Q', '10-K', '10-Q/A', '10-K/A'] as string[]).includes(
+      filingRecordFromDB.formType
+    );
+    if (isStrictFinancialForm && !processedDoc.isMinimalContent) {
+      const sections = extractSections(content, filingRecordFromDB.formType as SECFilingType);
+      if (!hasUsableFinancialSection(sections)) {
+        componentLogger.warn(
+          `[B3] No usable Financial Statements section in ${filingRecordFromDB.formType} ` +
+            `(${filingId || 'direct'}) — sectionizer found ${sections.length} section(s).`
+        );
+        monitoring.incrementCounter('ai.sectioned_extraction.no_financial_section', 1);
+        throw new SummarizationError(
+          `No Financial Statements section found in ${filingRecordFromDB.formType} filing. ` +
+            `Sectionizer found ${sections.length} section(s) but none matched Financial ` +
+            `Statements with usable content (>=100 chars).`,
+          summaryId || 'direct',
+          filingRecordFromDB.formType,
+          ProcessingStatus.INSUFFICIENT_FINANCIAL_SECTION,
+          false,
+          'no_financial_statements_section'
+        );
+      }
+      processedDoc.processedContent = buildSectionedPrompt(sections, 150000);
+      processedDoc.isSectioned = true;
+      componentLogger.info(
+        `[B3] Sectioned extraction for ${filingRecordFromDB.formType} ` +
+          `(${filingId || 'direct'}): ${sections.length} section(s) assembled.`
+      );
+      monitoring.incrementCounter('ai.sectioned_extraction.success', 1);
+    }
+
     // Use the processed content for the prompt
     const processedContent = processedDoc.processedContent;
 
@@ -1071,7 +1141,11 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
     // Reproduces COIN 2026-05-07 regression: parser fed Grok only XBRL
     // namespace headers; Grok returned 6 rows of `value: "$NaN"`.
     if (requiresFinancialContent(filingRecordFromDB.formType)) {
-      const preGate = hasFinancialStatementSignal(enrichedContent);
+      // Layer C C1: pass formType so the gate requires STATEMENT_TITLE_RE for
+      // strict-financial forms (not the 3-of-5 generic threshold). Without this
+      // arg the tightening is dead — iXBRL noise with dollar density + line
+      // items can satisfy 3-of-5 without ever mentioning "Statements of Operations".
+      const preGate = hasFinancialStatementSignal(enrichedContent, filingRecordFromDB.formType);
       if (!preGate.ok) {
         componentLogger.warn(
           `Pre-LLM content gate failed for ${filingRecordFromDB.formType} (summaryId=${summaryId || 'direct'}): ${preGate.reasons.join('; ')}`,
@@ -1095,7 +1169,11 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
           summaryId || 'unknown',
           filingRecordFromDB.formType,
           ErrorCode.AI_INSUFFICIENT_CONTENT,
-          true, // retriable — EDGAR may finish processing shortly after acceptance
+          // Layer C C7: non-retriable on cache-read path. SummarizationError
+          // assigns this directly (not from the isRetriableError global table),
+          // so the per-throw flag must match. Cache reads return the same
+          // bytes on retry; the retry budget is wasted.
+          false,
           'insufficient_content'
         );
       }
@@ -1258,7 +1336,14 @@ export async function summarizeFiling(content: string, options: SummarizationOpt
         // Marks as COMPLETED_WITH_WARNINGS so the downstream email gate
         // (read by the cron summary handler) skips the send.
         if (requiresFinancialContent(filingRecordFromDB.formType)) {
-          const postGate = hasUsableFinancialHighlights(parsedResult.data);
+          // Layer C C6: pass summaryText so the gate also checks for failure
+          // phrases ("no extractable", "are unavailable", etc.) — catches the
+          // case where the LLM populated highlights but its prose contradicts
+          // them (the NVDA 2026-05-20 failure mode).
+          const postGate = hasUsableFinancialHighlights(
+            parsedResult.data,
+            parsedResult.data?.summary ?? null
+          );
           if (!postGate.ok) {
             componentLogger.warn(
               `Post-LLM content gate failed for ${filingRecordFromDB.formType} (summaryId=${summaryId || 'direct'}): ${postGate.reasons.join('; ')}`,

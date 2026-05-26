@@ -2,6 +2,62 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.37.0] - 2026-05-25
+
+Fixes the NVDA 2026-05-20 "no extractable financial metrics" failure and
+the underlying class of bug. The summarization pipeline was passing raw
+inline-XBRL HTML directly to the LLM for every 10-Q/10-K filing since 2019.
+The model saw `<ix:nonFraction>81600</ix:nonFraction>` tag soup instead of
+"$81,600 Revenue" and produced a give-up summary admitting the data was
+unavailable. Confirmed blast radius across the last 30 days: 5 shipped
+summaries (3 NVDA, 1 PLTR, 1 GS), all 10-Q.
+
+### Added
+- iXBRL preprocessing in `cleanHtmlContent`: strips `<ix:hidden>` blocks,
+  unwraps `<ix:nonFraction>` / `<ix:nonNumeric>` / `<ix:continuation>` to
+  preserve visible values, removes XBRL/XLink namespace schema noise.
+- Markdown heading promotion: SEC's de-facto section headers ("PART I",
+  "Item 1.", "Item 1A.") are now promoted to `#` / `##` so downstream
+  section-aware code can split on them.
+- Section extractor (`lib/parsers/sec-section-extractor.ts`): segments
+  cleaned text into canonical `SECFilingSection` buckets. Form-type aware:
+  10-Q Item 1 = Financial Statements; 10-K Item 1 = Business Overview.
+- Priority-budget prompt builder: `buildSectionedPrompt()` assembles
+  section content in priority order. Financial Statements always survives
+  budget pressure; truncates from low-priority sections first.
+- `FilingContentCache.cleanedContent` + `cleanedAt` columns store the
+  iXBRL-cleaned text alongside raw HTML for downstream reuse.
+- Self-healing cleanedContent read: when null (pre-deploy rows), the
+  summarizer cleans on-the-fly and writes back. Behaves as a write-through cache.
+- Bad-phrase post-LLM gate: catches "no extractable", "are unavailable",
+  etc. in summary text and fails the gate even when `financialHighlights` populates.
+- ADR-0005 documents HTML iXBRL parsing as primary, with the SEC
+  Companyfacts JSON API reserved for a future numeric validation gate.
+- `scripts/backfill-bad-summaries.ts` discovery + dry-run for identifying
+  shipped summaries that need re-processing.
+
+### Changed
+- Pre-LLM content gate (`hasFinancialStatementSignal`) now requires the
+  statement-title signal for strict-financial forms (10-K, 10-Q, 20-F,
+  6-K, amendments). The 3-of-5 generic threshold could be satisfied by
+  iXBRL noise alone.
+- Minimal-content trap eliminated for strict-financial forms: the
+  summarizer no longer falls through to the metadata-only prompt that
+  told the LLM to "acknowledge limited information available" — the exact
+  source of the NVDA failure language. Now throws `INSUFFICIENT_CONTENT`.
+- `AI_INSUFFICIENT_CONTENT` is now non-retriable on the cache-read path.
+  Cache returns the same bytes on retry — retries wasted budget.
+- 8 SEC fetcher User-Agent strings standardized to
+  `tldrSEC support@tldrsec.app` (SEC's preferred "Name email" format).
+- New `Extractable` and `SEC Section` entries in `CONTEXT.md` glossary.
+
+### Fixed
+- 10-Q Part II "Item 1. Legal Proceedings" was being incorrectly routed
+  to Financial Statements by the section extractor's catchall pattern.
+  Now matched by an explicit `/Item\s+1\.\s*Legal/` rule.
+- `processingErrorCode` vocabulary centralized via `PROCESSING_ERROR_CODES`
+  constant in `lib/db/summary-status.ts`.
+
 ## [0.0.36.0] - 2026-05-21
 
 Launches the Founding Lifetime Seat offer: 25 one-time $499 payments grant

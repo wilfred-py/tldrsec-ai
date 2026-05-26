@@ -75,8 +75,18 @@ const REQUIRED_SIGNALS = 3; // out of 5 below
  * The COIN failure produced an excerpt of pure XBRL namespaces + CIK
  * identifiers — no period headers, no statement titles, no line items,
  * no dollar figures, and short. That excerpt scores 0/5 and is rejected.
+ *
+ * Layer C tightens this gate for strict-financial forms: pass
+ * `formType` to require `STATEMENT_TITLE_RE` (was previously 1-of-5
+ * optional). Plain iXBRL noise frequently contains dollar density +
+ * common line-item words without ever mentioning "Statements of
+ * Operations" or "Balance Sheets" — the title is the most reliable
+ * signal that real financial-statement structure is present.
  */
-export function hasFinancialStatementSignal(text: string | null | undefined): ContentGateResult {
+export function hasFinancialStatementSignal(
+  text: string | null | undefined,
+  formType?: string | null
+): ContentGateResult {
   const reasons: string[] = [];
   const signals: Record<string, boolean> = {
     hasPeriodHeader: false,
@@ -123,9 +133,48 @@ export function hasFinancialStatementSignal(text: string | null | undefined): Co
   }
 
   const passingSignals = Object.values(signals).filter(Boolean).length;
-  const ok = passingSignals >= REQUIRED_SIGNALS;
+  let ok = passingSignals >= REQUIRED_SIGNALS;
+
+  // C1: for strict-financial forms (10-K, 10-Q, 20-F, 6-K, and amendments),
+  // require STATEMENT_TITLE_RE specifically. The 3-of-5 generic threshold can
+  // be satisfied by dollar density + line items + length alone — true for any
+  // iXBRL tag soup that mentions revenue tags, even when no actual statement
+  // structure is present. The statement title is the most reliable signal.
+  if (ok && formType && requiresFinancialContent(formType) && !signals.hasStatementTitle) {
+    ok = false;
+    reasons.push(
+      `strict-financial form ${formType} requires hasStatementTitle (Layer C C1)`
+    );
+  }
 
   return { ok, reasons, signals };
+}
+
+/**
+ * Phrases the LLM emits when it can't extract structured financial data
+ * but doesn't outright refuse. After Layer C, any of these in the summary
+ * text signals that the post-LLM gate should fail even if
+ * `financialHighlights` happens to be populated — the prose itself
+ * contradicts the structured data.
+ *
+ * Pattern is case-insensitive and matches the language Grok produced on
+ * the NVDA 2026-05-20 failure ("no extractable quarterly financial
+ * results", "Key metrics… are unavailable") plus the language emitted by
+ * `generateMinimalContentPrompt` in summarize.ts ("acknowledge the
+ * limited information available").
+ */
+const SUMMARY_FAILURE_PHRASES_RE =
+  /\b(?:no extractable|are unavailable|minimal or no|could not be fully extracted|limited information available)\b/i;
+
+export function summaryHasFailurePhrase(summaryText: string | null | undefined): {
+  matched: boolean;
+  matchedPhrase: string | null;
+} {
+  if (typeof summaryText !== 'string' || summaryText.length === 0) {
+    return { matched: false, matchedPhrase: null };
+  }
+  const match = summaryText.match(SUMMARY_FAILURE_PHRASES_RE);
+  return { matched: match !== null, matchedPhrase: match ? match[0] : null };
 }
 
 /**
@@ -136,8 +185,16 @@ export function hasFinancialStatementSignal(text: string | null | undefined): Co
  * Required for 10-Q and 10-K: per product contract, these filings always
  * contain numeric financial data. Zero usable rows means the LLM output
  * is unfit for the email scorecard.
+ *
+ * Layer C C6: also checks `summaryText` for known failure phrases
+ * (see SUMMARY_FAILURE_PHRASES_RE). When matched, signals `hasFailurePhrase`
+ * = false (gate fails) AND records the matched phrase in reasons so the
+ * caller can surface it in observability.
  */
-export function hasUsableFinancialHighlights(data: unknown): ContentGateResult {
+export function hasUsableFinancialHighlights(
+  data: unknown,
+  summaryText?: string | null
+): ContentGateResult {
   const reasons: string[] = [];
   const signals: Record<string, boolean> = {
     arrayPresent: false,
@@ -177,7 +234,20 @@ export function hasUsableFinancialHighlights(data: unknown): ContentGateResult {
     );
   }
 
-  return { ok: signals.hasUsableRow, reasons, signals };
+  // C6: summary-text failure-phrase check. Catches the case where the LLM
+  // populated financialHighlights with apparent values but its prose
+  // simultaneously admits the extraction failed. Trust the prose — if it
+  // says "are unavailable," don't ship.
+  const phraseCheck = summaryHasFailurePhrase(summaryText);
+  signals.hasNoFailurePhrase = !phraseCheck.matched;
+  if (phraseCheck.matched) {
+    reasons.push(
+      `summary text contains failure phrase "${phraseCheck.matchedPhrase}" — LLM admitted extraction failure`
+    );
+  }
+
+  const ok = signals.hasUsableRow && signals.hasNoFailurePhrase;
+  return { ok, reasons, signals };
 }
 
 /**
