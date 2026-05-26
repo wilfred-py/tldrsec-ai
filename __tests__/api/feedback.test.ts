@@ -21,7 +21,7 @@ jest.mock('next/server', () => {
 
 import type { NextRequest } from 'next/server';
 import { GET } from '@/app/api/feedback/route';
-import { generateFeedbackToken } from '@/lib/email/feedback-tokens';
+import { generateFeedbackToken } from '@/lib/email/email-link-token';
 
 // The token validator enforces UUIDs for userId and summaryId.
 const USER_UUID = '11111111-1111-4111-8111-111111111111';

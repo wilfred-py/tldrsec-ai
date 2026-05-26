@@ -40,7 +40,7 @@ jest.mock('@clerk/nextjs/server', () => ({
   currentUser: jest.fn().mockResolvedValue({ id: 'user_admin_test' }),
 }));
 
-jest.mock('@/lib/email/unsubscribe-tokens', () => ({
+jest.mock('@/lib/email/email-link-token', () => ({
   generateUnsubscribeUrl: (email: string) => `https://tldrsec.app/unsubscribe?token=stub-${email}`,
 }));
 

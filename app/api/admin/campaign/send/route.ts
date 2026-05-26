@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { Resend } from 'resend';
-import { generateUnsubscribeUrl } from '@/lib/email/unsubscribe-tokens';
+import { generateUnsubscribeUrl } from '@/lib/email/email-link-token';
 import { fetchCampaignFilings } from '@/lib/email/campaign-templates';
 import { classifyRegion, regionCohortSlot, type Region } from '@/lib/email/region-classifier';
 import { FOUNDER_REPLY_TO } from '@/lib/email/config';
