@@ -44,7 +44,7 @@
 
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { classifyRegion } from '@/lib/email/region-classifier';
 import { FOUNDER_REPLY_TO } from '@/lib/email/config';
@@ -88,39 +88,72 @@ function parseArgs(argv: string[]): CliArgs {
   return { batch, dryRun, limit };
 }
 
-function loadSentEmails(): Set<string> {
-  if (!existsSync(SENT_LOG_PATH)) return new Set();
-  const lines = readFileSync(SENT_LOG_PATH, 'utf-8').split('\n').filter(Boolean);
-  const sent = new Set<string>();
-  for (const line of lines) {
-    try {
-      const entry = JSON.parse(line);
-      // Only treat successful sends as "already sent". Failed entries
-      // (missing resendId or with error) stay in the log for forensics
-      // but should retry on the next run — otherwise a transient Resend
-      // 429 / 5xx permanently drops a $499 Lifetime target.
-      if (entry.email && entry.resendId && !entry.error) {
-        sent.add(entry.email.toLowerCase());
-      }
-    } catch {
-      // skip malformed lines
-    }
-  }
-  return sent;
+// Supabase-backed dedup. Replaces the prior local-jsonl approach so CI runs
+// (and any re-run after a crash) can correctly skip already-sent recipients.
+// Local jsonl is still appended as a best-effort forensic trail.
+//
+// Schema (lib/supabase/migrations/create-founding-sends.sql):
+//   founding_sends(email PK, batch, resend_id, error, sent_at)
+//
+// Dedup rule: only rows with error IS NULL count as "already sent". Failed
+// rows can retry (upsert replaces them) so a transient Resend 429 / 5xx
+// doesn't permanently drop a $499 Lifetime target.
+
+// Use a relaxed structural type — the strict generic SupabaseClient signature
+// shifts between minor versions and would force this script to thread generics
+// it doesn't care about. The from('founding_sends') call sites only need the
+// query builder surface (.select/.upsert), so unknown is the lowest-friction fit.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseLike = any;
+
+async function loadSentEmails(supabase: SupabaseLike): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('founding_sends')
+    .select('email')
+    .is('error', null);
+  if (error) throw new Error(`founding_sends read failed: ${error.message}`);
+  return new Set((data ?? []).map((r: { email: string }) => r.email.toLowerCase()));
 }
 
-function recordSent(email: string, batch: string, resendId: string | null, error?: string) {
-  if (!existsSync(dirname(SENT_LOG_PATH))) {
-    mkdirSync(dirname(SENT_LOG_PATH), { recursive: true });
+async function recordSent(
+  supabase: SupabaseLike,
+  email: string,
+  batch: string,
+  resendId: string | null,
+  error?: string,
+) {
+  const normalizedEmail = email.toLowerCase();
+  const { error: upsertErr } = await supabase
+    .from('founding_sends')
+    .upsert(
+      {
+        email: normalizedEmail,
+        batch,
+        resend_id: resendId,
+        error: error ?? null,
+        sent_at: new Date().toISOString(),
+      },
+      { onConflict: 'email' },
+    );
+  if (upsertErr) {
+    // Don't throw — we'd rather a duplicate-send risk than dropping the send
+    // log entirely. Log loudly so the operator sees it.
+    console.error(`  ✗ founding_sends upsert failed for ${normalizedEmail}: ${upsertErr.message}`);
   }
-  const entry = {
-    email: email.toLowerCase(),
-    batch,
-    resendId,
-    error,
-    ts: new Date().toISOString(),
-  };
-  appendFileSync(SENT_LOG_PATH, JSON.stringify(entry) + '\n');
+
+  // Local forensic trail. Best-effort — kept gitignored.
+  try {
+    if (!existsSync(dirname(SENT_LOG_PATH))) {
+      mkdirSync(dirname(SENT_LOG_PATH), { recursive: true });
+    }
+    appendFileSync(
+      SENT_LOG_PATH,
+      JSON.stringify({ email: normalizedEmail, batch, resendId, error, ts: new Date().toISOString() }) + '\n',
+    );
+  } catch {
+    // Local file I/O may fail in CI / read-only FS. Supabase row above is the
+    // source of truth; ignore.
+  }
 }
 
 function buildEmailBody(email: string, batch: string): { subject: string; text: string; html: string } {
@@ -202,7 +235,7 @@ async function main() {
     return;
   }
 
-  const sentAlready = loadSentEmails();
+  const sentAlready = await loadSentEmails(supabase);
 
   const recipients = subscribers
     .filter((s) => typeof s.email === 'string' && s.email)
@@ -256,18 +289,18 @@ async function main() {
       const resErr = (res as { error?: { message?: string; name?: string } | null }).error;
       if (resErr) {
         const msg = resErr.message ?? resErr.name ?? JSON.stringify(resErr);
-        recordSent(r.email, args.batch, null, msg);
+        await recordSent(supabase, r.email, args.batch, null, msg);
         failed++;
         console.error(`  ✗ ${r.email}: ${msg}`);
       } else {
         const id = (res as { data?: { id?: string } }).data?.id ?? null;
-        recordSent(r.email, args.batch, id);
+        await recordSent(supabase, r.email, args.batch, id);
         sent++;
         console.log(`  ✓ ${r.email} (resend id: ${id})`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      recordSent(r.email, args.batch, null, msg);
+      await recordSent(supabase, r.email, args.batch, null, msg);
       failed++;
       console.error(`  ✗ ${r.email}: ${msg}`);
     }

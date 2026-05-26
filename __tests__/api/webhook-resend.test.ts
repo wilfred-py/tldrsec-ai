@@ -318,8 +318,17 @@ describe('POST /api/webhook?provider=resend', () => {
     }) as never);
     expect(res.status).toBe(200);
     expect(supabaseFromMock).toHaveBeenCalledWith('newsletter_subscribers');
-    // Bounce events do NOT forward to PostHog (suppression-only path)
-    expect(captureServerEventMock).not.toHaveBeenCalled();
+    // Bounce events also forward to PostHog with bounce_type (added in launch-infra PR
+    // so the funnel-failure dashboard has bounce metadata without a Resend round-trip).
+    expect(captureServerEventMock).toHaveBeenCalledWith(
+      'bounced@example.com',
+      EVENTS.EMAIL_BOUNCED,
+      expect.objectContaining({
+        email_id: 'em_bounce',
+        recipient: 'bounced@example.com',
+        bounce_type: 'hard',
+      }),
+    );
   });
 
   it('email.complained → updates subscriber row with complained_at, returns 200', async () => {
@@ -332,7 +341,14 @@ describe('POST /api/webhook?provider=resend', () => {
     }) as never);
     expect(res.status).toBe(200);
     expect(supabaseFromMock).toHaveBeenCalledWith('newsletter_subscribers');
-    expect(captureServerEventMock).not.toHaveBeenCalled();
+    expect(captureServerEventMock).toHaveBeenCalledWith(
+      'complainer@example.com',
+      EVENTS.EMAIL_COMPLAINED,
+      expect.objectContaining({
+        email_id: 'em_complaint',
+        recipient: 'complainer@example.com',
+      }),
+    );
   });
 
   it('email.bounced with `to` as array picks the first recipient', async () => {

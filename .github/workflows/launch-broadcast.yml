@@ -1,0 +1,145 @@
+name: Launch Broadcast
+
+# Fires the 2026-05 launch sequence:
+#   Wed 27 May 07:30 UTC — VRT 10-Q EU batch  (~8 recipients)
+#   Wed 27 May 11:00 UTC — VRT 10-Q US batch  (~116 recipients)
+#   Wed  3 Jun 07:30 UTC — Lifetime EU batch
+#   Wed  3 Jun 11:00 UTC — Lifetime US batch
+#
+# VRT sends curl the bearer-auth admin route (LAUNCH_ARMED env in Vercel
+# must be 'true' or the route no-ops with HTTP 200 + {skipped:true}).
+# Lifetime sends run the script directly with FOUNDING_ARMED=true.
+#
+# Both campaigns also support workflow_dispatch for manual fire / dry-run.
+
+on:
+  schedule:
+    - cron: '30 7 27 5 *'   # VRT EU
+    - cron: '0 11 27 5 *'   # VRT US
+    - cron: '30 7 3 6 *'    # Lifetime EU
+    - cron: '0 11 3 6 *'    # Lifetime US
+  workflow_dispatch:
+    inputs:
+      campaign:
+        description: 'Which campaign'
+        required: true
+        type: choice
+        options: [vrt, lifetime]
+      region:
+        description: 'Region batch'
+        required: true
+        type: choice
+        options: [eu, us]
+      dry_run:
+        description: 'Dry-run only (no real sends)'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  # Don't allow two fires of the same campaign+region to overlap.
+  group: launch-${{ github.event.inputs.campaign || github.event.schedule }}-${{ github.event.inputs.region || 'auto' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      campaign: ${{ steps.ctx.outputs.campaign }}
+      region:   ${{ steps.ctx.outputs.region }}
+      dry_run:  ${{ steps.ctx.outputs.dry_run }}
+    steps:
+      - name: Year guard (schedules are 2026-only)
+        if: github.event_name == 'schedule'
+        run: |
+          # GH Actions cron is `m h d M *` — year is implicit, so `30 7 27 5 *`
+          # re-fires every 27 May. Hard-gate to 2026 to prevent silently
+          # re-running the launch on 27 May 2027/2028/etc.
+          YEAR=$(date -u +%Y)
+          if [ "$YEAR" != "2026" ]; then
+            echo "::warning::Launch schedule fired in $YEAR — gating to 2026 only. Exiting cleanly."
+            exit 0
+          fi
+      - name: Resolve campaign + region from trigger
+        id: ctx
+        run: |
+          case "${{ github.event_name }}::${{ github.event.schedule }}" in
+            "schedule::30 7 27 5 *")  C=vrt;      R=eu; D=false ;;
+            "schedule::0 11 27 5 *")  C=vrt;      R=us; D=false ;;
+            "schedule::30 7 3 6 *")   C=lifetime; R=eu; D=false ;;
+            "schedule::0 11 3 6 *")   C=lifetime; R=us; D=false ;;
+            "workflow_dispatch::"*)
+              C="${{ inputs.campaign }}"
+              R="${{ inputs.region }}"
+              D="${{ inputs.dry_run }}"
+              ;;
+            *) echo "Unknown trigger context"; exit 1 ;;
+          esac
+          echo "campaign=$C" >> "$GITHUB_OUTPUT"
+          echo "region=$R"   >> "$GITHUB_OUTPUT"
+          echo "dry_run=$D"  >> "$GITHUB_OUTPUT"
+          echo "Resolved: campaign=$C region=$R dry_run=$D"
+
+  vrt:
+    needs: resolve
+    if: needs.resolve.outputs.campaign == 'vrt'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST to admin/campaign/send
+        env:
+          TOKEN:  ${{ secrets.LAUNCH_CRON_TOKEN }}
+          REGION: ${{ needs.resolve.outputs.region }}
+          DRY:    ${{ needs.resolve.outputs.dry_run }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::LAUNCH_CRON_TOKEN secret is not set in repo"
+            exit 1
+          fi
+          BODY="{\"region\":\"$REGION\",\"emailNumber\":1"
+          if [ "$DRY" = "true" ]; then BODY="$BODY,\"dryRun\":true"; fi
+          BODY="$BODY}"
+          echo "POST body: $BODY"
+          HTTP=$(curl -sS -o /tmp/resp.json -w "%{http_code}" \
+            -X POST https://tldrsec.app/api/admin/campaign/send \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+          echo "HTTP $HTTP"
+          cat /tmp/resp.json | jq . || cat /tmp/resp.json
+          case "$HTTP" in
+            202|207|200) exit 0 ;;
+            409)         echo "::warning::Duplicate send blocked by idempotency (HTTP 409). Prior send already recorded — this is safe."; exit 0 ;;
+            *)           echo "::error::Send failed with HTTP $HTTP"; exit 1 ;;
+          esac
+
+  lifetime:
+    needs: resolve
+    if: needs.resolve.outputs.campaign == 'lifetime'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.11'
+      - name: Install deps
+        # Repo uses npm (package-lock.json present, no bun.lockb). bun install
+        # resolves from package.json without a lockfile; --frozen-lockfile would
+        # fail because no bun lockfile exists. Skip the lockfile flag.
+        run: bun install
+      - name: Run send-founding-batch
+        env:
+          FOUNDING_ARMED:            ${{ needs.resolve.outputs.dry_run == 'false' && 'true' || '' }}
+          RESEND_API_KEY:            ${{ secrets.RESEND_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL:  ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EMAIL_DEFAULT_REPLY_TO:    ${{ secrets.EMAIL_DEFAULT_REPLY_TO }}
+          NEXT_PUBLIC_SITE_URL:      https://tldrsec.app
+          REGION:                    ${{ needs.resolve.outputs.region }}
+          DRY:                       ${{ needs.resolve.outputs.dry_run }}
+        run: |
+          ARGS="--batch $REGION"
+          if [ "$DRY" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          echo "Running: bun run scripts/founding/send-founding-batch.ts $ARGS"
+          bun run scripts/founding/send-founding-batch.ts $ARGS
