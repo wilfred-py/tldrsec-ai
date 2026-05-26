@@ -44,7 +44,7 @@
 
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { classifyRegion } from '@/lib/email/region-classifier';
 import { FOUNDER_REPLY_TO } from '@/lib/email/config';

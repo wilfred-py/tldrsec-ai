@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.38.0] - 2026-05-26
+
+Wires the cron trigger + dedup infrastructure for the Wed 27 May 2026 VRT
+10-Q broadcast and the Wed 3 Jun 2026 Lifetime $499 follow-up — sends to
+124 waitlist subscribers (8 EU / 116 US). Until this PR, no automated
+trigger existed for either campaign; routine reminders fired but nothing
+actually called `POST /api/admin/campaign/send`.
+
+### Added
+- `.github/workflows/launch-broadcast.yml`: four-schedule launch cron with
+  workflow_dispatch fallback. Wed 27 May VRT (EU 07:30 UTC, US 11:00 UTC)
+  curls the bearer-auth admin route; Wed 3 Jun Lifetime (same windows)
+  runs `scripts/founding/send-founding-batch.ts` in CI. Year-guard prevents
+  re-fire on 27 May 2027+. HTTP 409 (idempotency dup) treated as success.
+- `lib/supabase/migrations/create-founding-sends.sql`: per-email dedup
+  store for the Lifetime script. Replaces the local `sent.jsonl` (which
+  doesn't survive CI runs or workstation crashes). PRIMARY KEY (email)
+  blocks re-send; failed rows upsert on retry.
+- PostHog event lifecycle: `email_sent`, `email_bounced`, `email_complained`
+  now fire from the Resend webhook handler. Closes the "no leading-edge
+  events in PostHog" gap so launch open-rate dashboards work end-to-end.
+
+### Changed
+- `scripts/founding/send-founding-batch.ts`: dedup moved from local jsonl
+  to Supabase `founding_sends` table. Local jsonl still appended as a
+  best-effort forensic trail. Same script signature; CI-friendly.
+- `app/api/webhook/route.ts`: bounce / complaint events now forward to
+  PostHog alongside the existing newsletter_subscribers suppression write,
+  so the funnel-failure dashboard has bounce metadata without a Resend
+  round-trip.
+
+### Out-of-PR (applied to prod outside this PR)
+- PR #584's three pending SQL migrations applied (page_analytics anon-policy
+  drop, _prisma_migrations RLS, search_path pin).
+- `founding_sends` table created in prod Supabase.
+- Resend webhook `f6897df7-d0b7-4511-9cc1-be748dd909a1` configured to POST
+  sent/delivered/opened/clicked/bounced/complained to
+  `https://tldrsec.app/api/webhook?provider=resend`.
+- `RESEND_WEBHOOK_SECRET` + `SUPABASE_SERVICE_ROLE_KEY` set in Vercel prod
+  env (marked sensitive). `SUPABASE_SECRET_KEY` (legacy fallback) synced
+  to the same value. Five GH Actions secrets added: `LAUNCH_CRON_TOKEN`,
+  `RESEND_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `EMAIL_DEFAULT_REPLY_TO`.
+
+### Known follow-up
+- Lifetime script has no transactional pre-claim between SELECT and
+  per-row upsert. Two parallel CI runs (manual + scheduled in the same
+  region) could theoretically double-send. Mitigated by the workflow's
+  concurrency group within trigger-type but not across types. Will fold
+  into a follow-up PR if the 3 Jun send hits the race.
+
 ## [0.0.37.0] - 2026-05-25
 
 Fixes the NVDA 2026-05-20 "no extractable financial metrics" failure and
