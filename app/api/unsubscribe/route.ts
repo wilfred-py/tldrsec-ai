@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateUnsubscribeToken } from '@/lib/email/feedback-tokens';
+import { validateUnsubscribeToken } from '@/lib/email/email-link-tokens';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
