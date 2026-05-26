@@ -22,6 +22,7 @@ import { parseResponse } from '../../ai/parsers/response-parser';
 import { CURRENT_FORM4_SCHEMA_VERSION } from '../../email/form4-field-normalizer';
 import { isMaxEligible } from '../../auth/tier-eligibility';
 import type { SECFilingType } from '../../ai/prompts/prompt-types';
+import { cleanHtmlContent } from '../../parsers/filing-extractor';
 
 const summarizeLogger = logger.child('summarize-cached-handler');
 
@@ -188,7 +189,10 @@ export async function handleSummarizeCached(
       });
     }
 
-    // Retrieve cached content including primaryDocUrl for email links
+    // Retrieve cached content including primaryDocUrl for email links.
+    // Layer A populated `cleanedContent` + `cleanedAt` on fetch; Layer C reads
+    // both so we can prefer cleaned text (iXBRL-stripped, markdown-headed) when
+    // available and fall back to on-the-fly cleaning for pre-Layer-A rows.
     const cachedContent = await prisma.filingContentCache.findUnique({
       where: { id: cacheId },
       select: {
@@ -196,7 +200,9 @@ export async function handleSummarizeCached(
         contentLength: true,
         status: true,
         fetchError: true,
-        primaryDocUrl: true  // Direct document URL for better email UX
+        primaryDocUrl: true,  // Direct document URL for better email UX
+        cleanedContent: true,
+        cleanedAt: true
       }
     });
 
@@ -208,9 +214,66 @@ export async function handleSummarizeCached(
       throw new Error(`Invalid cache status: ${cachedContent.status}${cachedContent.fetchError ? ` - ${cachedContent.fetchError}` : ''}`);
     }
 
+    // Layer C C4: self-healing cleanedContent read. When cleanedContent is
+    // null (any row cached before Layer A deployed), clean on-the-fly and
+    // write back to the cache row. The column behaves as a lazy-populated
+    // write-through cache. Eliminates deploy-ordering risk: Layer C is safe
+    // to ship regardless of whether the optional backfill ran.
+    let effectiveContent: string;
+    // Truthy check (not just !== null) handles both null and undefined uniformly —
+    // some test mocks return objects without the new field defined at all.
+    if (typeof cachedContent.cleanedContent === 'string' && cachedContent.cleanedContent.length > 0) {
+      effectiveContent = cachedContent.cleanedContent;
+      summarizeLogger.debug(`[${executionId}] Using pre-cleaned content from cache`, {
+        cacheId,
+        rawBytes: cachedContent.content.length,
+        cleanedBytes: effectiveContent.length
+      });
+    } else {
+      // Cache miss for cleaned text — clean now and write back.
+      try {
+        const cleaned = cleanHtmlContent(cachedContent.content);
+        if (cleaned && cleaned.length > 0) {
+          effectiveContent = cleaned;
+          // Write-through (fire-and-forget, but await to keep the row consistent
+          // for any concurrent reader; failure here doesn't block summarization).
+          await prisma.filingContentCache.update({
+            where: { id: cacheId },
+            data: { cleanedContent: cleaned, cleanedAt: new Date() }
+          }).catch((updateErr) => {
+            summarizeLogger.warn(`[${executionId}] Failed to write back cleanedContent — proceeding with cleaned text in memory`, {
+              cacheId,
+              error: updateErr instanceof Error ? updateErr.message : String(updateErr)
+            });
+          });
+          summarizeLogger.info(`[${executionId}] Self-healed cleanedContent for pre-Layer-A row`, {
+            cacheId,
+            rawBytes: cachedContent.content.length,
+            cleanedBytes: cleaned.length
+          });
+        } else {
+          // Cleaning produced empty output — fall back to raw to avoid
+          // shipping a definitely-broken summary on a cleaning bug.
+          effectiveContent = cachedContent.content;
+          summarizeLogger.warn(`[${executionId}] cleanHtmlContent returned empty — falling back to raw content`, {
+            cacheId,
+            rawBytes: cachedContent.content.length
+          });
+        }
+      } catch (cleanErr) {
+        // Same fallback rationale as the empty case.
+        effectiveContent = cachedContent.content;
+        summarizeLogger.warn(`[${executionId}] cleanHtmlContent threw — falling back to raw content`, {
+          cacheId,
+          error: cleanErr instanceof Error ? cleanErr.message : String(cleanErr)
+        });
+      }
+    }
+
     summarizeLogger.debug(`[${executionId}] Retrieved cached content`, {
       cacheId,
-      contentLength: cachedContent.contentLength
+      contentLength: cachedContent.contentLength,
+      effectiveContentLength: effectiveContent.length
     });
 
     // STEP 2.5: Verify cached content matches expected filing metadata (Gap 2 fix)
@@ -664,7 +727,8 @@ export async function handleSummarizeCached(
 
     // No shared summary found - generate AI summary
     summarizeLogger.debug(`[${executionId}] Generating AI summary (no shared summary available)`, {
-      contentLength: cachedContent.content.length,
+      contentLength: effectiveContent.length,
+      rawCachedLength: cachedContent.content.length,
       formType: filing.formType
     });
 
@@ -673,8 +737,12 @@ export async function handleSummarizeCached(
     // (Phase 4 of tasks/x-search-max-only.md). userTier comes from the job
     // payload (snapshot at enqueue time); isTrialing/trialEndsAt are read
     // fresh from the DB above to honor any trial-state changes since enqueue.
+    //
+    // Layer C: `effectiveContent` is the iXBRL-cleaned, markdown-headed text
+    // resolved above (either pre-Layer-A backfill, fresh Layer A populate, or
+    // self-healed on this call). All downstream extraction operates on this.
     const summaryResult = await summarizeFilingWithValidation(
-      cachedContent.content,
+      effectiveContent,
       {
         formType: filing.formType,
         metadata: {

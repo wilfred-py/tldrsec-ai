@@ -281,8 +281,10 @@ export async function fetchSecCompanyRSS(cik: string): Promise<CompanyRSSFeed> {
       validationMetadata: validation.metadata 
     });
     
-    // SEC-compliant user agent for all requests
-    const userAgent = 'TLDRSEC wilfredchen1@gmail.com';
+    // SEC-compliant user agent for all requests.
+    // Layer D: standardized to SEC's preferred "Name email" format across all
+    // sec.gov fetchers. TODO(post-launch): consolidate into lib/sec-edgar/sec-fetch.ts helper.
+    const userAgent = 'tldrSEC support@tldrsec.app';
     
     rssLogger.info(`[SEC-FETCH] Starting RSS fetch`, {
       cik: formattedCik,
