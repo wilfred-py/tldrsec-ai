@@ -1,0 +1,101 @@
+name: Launch Pre-Fire Checks
+
+# Automates the Tue-AM dry-run validation that operator routine 2/8 reminds
+# about. Fires Tue 26 May 2026 23:00 UTC (Tue 09:00 AEST) — the same window
+# the reminder mail lands in Wilf's inbox. Runs dry-run POSTs for both VRT
+# regions, expects HTTP 200 + {cohortSize: 8 / 116}, fails the job on
+# anything else. Result is visible in the GH Actions tab so the operator
+# has a fresh signal that auth + counts are correct before the Wed real
+# fire.
+#
+# LAUNCH_ARMED is set independently via `vercel env add` (already done).
+# The dry-run path is gated by dryRun: true in the body, not by
+# LAUNCH_ARMED, so this workflow runs cleanly regardless of the arm state.
+#
+# Year-guard matches launch-broadcast.yml: schedule re-fires every 26 May
+# without a guard, so this exits cleanly if YEAR != 2026.
+
+on:
+  schedule:
+    # Tue 26 May 2026 23:00 UTC = Tue 09:00 AEST (Wilf's morning window)
+    # NOTE: 5-field cron is m h d M w — year is implicit. The year-guard
+    # below makes this single-shot for 2026.
+    - cron: '0 23 26 5 *'
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: 'Which regions to dry-run'
+        required: true
+        type: choice
+        default: both
+        options: [both, eu, us]
+
+permissions:
+  contents: read
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Year guard (2026 only)
+        if: github.event_name == 'schedule'
+        run: |
+          YEAR=$(date -u +%Y)
+          if [ "$YEAR" != "2026" ]; then
+            echo "::warning::Pre-fire check schedule fired in $YEAR — gating to 2026 only. Exiting cleanly."
+            exit 0
+          fi
+
+      - name: Resolve regions to test
+        id: ctx
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REGIONS="${{ inputs.regions }}"
+          else
+            REGIONS="both"
+          fi
+          if [ "$REGIONS" = "both" ]; then
+            echo "list=eu us" >> "$GITHUB_OUTPUT"
+          else
+            echo "list=$REGIONS" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dry-run POST to admin/campaign/send for each region
+        env:
+          TOKEN: ${{ secrets.LAUNCH_CRON_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::LAUNCH_CRON_TOKEN secret is not set in repo"
+            exit 1
+          fi
+          FAIL=0
+          for REGION in ${{ steps.ctx.outputs.list }}; do
+            echo ""
+            echo "=== Region: $REGION ==="
+            BODY="{\"region\":\"$REGION\",\"emailNumber\":1,\"dryRun\":true}"
+            HTTP=$(curl -sS -o /tmp/resp.json -w "%{http_code}" \
+              -X POST https://tldrsec.app/api/admin/campaign/send \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$BODY")
+            echo "HTTP $HTTP"
+            cat /tmp/resp.json | jq . || cat /tmp/resp.json
+            EXPECTED=8
+            [ "$REGION" = "us" ] && EXPECTED=116
+            COHORT_SIZE=$(jq -r '.cohortSize // 0' /tmp/resp.json 2>/dev/null)
+            if [ "$HTTP" != "200" ]; then
+              echo "::error::$REGION: expected HTTP 200, got $HTTP"
+              FAIL=1
+            elif [ "$COHORT_SIZE" != "$EXPECTED" ]; then
+              echo "::warning::$REGION: cohortSize=$COHORT_SIZE, expected $EXPECTED. Audience may have changed since launch plan was sized."
+            else
+              echo "✓ $REGION: cohortSize=$COHORT_SIZE matches expected $EXPECTED"
+            fi
+          done
+          if [ "$FAIL" != "0" ]; then
+            echo "::error::One or more dry-runs failed. Investigate before Wed 27 May fire."
+            exit 1
+          fi
+          echo ""
+          echo "All dry-runs passed. Wed launch is wired correctly."
