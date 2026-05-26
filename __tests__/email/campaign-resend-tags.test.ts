@@ -120,7 +120,7 @@ jest.mock('@/lib/supabase/server-client', () => ({
 }));
 
 // generateUnsubscribeUrl — pure function, but pin the output for stability.
-jest.mock('@/lib/email/unsubscribe-tokens', () => ({
+jest.mock('@/lib/email/email-link-tokens', () => ({
   generateUnsubscribeUrl: (email: string) => `https://tldrsec.app/unsubscribe?token=stub-${email}`,
 }));
 

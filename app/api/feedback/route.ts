@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateFeedbackToken } from '@/lib/email/feedback-tokens';
+import { validateFeedbackToken } from '@/lib/email/email-link-tokens';
 import { getPrismaClient } from '@/lib/db/prisma';
 
 export const dynamic = 'force-dynamic';

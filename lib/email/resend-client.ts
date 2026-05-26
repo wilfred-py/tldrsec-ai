@@ -53,7 +53,7 @@ const safeRecordEmailSent = (emailType: string, recipient: string, success: bool
 };
 
 import { resendConfig } from './config';
-import { generateUnsubscribeUrl } from './unsubscribe-tokens';
+import { generateUnsubscribeUrl } from './email-link-tokens';
 import type {
   EmailMessage,
   EmailSendResult,

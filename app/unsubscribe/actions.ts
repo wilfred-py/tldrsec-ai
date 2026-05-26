@@ -1,6 +1,6 @@
 'use server';
 
-import { validateUnsubscribeToken } from '@/lib/email/unsubscribe-tokens';
+import { validateUnsubscribeToken } from '@/lib/email/email-link-tokens';
 
 async function getSupabaseClient() {
   const { createSupabaseServiceClient } = await import('@/lib/supabase/server-client');
