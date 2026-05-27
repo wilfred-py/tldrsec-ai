@@ -10,7 +10,7 @@
 // 1. Tier Priority
 // ─────────────────────────────────────────────────────────
 
-import { getPriorityForTier } from '../../../lib/cron/tier-priority';
+import { getPriorityForTier } from '../../../lib/cron/tier-eligibility';
 
 describe('getPriorityForTier', () => {
   it('returns 5 for FREE tier', () => {

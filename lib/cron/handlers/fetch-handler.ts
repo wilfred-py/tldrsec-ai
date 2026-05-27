@@ -20,7 +20,7 @@ import type { JobPayload } from '../../job-queue';
 import { createHash } from 'crypto';
 import { SECEdgarClient } from '../../sec-edgar/client';
 import { verifyFilingContent, type FilingMetadata, type ContentVerificationResult } from '../../validation/filing-content-verifier';
-import { getPriorityForTier } from '../tier-priority';
+import { getPriorityForTier } from '../tier-eligibility';
 import { cleanHtmlContent } from '../../parsers/filing-extractor';
 
 const fetchLogger = logger.child('fetch-handler');

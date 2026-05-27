@@ -22,7 +22,7 @@
 
 import { logger } from '../../logging';
 import { shouldPollNow } from '../edgar-schedule';
-import { getCompositePriority } from '../tier-priority';
+import { getCompositePriority } from '../tier-eligibility';
 import { enrichTickersWithCik, type EnrichedTicker, type UserForFiling } from './discovery-handler';
 import { SECEdgarError, SECErrorCode } from '../../sec-edgar/types';
 
