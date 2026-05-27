@@ -16,7 +16,7 @@ import {
 import {
   getFilingMaterialityBonus,
   getCompositePriority,
-} from '@/lib/cron/tier-priority';
+} from '@/lib/cron/tier-eligibility';
 
 // ── Adaptive Polling Intervals ───────────────────────────────────────
 

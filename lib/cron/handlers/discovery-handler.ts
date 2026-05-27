@@ -16,7 +16,7 @@
 import { logger } from '../../logging';
 import type { JobPayload } from '../../job-queue';
 import { CronSecFilingService } from '../sec-filing-service';
-import { getPriorityForTier } from '../tier-priority';
+import { getPriorityForTier } from '../tier-eligibility';
 
 const discoveryLogger = logger.child('discovery-handler');
 
@@ -119,7 +119,7 @@ export interface BulkJobExecutionContext {
   cronTriggerTime: string;
 }
 
-// getPriorityForTier imported from ../tier-priority.ts (single source of truth)
+// getPriorityForTier imported from ../tier-eligibility.ts (Tier Scheduling module)
 
 /**
  * Bulk create fetch jobs for all users tracking a filing
