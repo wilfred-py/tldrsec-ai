@@ -23,6 +23,7 @@
  */
 
 import { logger } from '../logging';
+import { TRANSACTION_CODE_MAP } from './form4-transaction-codes';
 // Circular import: derive-stake.ts imports formatNumberWithCommas from this file.
 // Safe only because formatNumberWithCommas (line ~625) is a `function` declaration
 // and gets hoisted. Do NOT convert it to `const fn = () => ...` or the cycle crashes
@@ -85,21 +86,6 @@ export interface NormalizedForm4Data {
 // Bump when changing field mappings or normalizer behavior.
 // Used by response-parser (stamp) and summarize-cached-handler (detect stale data).
 export const CURRENT_FORM4_SCHEMA_VERSION = 3;
-
-export const TX_CODE_TO_TYPE: Record<string, string> = {
-  'P': 'Purchase',
-  'S': 'Sale',
-  'A': 'Award/Grant',
-  'D': 'Disposition',
-  'G': 'Gift',
-  'M': 'Exercise',
-  'F': 'Tax Withholding',
-  'J': 'Trust Transfer',
-  'K': 'Equity Swap',
-  'X': 'Exercise',
-  'C': 'Conversion',
-  'W': 'Will/Descent',
-};
 
 /**
  * All known field aliases for transaction objects.
@@ -314,7 +300,7 @@ export function normalizeTransaction(raw: unknown): NormalizedTransaction | null
 
   // Infer type from code when type is missing
   if (!type && code) {
-    type = TX_CODE_TO_TYPE[code.toUpperCase()] || '';
+    type = TRANSACTION_CODE_MAP[code.toUpperCase()] || '';
   }
 
   // Must have at least code or shares to be useful
@@ -544,7 +530,7 @@ export function parseStringTransaction(str: string): NormalizedTransaction | nul
       adRaw.toLowerCase().startsWith('a') ? 'A' : 'D';
   }
 
-  const type = code ? (TX_CODE_TO_TYPE[code] || 'Other') : '';
+  const type = code ? (TRANSACTION_CODE_MAP[code.toUpperCase()] || 'Other') : '';
 
   // Extract share count
   const sharesMatch = str.match(/([\d,]+(?:\.\d+)?)\s+(?:Common\s+Stock\s+)?(?:shares?|Non-Qualified|RSU|Stock\s+Unit)/i);
