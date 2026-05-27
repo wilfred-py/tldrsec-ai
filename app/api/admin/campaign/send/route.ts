@@ -339,13 +339,20 @@ export async function POST(request: NextRequest) {
 
     const emails = await Promise.all(targetSubscribers.map(async subscriber => {
       const unsubscribeUrl = generateUnsubscribeUrl(subscriber.email);
+      // Resend tag values must be strings. The doc comment + TS type say
+      // subscriber.id is a UUID string, but newsletter_subscribers.id is
+      // actually a SERIAL integer in prod (see migration history). Passing
+      // a number through the resend SDK fails Zod validation with
+      // "Invalid literal value, expected \"\"". Stringify defensively
+      // regardless of underlying type.
+      const subscriberId = String(subscriber.id);
       const content = useLaunchHero && renderLaunchHero
-        ? await renderLaunchHero({ subscriberId: subscriber.id, unsubscribeUrl })
+        ? await renderLaunchHero({ subscriberId, unsubscribeUrl })
         : await getCampaignEmailContent(emailNumber, {
             unsubscribeUrl,
             variant,
             filings: filings || undefined,
-            subscriberId: subscriber.id,
+            subscriberId,
             emailId: emailTag,
           });
 
@@ -370,7 +377,7 @@ export async function POST(request: NextRequest) {
           { name: 'campaignId', value: CAMPAIGN_ID },
           { name: 'cohortId', value: cohortSlot },
           { name: 'emailId', value: emailTag },
-          { name: 'subscriberId', value: subscriber.id },
+          { name: 'subscriberId', value: subscriberId },
           { name: 'variant', value: variant || 'none' },
           // Region tag only emitted in region mode — keeps cohort-mode at the
           // locked 6-tag PostHog schema (see campaign-resend-tags.test.ts).
