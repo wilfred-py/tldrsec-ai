@@ -201,7 +201,7 @@ describe('Form 4 Transfer Detection', () => {
       const result = extractForm4Data(summaryText);
 
       expect(result.transactions.length).toBeGreaterThan(0);
-      expect(result.transactions[0].type).toBe('Award');
+      expect(result.transactions[0].type).toBe('Award/Grant');
       expect(result.transactions[0].type).not.toContain('Transfer');
     });
   });

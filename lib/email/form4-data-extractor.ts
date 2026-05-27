@@ -26,32 +26,9 @@
  * of economic value. This distinction is important for investment signal analysis.
  */
 
-/**
- * SEC Form 4 transaction codes and their human-readable types
- * @see https://www.sec.gov/about/forms/form4data.pdf
- */
-export const TRANSACTION_CODE_MAP: Record<string, string> = {
-  'S': 'Sale',
-  'P': 'Purchase',
-  'V': 'Voluntarily Reported',
-  'A': 'Award',
-  'D': 'Disposition',
-  'F': 'Tax Withholding',
-  'I': 'Discretionary',
-  'M': 'Exercise',
-  'C': 'Conversion',
-  'E': 'Expiration',
-  'H': 'Expiration',
-  'O': 'Exercise',
-  'X': 'Exercise',
-  'G': 'Gift',
-  'L': 'Small Acquisition',
-  'W': 'Will/Descent',
-  'Z': 'Voting Trust',
-  'J': 'Trust Transfer',
-  'K': 'Equity Swap',
-  'U': 'Tender',
-} as const;
+// SEC Form 4 transaction-code → type map: the canonical single source of truth,
+// shared with form4-field-normalizer so the markdown and AI-JSON paths can't drift.
+import { TRANSACTION_CODE_MAP } from './form4-transaction-codes';
 
 /**
  * Transaction types that represent trust/family transfers
