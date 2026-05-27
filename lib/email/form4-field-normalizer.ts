@@ -75,14 +75,6 @@ export interface NormalizedForm4Data {
   newStakeSource?: 'authoritative' | 'derived-common-direct' | 'derived-fallback' | 'llm-legacy' | 'narrative' | 'none';
 }
 
-/**
- * SEC transaction code → human-readable type mapping
- * This is the canonical map used by both parser and template.
- *
- * NOTE: Must stay in sync with TRANSACTION_CODE_MAP in form4-data-extractor.ts
- * which has additional codes (V, I, E, H, O, L, Z, U) for edge cases.
- */
-
 // Bump when changing field mappings or normalizer behavior.
 // Used by response-parser (stamp) and summarize-cached-handler (detect stale data).
 export const CURRENT_FORM4_SCHEMA_VERSION = 3;
