@@ -30,7 +30,7 @@ jest.mock('resend', () => {
 // Mock email-link-tokens so tests don't depend on CRON_SECRET
 jest.mock('../email-link-tokens', () => ({
   generateUnsubscribeUrl: jest.fn((email: string) =>
-    `https://tldrsec.app/unsubscribe?token=test-token-for-${encodeURIComponent(email)}`
+    `https://tldrsec.app/api/unsubscribe?token=test-token-for-${encodeURIComponent(email)}`
   ),
 }));
 
@@ -234,7 +234,7 @@ describe('ResendClient', () => {
       const params = mockSend.mock.calls[0][0];
       expect(params.headers).toBeDefined();
       expect(params.headers['List-Unsubscribe']).toBe(
-        '<https://tldrsec.app/unsubscribe?token=test-token-for-user%40example.com>'
+        '<https://tldrsec.app/api/unsubscribe?token=test-token-for-user%40example.com>'
       );
       expect(params.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
     });

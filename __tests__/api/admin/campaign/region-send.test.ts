@@ -39,7 +39,7 @@ jest.mock('@clerk/nextjs/server', () => ({
 }));
 
 jest.mock('@/lib/email/email-link-tokens', () => ({
-  generateUnsubscribeUrl: (email: string) => `https://tldrsec.app/unsubscribe?token=stub-${email}`,
+  generateUnsubscribeUrl: (email: string) => `https://tldrsec.app/api/unsubscribe?token=stub-${email}`,
 }));
 
 interface MockSubscriber {

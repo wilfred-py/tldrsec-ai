@@ -41,6 +41,7 @@ export const EVENTS = {
   EMAIL_CLICKED: 'email_clicked',
   EMAIL_BOUNCED: 'email_bounced',
   EMAIL_COMPLAINED: 'email_complained',
+  UNSUBSCRIBE_COMPLETED: 'unsubscribe_completed',
 
   // Operational telemetry — single carrier event for monitoring metrics that
   // need PostHog dashboards (see lib/monitoring/index.ts allowlist + bridge).
@@ -167,6 +168,12 @@ export type EventProps = {
   [EVENTS.EMAIL_COMPLAINED]: {
     email_id: string;
     recipient: string;
+  };
+  [EVENTS.UNSUBSCRIBE_COMPLETED]: {
+    /** 'auto' = page auto-fired action on mount, 'manual' = user clicked confirm button. */
+    method: 'auto' | 'manual';
+    /** 'success' = newly unsubscribed, 'already_unsubscribed' = idempotent re-hit. */
+    outcome: 'success' | 'already_unsubscribed';
   };
   [EVENTS.MONITORING_METRIC]: {
     /** The metric name as emitted by lib/monitoring (e.g., "ai.x_sentiment_added"). */

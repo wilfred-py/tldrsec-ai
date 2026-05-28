@@ -4,7 +4,6 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-// Shared headers for 410 responses: tell crawlers not to cache, and indicate HTML body.
 const GONE_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
   'Cache-Control': 'no-store',
@@ -15,29 +14,16 @@ function goneResponse(message: string): NextResponse {
   return new NextResponse(body, { status: 410, headers: GONE_HEADERS });
 }
 
-/**
- * GET /api/unsubscribe?token=...
- *
- * Validates an HMAC-signed unsubscribe token from an email link,
- * sets the unsubscribed flag in Supabase, and redirects to
- * a confirmation page. CAN-SPAM/GDPR compliant one-click unsubscribe.
- */
-export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  const token = searchParams.get('token');
-  const baseUrl = request.nextUrl.origin;
+type UnsubResult =
+  | { kind: 'gone'; message: string }
+  | { kind: 'error' }
+  | { kind: 'ok' };
 
-  if (!token) {
-    // 410 Gone (not 302 to a noindex page) so Google drops stale bot hits
-    // from the index immediately instead of seeing a redirect-to-noindex chain.
-    return goneResponse('Invalid unsubscribe link.');
-  }
+async function processUnsubscribe(token: string | null): Promise<UnsubResult> {
+  if (!token) return { kind: 'gone', message: 'Invalid unsubscribe link.' };
 
-  // Validate and decode the HMAC token
   const payload = validateUnsubscribeToken(token);
-  if (!payload) {
-    return goneResponse('Unsubscribe link expired.');
-  }
+  if (!payload) return { kind: 'gone', message: 'Unsubscribe link expired.' };
 
   const { email } = payload;
 
@@ -47,26 +33,77 @@ export async function GET(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || ''
     );
 
-    // Set unsubscribed flag (idempotent: already unsubscribed = no-op success)
+    // Idempotent: re-setting the timestamp on an already-unsubscribed row is a
+    // no-op from the recipient's perspective. The column is `unsubscribed_at`
+    // (timestamp), not a `unsubscribed` boolean — writing to a non-existent
+    // column was the original silent-fail bug.
     const { error } = await supabase
       .from('newsletter_subscribers')
-      .update({ unsubscribed: true })
+      .update({ unsubscribed_at: new Date().toISOString() })
       .eq('email', email.toLowerCase().trim());
 
     if (error) {
       console.error('Failed to update unsubscribe status in Supabase:', error);
+      return { kind: 'error' };
+    }
+
+    return { kind: 'ok' };
+  } catch (error) {
+    console.error('Unsubscribe endpoint error:', error);
+    return { kind: 'error' };
+  }
+}
+
+/**
+ * GET /api/unsubscribe?token=...
+ *
+ * Browser entry point — recipient clicked the unsubscribe link in the email
+ * body. Validates the HMAC token, sets `unsubscribed_at`, redirects to the
+ * confirmation page.
+ */
+export async function GET(request: NextRequest) {
+  const token = request.nextUrl.searchParams.get('token');
+  const result = await processUnsubscribe(token);
+  const baseUrl = request.nextUrl.origin;
+
+  switch (result.kind) {
+    case 'gone':
+      return goneResponse(result.message);
+    case 'error':
       return new NextResponse('Unable to process unsubscribe. Please try again later.', {
         status: 500,
       });
-    }
+    case 'ok':
+      return NextResponse.redirect(
+        new URL('/unsubscribe/confirmed?status=success', baseUrl)
+      );
+  }
+}
 
-    return NextResponse.redirect(
-      new URL('/unsubscribe/confirmed?status=success', baseUrl)
-    );
-  } catch (error) {
-    console.error('Unsubscribe endpoint error:', error);
-    return new NextResponse('Unable to process unsubscribe. Please try again later.', {
-      status: 500,
-    });
+/**
+ * POST /api/unsubscribe?token=...
+ *
+ * RFC 8058 one-click handler. Mail clients (Gmail, Yahoo) POST here when the
+ * recipient clicks the native unsubscribe button in the message header — the
+ * one paired with `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. Spec
+ * requires a 2xx response with no redirect: the mail client never renders a
+ * page, it just shows a confirmation toast in the inbox UI.
+ */
+export async function POST(request: NextRequest) {
+  const token = request.nextUrl.searchParams.get('token');
+  const result = await processUnsubscribe(token);
+
+  switch (result.kind) {
+    case 'gone':
+      // Same 410 the GET path returns — body is irrelevant to one-click clients
+      // but kept for parity with direct curl/debug use.
+      return goneResponse(result.message);
+    case 'error':
+      return new NextResponse('Unable to process unsubscribe. Please try again later.', {
+        status: 500,
+      });
+    case 'ok':
+      // 200 with no body. RFC 8058: do NOT redirect — the mail client won't follow.
+      return new NextResponse(null, { status: 200 });
   }
 }

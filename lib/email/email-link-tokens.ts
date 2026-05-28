@@ -179,9 +179,15 @@ export function validateUnsubscribeToken(token: string): { email: string } | nul
 
 /**
  * Build the full unsubscribe URL for embedding in emails.
+ *
+ * Points at the `/api/unsubscribe` route, not the `/unsubscribe` page. Gmail
+ * and Yahoo POST to this URL for RFC 8058 one-click unsubscribe — the API
+ * route exports a POST handler that performs the update with no redirect, as
+ * the spec requires. The same URL also works for GET (browser click in the
+ * email body) and redirects to /unsubscribe/confirmed.
  */
 export function generateUnsubscribeUrl(email: string): string {
   const token = generateUnsubscribeToken(email);
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app';
-  return `${baseUrl}/unsubscribe?token=${token}`;
+  return `${baseUrl}/api/unsubscribe?token=${token}`;
 }
