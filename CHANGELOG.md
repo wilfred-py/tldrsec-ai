@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.0.39.0] - 2026-05-28
 
 ### Fixed
 - `app/api/unsubscribe/route.ts`: previously wrote `{ unsubscribed: true }` to a
