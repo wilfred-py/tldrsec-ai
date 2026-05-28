@@ -4,6 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
+// Shared headers for 410 responses: tell crawlers not to cache, and indicate
+// HTML body. 410 (not a redirect) so Google drops stale bot hits from the
+// index immediately instead of seeing a redirect-to-noindex chain.
 const GONE_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
   'Cache-Control': 'no-store',

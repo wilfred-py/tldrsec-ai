@@ -170,8 +170,13 @@ export type EventProps = {
     recipient: string;
   };
   [EVENTS.UNSUBSCRIBE_COMPLETED]: {
-    /** 'auto' = page auto-fired action on mount, 'manual' = user clicked confirm button. */
-    method: 'auto' | 'manual';
+    /**
+     * How the unsubscribe was triggered. Only 'auto' is emitted today — the
+     * page auto-fires the action on mount. Kept as a union so a future
+     * confirm-step variant (or a separate one-click POST instrumentation) can
+     * be added without renaming the event.
+     */
+    method: 'auto';
     /** 'success' = newly unsubscribed, 'already_unsubscribed' = idempotent re-hit. */
     outcome: 'success' | 'already_unsubscribed';
   };
