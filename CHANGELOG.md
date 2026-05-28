@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.39.0] - 2026-05-28
+
+### Fixed
+- `app/api/unsubscribe/route.ts`: previously wrote `{ unsubscribed: true }` to a
+  column that does not exist on `newsletter_subscribers` (real column is
+  `unsubscribed_at` timestamptz). Any request to this endpoint hit a silent
+  PostgREST error and was never marked unsubscribed. Investigation of the
+  launch-2026-05 send found 9 real Chrome users landed on `/unsubscribe` on
+  launch day with zero rows updated in the DB.
+- `lib/email/email-link-tokens.ts`: `generateUnsubscribeUrl` now points at
+  `/api/unsubscribe` instead of `/unsubscribe`. The page route had no POST
+  handler, so Gmail/Yahoo RFC 8058 one-click POSTs (paired with the
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click` header on every send)
+  returned 405 Method Not Allowed. Native inbox unsubscribe was non-functional
+  for all 124 launch recipients.
+- `app/unsubscribe/page.tsx`: removed the second "Confirm Unsubscribe" click.
+  The page now auto-executes the unsubscribe action on mount, matching the
+  industry-standard single-click expectation. Pre-fix: 9 page views, 0
+  completions (100% abandonment at the confirm step).
+- `app/unsubscribe/actions.ts`: server action now lowercases + trims the
+  email decoded from the token before lookup, matching the normalization
+  `/api/unsubscribe` applies and what the waitlist insert stores.
+
+### Added
+- `app/api/unsubscribe/route.ts`: `POST` handler for RFC 8058 one-click.
+  Returns 200 with no body (no redirect — mail clients won't follow).
+- `EVENTS.UNSUBSCRIBE_COMPLETED`: PostHog event fired from the page on
+  successful unsubscribe so the funnel (page view → action success → DB
+  write) becomes observable going forward.
+- `__tests__/api/unsubscribe.test.ts`: GET + POST coverage, regression guard
+  asserting the route writes `unsubscribed_at` (not `unsubscribed`), and
+  email casing normalization.
+
 ## [0.0.38.0] - 2026-05-26
 
 Wires the cron trigger + dedup infrastructure for the Wed 27 May 2026 VRT

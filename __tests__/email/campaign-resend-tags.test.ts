@@ -121,7 +121,7 @@ jest.mock('@/lib/supabase/server-client', () => ({
 
 // generateUnsubscribeUrl — pure function, but pin the output for stability.
 jest.mock('@/lib/email/email-link-tokens', () => ({
-  generateUnsubscribeUrl: (email: string) => `https://tldrsec.app/unsubscribe?token=stub-${email}`,
+  generateUnsubscribeUrl: (email: string) => `https://tldrsec.app/api/unsubscribe?token=stub-${email}`,
 }));
 
 import { NextRequest } from 'next/server';
@@ -221,7 +221,7 @@ describe('Campaign Resend tag schema (AC6 + funnel-tracking Review Notes)', () =
     await POST(makePost({ cohort: 1, emailNumber: 1 }));
     const [batch] = batchSendMock.mock.calls[0];
     for (const message of batch as Array<{ headers: Record<string, string> }>) {
-      expect(message.headers['List-Unsubscribe']).toMatch(/^<https:\/\/tldrsec\.app\/unsubscribe\?token=/);
+      expect(message.headers['List-Unsubscribe']).toMatch(/^<https:\/\/tldrsec\.app\/api\/unsubscribe\?token=/);
       expect(message.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
     }
   });

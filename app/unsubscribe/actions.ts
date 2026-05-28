@@ -25,7 +25,11 @@ export async function unsubscribeAction(token: string): Promise<UnsubscribeResul
     return { status: 'invalid_token' };
   }
 
-  const { email } = validated;
+  // Match the normalization /api/unsubscribe applies. Subscriber rows are
+  // stored lowercased at signup (see app/api/waitlist route); the action used
+  // to query the raw decoded email, which would miss rows for any token minted
+  // before the lowercase-on-insert was added.
+  const email = validated.email.toLowerCase().trim();
   const masked = maskEmail(email);
 
   try {
