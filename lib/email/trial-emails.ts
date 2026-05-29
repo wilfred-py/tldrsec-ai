@@ -1,4 +1,4 @@
-import { sendEmail } from './email-core';
+import { sendEmail } from './index';
 import { EmailMessage } from './types';
 import { logger } from '../logging';
 
