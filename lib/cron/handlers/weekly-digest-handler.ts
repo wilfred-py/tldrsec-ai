@@ -14,7 +14,7 @@ import { logger } from '../../logging';
 import { getPrismaClient } from '../../db/prisma';
 import { OpenRouterClient } from '../../ai/openrouter-client';
 import { getDefaultModel } from '../../ai/config';
-import { sendEmail } from '../../email/email-core';
+import { sendEmail } from '../../email';
 import { resendConfig } from '../../email/config';
 import { generateFeedbackToken } from '../../email/email-link-tokens';
 import { escapeHtml } from '../../email/security-helpers';
