@@ -32,7 +32,6 @@ import { ApiError, ErrorCode } from '../error-handling';
 import { prisma, getPrismaClient } from '../db/prisma';
 import { getSchemaForFormType, JSONSchema } from './prompts/unified-prompts';
 import { validateTickerGroundingInPlace } from './parsers/ticker-grounding';
-import { coerceWhyItMatters } from './parsers/why-it-matters';
 import { validateNumericGrounding } from './parsers/numeric-grounding';
 import {
   hasFinancialStatementSignal,
@@ -96,6 +95,146 @@ function validateRequiredFields(
     valid: missingFields.length === 0,
     missingFields
   };
+}
+
+// ---------------------------------------------------------------------------
+// whyItMatters coercion (W1.3 restatement guard)
+//
+// Two-state contract: either a valid non-empty trimmed string (>= 40 chars
+// per Zod, adds context beyond headline/summary), OR the field is absent
+// from the parsed JSON. Templates rely on this binary via one `'whyItMatters'
+// in data` check.
+//
+// Rejection rules:
+// 1. Any 10+ consecutive-word window from whyItMatters appears verbatim
+//    (case-insensitive) in summary or headline.
+// 2. >=60% of the headline's distinct content words (minus stopwords,
+//    ticker, filing-type words) also appear in whyItMatters.
+//
+// Inlined here because the only caller is the summarization pipeline below
+// and the prior extraction-for-testability split (in
+// `lib/ai/parsers/why-it-matters.ts`) produced no leverage — same shape as
+// ADR-0002 (analysis-depth inlining).
+// ---------------------------------------------------------------------------
+
+const WHY_IT_MATTERS_CONSECUTIVE_WINDOW = 10;
+const WHY_IT_MATTERS_HEADLINE_OVERLAP_THRESHOLD = 0.6;
+/** Minimum useful length. Below this, the field is too short to add context. */
+const WHY_IT_MATTERS_MIN_LENGTH = 40;
+
+const WHY_IT_MATTERS_STOPWORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'of', 'in', 'on', 'at', 'to', 'for',
+  'with', 'by', 'from', 'as', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'has', 'have', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
+  'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'it', 'its',
+  'their', 'his', 'her', 'our', 'not', 'no', 'than', 'then', 'so', 'if',
+  'about', 'into', 'over', 'under', 'after', 'before', 'more', 'most', 'some',
+  'any', 'all', 'each', 'new', 'per', 'up', 'down', 'out', 'off', 'via',
+]);
+
+const WHY_IT_MATTERS_FILING_TYPE_WORDS = new Set([
+  'form', 'filing', 'report', 'statement', 'prospectus', 'schedule',
+  '10-k', '10-q', '8-k', '424b2', '424b', 's-1', 's-3', 'sc', 'def', '14a',
+  '13g', '13d', 'defa14a', 'fwp', '11-k', '20-f', '6-k',
+]);
+
+function whyItMattersTokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function whyItMattersContentWords(text: string, ticker?: string): Set<string> {
+  const tickerLower = ticker?.toLowerCase();
+  const out = new Set<string>();
+  for (const tok of whyItMattersTokenize(text)) {
+    if (tok.length < 2) continue;
+    if (WHY_IT_MATTERS_STOPWORDS.has(tok)) continue;
+    if (WHY_IT_MATTERS_FILING_TYPE_WORDS.has(tok)) continue;
+    if (tickerLower && tok === tickerLower) continue;
+    out.add(tok);
+  }
+  return out;
+}
+
+function whyItMattersHasConsecutiveOverlap(needle: string, haystack: string, windowSize: number): boolean {
+  const needleTokens = whyItMattersTokenize(needle);
+  if (needleTokens.length < windowSize) return false;
+
+  const haystackText = whyItMattersTokenize(haystack).join(' ');
+  if (!haystackText) return false;
+
+  for (let i = 0; i <= needleTokens.length - windowSize; i++) {
+    const window = needleTokens.slice(i, i + windowSize).join(' ');
+    if (haystackText.includes(window)) return true;
+  }
+  return false;
+}
+
+function whyItMattersHeadlineOverlapRatio(whyItMatters: string, headline: string, ticker?: string): number {
+  const headlineWords = whyItMattersContentWords(headline, ticker);
+  if (headlineWords.size === 0) return 0;
+
+  const whyWords = whyItMattersContentWords(whyItMatters, ticker);
+  let shared = 0;
+  for (const w of headlineWords) {
+    if (whyWords.has(w)) shared++;
+  }
+  return shared / headlineWords.size;
+}
+
+function isWhyItMattersRestatement(
+  whyItMatters: string,
+  summary: string | undefined,
+  headline: string | undefined,
+  ticker: string | undefined,
+): boolean {
+  const trimmed = whyItMatters.trim();
+  if (!trimmed) return false;
+
+  if (summary && whyItMattersHasConsecutiveOverlap(trimmed, summary, WHY_IT_MATTERS_CONSECUTIVE_WINDOW)) {
+    return true;
+  }
+  if (headline && whyItMattersHasConsecutiveOverlap(trimmed, headline, WHY_IT_MATTERS_CONSECUTIVE_WINDOW)) {
+    return true;
+  }
+
+  if (headline) {
+    const ratio = whyItMattersHeadlineOverlapRatio(trimmed, headline, ticker);
+    if (ratio >= WHY_IT_MATTERS_HEADLINE_OVERLAP_THRESHOLD) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Mutates `data` in place, deleting `whyItMatters` if missing / not a
+ * string / empty / below the MIN_LENGTH floor / fails the restatement guard.
+ * Otherwise trims the string and leaves it in place.
+ */
+function coerceWhyItMatters(data: Record<string, unknown>, ticker?: string): void {
+  const raw = data.whyItMatters;
+  if (typeof raw !== 'string') {
+    delete data.whyItMatters;
+    return;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length < WHY_IT_MATTERS_MIN_LENGTH) {
+    delete data.whyItMatters;
+    return;
+  }
+
+  const summary = typeof data.summary === 'string' ? data.summary : undefined;
+  const headline = typeof data.headline === 'string' ? data.headline : undefined;
+
+  if (isWhyItMattersRestatement(trimmed, summary, headline, ticker)) {
+    delete data.whyItMatters;
+    return;
+  }
+
+  data.whyItMatters = trimmed;
 }
 
 /**
