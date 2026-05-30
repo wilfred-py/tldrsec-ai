@@ -10,7 +10,6 @@
 
 import { ParserMetrics } from './types';
 import { parseJSONResponse, ParseResult as SimpleParseResult } from './simple-parser';
-import { normalizeDate, normalizeCurrency, normalizePercentage } from './normalizers';
 import { SECFilingType } from '../prompts/prompt-types';
 import { secLogger as logger } from '../../../utils/logger';
 import { canonicalizeFormType } from '../utils/form-type-utils';
@@ -25,6 +24,128 @@ import {
   NormalizedTransaction,
 } from '../../email/form4-field-normalizer';
 import { deriveNewStake } from '../utils/derive-stake';
+
+// ── Field normalizers (formerly lib/ai/parsers/normalizers.ts) ──────────────
+// Inlined here because the only caller is normalizeFields below — the prior
+// extraction was extraction-for-testability, with no leverage outside this
+// module. Same shape as ADR-0002.
+
+function getMonthIndex(month: string): number {
+  const months = [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+  ];
+  const shortMonths = [
+    'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+    'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+  ];
+  const normalizedMonth = month.toLowerCase();
+  const fullIndex = months.findIndex((m) => m.startsWith(normalizedMonth));
+  if (fullIndex !== -1) return fullIndex;
+  const shortIndex = shortMonths.findIndex((m) => m === normalizedMonth);
+  if (shortIndex !== -1) return shortIndex;
+  return 0;
+}
+
+function normalizeDate(dateStr: string): string {
+  try {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+
+    const longMonthMatch = dateStr.match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+    if (longMonthMatch) {
+      const [, month, day, year] = longMonthMatch;
+      const monthIndex = getMonthIndex(month);
+      return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')}`;
+    }
+
+    const slashMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (slashMatch) {
+      const [, month, day, year] = slashMatch;
+      return `${year}-${String(parseInt(month, 10)).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')}`;
+    }
+
+    const dashMatch = dateStr.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
+    if (dashMatch) {
+      const [, month, day, year] = dashMatch;
+      return `${year}-${String(parseInt(month, 10)).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')}`;
+    }
+
+    const shortMonthMatch = dateStr.match(/(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
+    if (shortMonthMatch) {
+      const [, day, month, year] = shortMonthMatch;
+      const monthIndex = getMonthIndex(month);
+      return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')}`;
+    }
+
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
+
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+}
+
+function normalizeCurrency(valueStr: string | number): string {
+  try {
+    if (typeof valueStr === 'number') {
+      return `$${valueStr.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+    }
+
+    const str = valueStr.trim();
+    if (/^\$[\d,]+\.\d{2}$/.test(str)) return str;
+
+    let numericStr = str.replace(/[^\d.-]/g, '');
+    const decimalPoints = numericStr.match(/\./g);
+    if (decimalPoints && decimalPoints.length > 1) {
+      numericStr = numericStr.replace(/\./g, (match, index) =>
+        index === numericStr.lastIndexOf('.') ? '.' : ''
+      );
+    }
+
+    const value = parseFloat(numericStr);
+    return `$${value.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  } catch {
+    return typeof valueStr === 'string'
+      ? valueStr.includes('$') ? valueStr : `$${valueStr}`
+      : `$${valueStr}`;
+  }
+}
+
+function normalizePercentage(valueStr: string | number): string {
+  try {
+    if (typeof valueStr === 'number') {
+      const isDecimal = valueStr > -1 && valueStr < 1;
+      const percentage = isDecimal ? valueStr * 100 : valueStr;
+      return `${percentage.toFixed(2)}%`;
+    }
+
+    const str = valueStr.trim();
+    if (/^-?\d+(\.\d+)?%$/.test(str)) {
+      const match = str.match(/^(-?\d+(\.\d+)?)%$/);
+      if (match) return `${parseFloat(match[1]).toFixed(2)}%`;
+      return str;
+    }
+
+    const numericStr = str.replace(/[^\d.-]/g, '');
+    const value = parseFloat(numericStr);
+    const isPercentage = str.includes('%');
+    const isBasisPoints = !isPercentage && value > 100;
+
+    if (isBasisPoints) return `${(value / 100).toFixed(2)}%`;
+    return `${value.toFixed(2)}%`;
+  } catch {
+    return typeof valueStr === 'string'
+      ? valueStr.includes('%') ? valueStr : `${valueStr}%`
+      : `${valueStr}%`;
+  }
+}
 
 /**
  * Transaction code to human-readable type mapping
