@@ -31,7 +31,6 @@ import { monitoring } from '../monitoring';
 import { ApiError, ErrorCode } from '../error-handling';
 import { prisma, getPrismaClient } from '../db/prisma';
 import { getSchemaForFormType, JSONSchema } from './prompts/unified-prompts';
-import { validateTickerGroundingInPlace } from './parsers/ticker-grounding';
 import { validateNumericGrounding } from './parsers/numeric-grounding';
 import {
   hasFinancialStatementSignal,
@@ -235,6 +234,151 @@ function coerceWhyItMatters(data: Record<string, unknown>, ticker?: string): voi
   }
 
   data.whyItMatters = trimmed;
+}
+
+// =============================================================================
+// Ticker Grounding Guard
+// =============================================================================
+// Detect when an AI-emitted prose field mentions a ticker symbol or company
+// name that doesn't match the Filing's actual ticker. Triggered by a real
+// failure: a fresh JPM S-3 summary's whyItMatters read "This $5B shelf
+// provides TSLA flexible, low-cost capital..." — the model swapped JPMorgan
+// for Tesla mid-sentence. Shipping the wrong ticker is worse than shipping
+// no analysis. False positives are tolerated; false negatives are not — any
+// suspicious mismatch redacts the field.
+//
+// Implemented as private functions inside the Summarize module rather than a
+// separate seam: there is only one production caller (the post-parse path
+// below), and the prior extraction-for-testability split (formerly
+// `lib/ai/parsers/ticker-grounding.ts`) offered no leverage. Same shape as
+// the Why It Matters Guard above and ADR-0002.
+
+/**
+ * Common UPPERCASE 2-5-letter tokens that look like tickers but are almost
+ * always something else (financial acronyms, units, geographic codes).
+ * Conservative list — we'd rather flag a false positive than let a real
+ * foreign ticker through.
+ */
+const TICKER_GROUNDING_ACRONYM_ALLOWLIST = new Set<string>([
+  // Officer / governance
+  'CEO', 'CFO', 'COO', 'CTO', 'CIO', 'CMO', 'CSO', 'CHRO',
+  // Financial metrics
+  'EPS', 'EBT', 'EBITDA', 'GAAP', 'IFRS', 'NOPAT', 'NOPLAT', 'FCF', 'CAPEX', 'OPEX', 'COGS', 'SGA', 'R&D', 'PE',
+  // Currencies / units
+  'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'HKD', 'INR', 'KRW', 'MXN', 'BPS', 'PPT',
+  // Markets / structures
+  'IPO', 'ETF', 'REIT', 'SPAC', 'OTC', 'NYSE', 'NASDAQ', 'AMEX', 'TSX', 'LSE',
+  // Tech / business jargon
+  'API', 'KPI', 'ROI', 'ROE', 'ROA', 'ROIC', 'WACC', 'TAM', 'SAM', 'SOM', 'ARR', 'MRR', 'LTV', 'CAC',
+  'AI', 'ML', 'IT', 'HR', 'PR', 'OEM', 'EV', 'IP', 'OS',
+  'SAAS', 'PAAS', 'IAAS', 'B2B', 'B2C', 'D2C', 'P2P',
+  // Geo
+  'USA', 'US', 'UK', 'EU', 'EMEA', 'APAC', 'LATAM', 'NA', 'CA', 'NY', 'CN', 'JP', 'IN', 'DE', 'FR',
+  // Regulators / agencies
+  'SEC', 'FDA', 'FTC', 'FCC', 'DOJ', 'IRS', 'FBI', 'CFPB', 'CFTC', 'OCC', 'OSHA', 'HHS', 'EPA', 'NSA', 'CIA', 'GAO',
+  // Filing types / corp structure
+  'INC', 'LLC', 'LLP', 'LP', 'CORP', 'CO', 'LTD', 'PLC', 'NV', 'AG', 'SA',
+  'ESG', 'DEI', 'IPO', 'GDP', 'CPI', 'PCE', 'PMI',
+  // Misc
+  'TBD', 'TBA', 'NA', 'NM', 'TBC', 'YTD', 'MTD', 'QTD', 'YOY', 'YOY', 'QOQ', 'MOM', 'WOW',
+  'ATM', 'OTM', 'ITM', 'BPS', 'CDS', 'CDO', 'MBS', 'ABS',
+  // Equity-research shorthand
+  'PT', 'TP', 'EV', 'P', 'C', 'BUY', 'HOLD', 'SELL', 'OW', 'UW', 'EW', 'NEW', 'OLD',
+  // Filing-specific terms
+  'YTD', 'MOIC', 'IRR', 'TWR', 'NAV', 'AUM',
+]);
+
+/**
+ * Company-name aliases for the most-hallucinated tickers. Catches names like
+ * "Tesla" appearing in a JPM filing where the bare-word ticker scan would
+ * miss (Tesla isn't a 2-5 char uppercase token). Tight list — comprehensive
+ * S&P 500 coverage is out of scope.
+ */
+const TICKER_GROUNDING_FOREIGN_COMPANY_NAMES: Array<{ pattern: RegExp; ticker: string }> = [
+  { pattern: /\btesla\b/i, ticker: 'TSLA' },
+  { pattern: /\bapple\b/i, ticker: 'AAPL' },
+  { pattern: /\bmicrosoft\b/i, ticker: 'MSFT' },
+  { pattern: /\b(google|alphabet)\b/i, ticker: 'GOOGL' },
+  { pattern: /\bamazon\b/i, ticker: 'AMZN' },
+  { pattern: /\b(meta|facebook)\b/i, ticker: 'META' },
+  { pattern: /\bnvidia\b/i, ticker: 'NVDA' },
+  { pattern: /\bberkshire(?:\s+hathaway)?\b/i, ticker: 'BRK' },
+  { pattern: /\b(jpmorgan|jp\s*morgan)\b/i, ticker: 'JPM' },
+  { pattern: /\b(coca[\s\-]?cola)\b/i, ticker: 'KO' },
+  { pattern: /\bdisney\b/i, ticker: 'DIS' },
+  { pattern: /\bnetflix\b/i, ticker: 'NFLX' },
+  { pattern: /\bintel\b/i, ticker: 'INTC' },
+  { pattern: /\boracle\b/i, ticker: 'ORCL' },
+  { pattern: /\bpalantir\b/i, ticker: 'PLTR' },
+  { pattern: /\bstripe\b/i, ticker: 'STRP' },
+];
+
+function findForeignTickers(text: string, expected: string): string[] {
+  if (!text || !expected) return [];
+  const expectedUpper = expected.toUpperCase().replace(/[.\-]/g, '');
+  const found = new Set<string>();
+
+  const dollarPattern = /\$([A-Z]{1,5})(?:[.\-][A-Z])?\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = dollarPattern.exec(text)) !== null) {
+    const tok = m[1].toUpperCase();
+    if (tok !== expectedUpper && tok !== expectedUpper.slice(0, m[1].length)) {
+      found.add(tok);
+    }
+  }
+
+  const bareWordPattern = /\b([A-Z]{2,5})\b/g;
+  while ((m = bareWordPattern.exec(text)) !== null) {
+    const tok = m[1];
+    if (tok === expectedUpper) continue;
+    if (TICKER_GROUNDING_ACRONYM_ALLOWLIST.has(tok)) continue;
+    found.add(tok);
+  }
+
+  for (const { pattern, ticker } of TICKER_GROUNDING_FOREIGN_COMPANY_NAMES) {
+    if (ticker === expectedUpper) continue;
+    if (ticker === expectedUpper.slice(0, ticker.length)) continue;
+    if (pattern.test(text)) {
+      found.add(ticker);
+    }
+  }
+
+  return Array.from(found);
+}
+
+function validateTickerGrounding(
+  raw: unknown,
+  expected: string,
+): { value: string; rejected: boolean; foreignTickers?: string[] } {
+  if (raw === null || raw === undefined) return { value: '', rejected: false };
+  if (typeof raw !== 'string') return { value: '', rejected: false };
+  if (!raw.trim()) return { value: raw, rejected: false };
+  const foreign = findForeignTickers(raw, expected);
+  if (foreign.length === 0) return { value: raw, rejected: false };
+  return { value: '', rejected: true, foreignTickers: foreign };
+}
+
+const TICKER_GROUNDING_PROSE_FIELDS = ['whyItMatters', 'headline', 'summary', 'emailSubject'] as const;
+
+interface TickerGroundingViolation {
+  field: string;
+  foreignTickers: string[];
+}
+
+function validateTickerGroundingInPlace(
+  data: Record<string, unknown>,
+  expectedTicker: string | undefined | null,
+): TickerGroundingViolation[] {
+  if (!expectedTicker || expectedTicker === 'UNKNOWN') return [];
+  const violations: TickerGroundingViolation[] = [];
+  for (const field of TICKER_GROUNDING_PROSE_FIELDS) {
+    const result = validateTickerGrounding(data[field], expectedTicker);
+    if (result.rejected) {
+      violations.push({ field, foreignTickers: result.foreignTickers || [] });
+      delete data[field];
+    }
+  }
+  return violations;
 }
 
 /**
