@@ -9,10 +9,6 @@
     "app/api/cron/route.ts": {
       "maxDuration": 300,
       "memory": 1024
-    },
-    "app/api/filings/route.ts": {
-      "maxDuration": 300,
-      "memory": 2048
     }
   },
   "headers": [
