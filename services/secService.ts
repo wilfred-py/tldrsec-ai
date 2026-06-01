@@ -8,7 +8,6 @@
  */
 
 // Import from filings modules
-import { getFilingSummary as getGenericFilingSummary } from './filings/summaries';
 import { getForm144Summary, getLatestFilingByFormType as getLatestFilingByFormTypeInternal } from './filings/summaries/form144Summary';
 import { generateFallbackSummary } from './filings/summaries/fallbackSummary';
 import { getFilingDetails } from './filings/filingDetails';
@@ -81,8 +80,7 @@ export async function getLatestFilingByFormType(ticker: string, formType: string
 export {
   // Filing summaries
   getForm144Summary,
-  getGenericFilingSummary as getFilingSummary,
-  
+
   // Filing details
   getFilingDetails,
   
@@ -122,8 +120,8 @@ export {
  * 
  * 3. Filing Summaries:
  *    - services/filings/summaries/form144Summary.ts
- *    - services/filings/summaries/genericSummary.ts
- * 
+ *    - services/filings/summaries/filingSummaryService.ts
+ *
  * 4. Filing Details:
  *    - services/filings/filingDetails.ts
  * 
