@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.40.0] - 2026-06-01
+
+### Added
+- `lib/analytics/events.ts`: six new events that close the visibility gap
+  between `$pageview` on `/sign-up` and `$identify` after Clerk completes.
+  Today the funnel goes dark inside the Clerk widget — no telemetry until
+  the user successfully signs in. New events:
+  - `signup_page_arrived` (server-side, fires before any client JS — catches
+    visitors even when the browser SDK is blocked or never loads)
+  - `signup_widget_rendered` (Clerk form DOM observed)
+  - `signup_email_entered` (first keystroke in email field)
+  - `signup_password_entered` (first keystroke in password field)
+  - `signup_submitted` (form submit; carries whether email/password were
+    entered to split bot-style submit-without-typing from real form fills)
+  - `signup_failed` (Clerk error text rendered; de-duped on the same error
+    text to avoid spamming on retry keystrokes)
+- `app/(auth)/sign-up/[[...sign-up]]/page.tsx`: server component that fires
+  `signup_page_arrived` on root `/sign-up` arrivals only (skips
+  `verify-email` and `sso-callback` continuation sub-routes so the funnel
+  top isn't inflated). Captures `sub`, `utm_*`, `plan`, `ref`, `referer`,
+  `user_agent`. Uses `next/server`'s `after()` to flush PostHog after the
+  HTML has streamed.
+- `app/(auth)/sign-up/[[...sign-up]]/signup-client.tsx`: new client child
+  containing the existing campaign-cookie logic plus a MutationObserver
+  that attaches DOM listeners to Clerk form fields. Each instrumentation
+  event fires at most once per mount (except submit and failed, where
+  retries are meaningful signal).
+- `lib/analytics/distinct-id.ts`: extracted `resolveDistinctId` and
+  `anonymousDistinctId` from `landing-flags.ts` so the sign-up server
+  component reuses the same anon-id scheme. PostHog can now join landing
+  exposure → sign-up arrival for the same anonymous visitor before Clerk
+  identify runs.
+
+### Changed
+- `lib/analytics/landing-flags.ts`: delegates to the shared distinct-id
+  module instead of inlining the resolver. Behaviour unchanged.
+
 ## [0.0.39.0] - 2026-05-28
 
 ### Fixed
