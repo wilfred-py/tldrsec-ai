@@ -15,6 +15,16 @@ export const EVENTS = {
   LANDING_CTA_CLICK: 'landing_cta_click',
   PRICING_PLAN_SELECTED: 'pricing_plan_selected',
 
+  // Sign-up funnel (between /sign-up $pageview and $identify after Clerk completes)
+  // These close the visibility gap: $pageview tells us they arrived, but the
+  // Clerk widget runs in our DOM and previously fired no telemetry until success.
+  SIGNUP_PAGE_ARRIVED: 'signup_page_arrived',
+  SIGNUP_WIDGET_RENDERED: 'signup_widget_rendered',
+  SIGNUP_EMAIL_ENTERED: 'signup_email_entered',
+  SIGNUP_PASSWORD_ENTERED: 'signup_password_entered',
+  SIGNUP_SUBMITTED: 'signup_submitted',
+  SIGNUP_FAILED: 'signup_failed',
+
   // Onboarding funnel
   ONBOARDING_STEP_COMPLETED: 'onboarding_step_completed',
   ONBOARDING_COMPLETED: 'onboarding_completed',
@@ -67,6 +77,38 @@ export type EventProps = {
   [EVENTS.PRICING_PLAN_SELECTED]: {
     plan: PlanTier;
     billing_period: BillingPeriod;
+  };
+  [EVENTS.SIGNUP_PAGE_ARRIVED]: {
+    // Subscriber id from campaign email links (?sub=<id>)
+    sub?: string;
+    utm_source?: string;
+    utm_medium?: string;
+    utm_campaign?: string;
+    utm_content?: string;
+    utm_term?: string;
+    plan?: string;
+    ref?: string;
+    referer?: string;
+    user_agent?: string;
+    // Optional sub-route segment for the [[...sign-up]] catch-all (e.g. "verify-email",
+    // "sso-callback"). Undefined on the initial /sign-up arrival.
+    sub_route?: string;
+  };
+  [EVENTS.SIGNUP_WIDGET_RENDERED]: {
+    // Time from page hydration to Clerk form being present in the DOM.
+    time_to_render_ms: number;
+  };
+  [EVENTS.SIGNUP_EMAIL_ENTERED]: Record<string, never>;
+  [EVENTS.SIGNUP_PASSWORD_ENTERED]: Record<string, never>;
+  [EVENTS.SIGNUP_SUBMITTED]: {
+    // True if both email and password fields had been touched before submit.
+    // Lets us split bot-style submit-without-typing from real form fills.
+    email_entered: boolean;
+    password_entered: boolean;
+  };
+  [EVENTS.SIGNUP_FAILED]: {
+    // Trimmed error text shown by Clerk. Truncated to 200 chars to avoid PII overflow.
+    error_message?: string;
   };
   [EVENTS.ONBOARDING_STEP_COMPLETED]: {
     step_name: 'profile' | 'sectors' | 'companies' | 'confirm' | 'email' | 'tutorial';

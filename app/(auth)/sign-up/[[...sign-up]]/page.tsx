@@ -1,49 +1,56 @@
-'use client';
+import { after } from 'next/server';
+import { headers } from 'next/headers';
+import { getServerPostHog, captureServerEvent } from '@/lib/analytics/posthog-server';
+import { resolveDistinctId } from '@/lib/analytics/distinct-id';
+import { EVENTS } from '@/lib/analytics/events';
+import SignUpClient from './signup-client';
 
-import { SignUp } from '@clerk/nextjs';
-import { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+// Force dynamic — we capture per-request telemetry and read headers/cookies.
+export const dynamic = 'force-dynamic';
 
-const PLAN_PATTERN = /^[a-z]{1,16}$/;
-const REF_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+type PageProps = {
+  // Next.js 15: dynamic params and searchParams arrive as Promises in server components.
+  params: Promise<{ 'sign-up'?: string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-export default function SignUpPage() {
-  const searchParams = useSearchParams();
+function asString(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
 
-  // CRITICAL: campaign attribution from email links — do not remove.
-  // Inputs are validated against allow-list patterns to prevent cookie injection
-  // (semicolon/attribute splicing) and overflow of the 4 KB cookie size limit.
-  useEffect(() => {
-    const plan = searchParams.get('plan');
-    const ref = searchParams.get('ref');
-    if (plan && PLAN_PATTERN.test(plan)) {
-      document.cookie = `signup_plan=${encodeURIComponent(plan)};path=/;max-age=3600;SameSite=Lax`;
-    }
-    if (ref && REF_PATTERN.test(ref)) {
-      document.cookie = `signup_ref=${encodeURIComponent(ref)};path=/;max-age=3600;SameSite=Lax`;
-    }
-  }, [searchParams]);
+export default async function SignUpPage({ params, searchParams }: PageProps) {
+  const [resolvedParams, resolvedSearch] = await Promise.all([params, searchParams]);
+  const subRouteSegments = resolvedParams['sign-up'];
+  // [[...sign-up]] is optional catch-all. Root /sign-up → undefined.
+  // /sign-up/verify-email and /sign-up/sso-callback → [segment].
+  const isRootArrival = !subRouteSegments || subRouteSegments.length === 0;
 
-  return (
-    <div className="flex min-h-dvh items-start sm:items-center justify-center p-4 pt-12 sm:pt-0">
-      <div className="w-full max-w-[400px] min-h-[560px]">
-        <SignUp
-          forceRedirectUrl="/onboarding"
-          appearance={{
-            variables: {
-              fontFamily: 'var(--font-geist-sans)',
-              colorPrimary: '#0066CC',
-              borderRadius: '0.5rem',
-            },
-            elements: {
-              card: 'shadow-sm border border-gray-200 rounded-xl',
-              formButtonPrimary: 'text-sm normal-case',
-              socialButtonsBlockButton: 'border-gray-300 hover:bg-gray-50',
-              footerActionLink: 'text-[#0066CC] hover:text-[#004C99]',
-            },
-          }}
-        />
-      </div>
-    </div>
-  );
+  // Fire signup_page_arrived on initial /sign-up hit only. Verify-email and
+  // sso-callback sub-routes are continuation flows, not arrivals — counting
+  // them would inflate the funnel top.
+  if (isRootArrival && getServerPostHog()) {
+    const distinctId = await resolveDistinctId();
+    const h = await headers();
+    captureServerEvent(distinctId, EVENTS.SIGNUP_PAGE_ARRIVED, {
+      sub: asString(resolvedSearch.sub),
+      utm_source: asString(resolvedSearch.utm_source),
+      utm_medium: asString(resolvedSearch.utm_medium),
+      utm_campaign: asString(resolvedSearch.utm_campaign),
+      utm_content: asString(resolvedSearch.utm_content),
+      utm_term: asString(resolvedSearch.utm_term),
+      plan: asString(resolvedSearch.plan),
+      ref: asString(resolvedSearch.ref),
+      referer: h.get('referer') ?? undefined,
+      user_agent: h.get('user-agent') ?? undefined,
+    });
+    // Keep the function alive long enough for posthog-node's HTTP flush to
+    // complete after the HTML has been streamed to the client.
+    after(async () => {
+      const posthog = getServerPostHog();
+      if (posthog) await posthog.flush();
+    });
+  }
+
+  return <SignUpClient />;
 }

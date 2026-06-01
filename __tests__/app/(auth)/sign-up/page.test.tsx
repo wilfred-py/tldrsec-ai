@@ -1,9 +1,20 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import SignUpPage from '@/app/(auth)/sign-up/[[...sign-up]]/page';
+import SignUpClient from '@/app/(auth)/sign-up/[[...sign-up]]/signup-client';
 
 jest.mock('@clerk/nextjs', () => ({
   SignUp: () => <div data-testid="clerk-sign-up">Clerk SignUp Component</div>,
+}));
+
+// The Clerk widget instrumentation calls trackEvent; stub the hook so tests
+// stay focused on the cookie-attribution behaviour they originally covered.
+jest.mock('@/lib/hooks/use-analytics', () => ({
+  useAnalytics: () => ({
+    trackEvent: jest.fn(),
+    trackRaw: jest.fn(),
+    trackPageView: jest.fn(),
+    identifyUser: jest.fn(),
+  }),
 }));
 
 const mockSearchParams = new URLSearchParams();
@@ -11,7 +22,7 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams,
 }));
 
-describe('SignUpPage', () => {
+describe('SignUpClient', () => {
   beforeEach(() => {
     // Clear all cookies between tests
     document.cookie.split(';').forEach((c) => {
@@ -25,7 +36,7 @@ describe('SignUpPage', () => {
   it('captures ?plan=pro into a signup_plan cookie', () => {
     mockSearchParams.set('plan', 'pro');
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
 
     expect(document.cookie).toContain('signup_plan=pro');
   });
@@ -33,13 +44,13 @@ describe('SignUpPage', () => {
   it('captures ?ref=campaign into a signup_ref cookie', () => {
     mockSearchParams.set('ref', 'campaign');
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
 
     expect(document.cookie).toContain('signup_ref=campaign');
   });
 
   it('does not set cookies when plan and ref are absent', () => {
-    render(<SignUpPage />);
+    render(<SignUpClient />);
 
     expect(document.cookie).not.toContain('signup_plan=');
     expect(document.cookie).not.toContain('signup_ref=');
@@ -48,7 +59,7 @@ describe('SignUpPage', () => {
   it('rejects plan values containing cookie-attribute injection', () => {
     mockSearchParams.set('plan', 'pro;Domain=evil.com');
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
 
     expect(document.cookie).not.toContain('signup_plan=');
     expect(document.cookie).not.toContain('Domain=evil');
@@ -57,7 +68,7 @@ describe('SignUpPage', () => {
   it('rejects oversized ref values', () => {
     mockSearchParams.set('ref', 'a'.repeat(200));
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
 
     expect(document.cookie).not.toContain('signup_ref=');
   });
@@ -65,7 +76,7 @@ describe('SignUpPage', () => {
   it('rejects plan values with non-allowlisted characters', () => {
     mockSearchParams.set('plan', 'PRO_TIER');
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
 
     expect(document.cookie).not.toContain('signup_plan=');
   });
