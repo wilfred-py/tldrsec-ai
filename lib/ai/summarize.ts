@@ -14,8 +14,14 @@ import { modelConfig, getDefaultModel } from './config';
 import { parseResponse } from './parsers';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
-import { estimateTokenCount, splitDocumentIntoChunks, getContextConfig, buildSectionedPrompt } from './prompts/context-manager';
-import { extractSections, hasUsableFinancialSection } from '../parsers/sec-section-extractor';
+import {
+  estimateTokenCount,
+  splitDocumentIntoChunks,
+  getContextConfig,
+  buildSectionedPrompt,
+  extractSections,
+  hasUsableFinancialSection,
+} from './prompts/context-manager';
 import { getEnrichmentContext } from './web-search-context';
 import {
   isWhyItMattersEnabled,

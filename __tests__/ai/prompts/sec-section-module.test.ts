@@ -1,10 +1,14 @@
-import { extractSections, hasUsableFinancialSection } from '../../lib/parsers/sec-section-extractor';
-import { buildSectionedPrompt, SECTION_TOKEN_BUDGETS } from '../../lib/ai/prompts/context-manager';
+import {
+  extractSections,
+  hasUsableFinancialSection,
+  buildSectionedPrompt,
+  SECTION_TOKEN_BUDGETS,
+} from '../../../lib/ai/prompts/context-manager';
 
 /**
- * Layer B unit tests — the section extractor + prompt builder.
- *
- * Fixtures here are minimal markdown samples that mimic what
+ * Layer B interface tests for the SEC Section module — the extractor
+ * + prompt builder behind the canonical `lib/ai/prompts/context-manager.ts`
+ * surface. Fixtures here are minimal markdown samples that mimic what
  * cleanHtmlContent + promoteSecHeadings produce for real SEC 10-Q/10-K
  * filings. The trimmed real-world NVDA fixture lives at
  * __tests__/fixtures/sec/nvda-10q-trimmed.htm and is exercised by the
