@@ -1,5 +1,6 @@
 import { logger } from '../logging';
 import { prisma } from '../db';
+import { isSubscriptionActive } from '../auth/tier-eligibility';
 
 const subscriptionLogger = logger.child('ticker-subscription-info');
 
@@ -186,7 +187,7 @@ export async function getTickerSubscriptionInfo(
       
       const userSub = subscription.user.userSubscription;
       
-      if (userSub && userSub.isActive && userSub.currentPeriodEnd >= new Date()) {
+      if (isSubscriptionActive(userSub)) {
         totalValidSubscribers++;
         
         // Map Prisma PlanType to our internal tier names

@@ -10,6 +10,11 @@
  * Resolution: 5-min clock-skew grace everywhere. The grace tolerates skew
  * between Stripe webhooks, our DB clock, and worker nodes.
  *
+ * Also the canonical home for `isSubscriptionActive`, the predicate
+ * (`UserSubscription.isActive` AND not yet past `currentPeriodEnd`) that
+ * previously appeared inlined at three call sites with subtle drift between
+ * `<` and `>=` and three independent `new Date()` allocations.
+ *
  * All exports are SYNC and PURE (args-only). Do not introduce I/O here —
  * a purity guard test enforces this (see __tests__/auth/tier-eligibility-purity).
  */
@@ -23,6 +28,16 @@ export interface TrialFields {
 
 export interface TierFields extends TrialFields {
   tier?: string | null;
+}
+
+/**
+ * Minimal subscription shape required by `isSubscriptionActive`. Callers can
+ * pass a full `UserSubscription` row (Prisma) or a hand-built struct; only
+ * the two fields named here are read.
+ */
+export interface SubscriptionActiveFields {
+  isActive: boolean;
+  currentPeriodEnd: Date;
 }
 
 /**
@@ -69,4 +84,28 @@ export function hasActiveAccess({ tier, isTrialing, trialEndsAt }: TierFields): 
  */
 export function getActiveTrialCutoffDate(): Date {
   return new Date(Date.now() - MAX_ELIGIBILITY_GRACE_MS);
+}
+
+/**
+ * True when the `UserSubscription` row is currently active: `isActive=true`
+ * AND `currentPeriodEnd` is in the future.
+ *
+ * Distinct from `hasActiveAccess` / `isMaxEligible` above, which read the
+ * denormalized `User.subscriptionTier` + trial fields. This predicate reads
+ * the raw subscription-row state directly — use it when answering "does
+ * this user's recurring subscription cover them right now?" (e.g. for
+ * billing-page status, ticker-stat aggregation, and the
+ * `/api/user` response). Lifetime Seats (ADR-0004) write a sentinel
+ * `currentPeriodEnd` of `9999-12-31`, which trivially satisfies the
+ * future-end check.
+ *
+ * Comparison is strictly `currentPeriodEnd > now()` so a subscription
+ * expiring at exactly the call instant is reported inactive — chosen over
+ * `>=` for consistency with the `/api/user` and subscription-service
+ * call sites that previously used `<`; the 1ms edge case is negligible
+ * and the strict comparison composes cleanly with cron-tick boundaries.
+ */
+export function isSubscriptionActive(sub: SubscriptionActiveFields | null | undefined): boolean {
+  if (!sub) return false;
+  return sub.isActive && sub.currentPeriodEnd.getTime() > Date.now();
 }
