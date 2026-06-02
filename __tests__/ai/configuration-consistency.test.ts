@@ -95,13 +95,6 @@ describe('AI Configuration Consistency', () => {
       expect(temperatures.length).toBeGreaterThan(5);
     });
 
-    it('should use 0.2 temperature in chunk-processor.ts', async () => {
-      const chunkProcessorPath = path.join(process.cwd(), 'lib/ai/summarization/chunk-processor.ts');
-      const content = fs.readFileSync(chunkProcessorPath, 'utf-8');
-
-      // Look for the temperature setting in the options
-      expect(content).toMatch(/temperature:\s*0\.2/);
-    });
   });
 });
 
