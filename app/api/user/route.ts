@@ -27,6 +27,7 @@ import {
   createBillingPortalSession,
 } from '@/lib/stripe';
 import { TrialService } from '@/lib/auth/trial-service';
+import { isSubscriptionActive } from '@/lib/auth/tier-eligibility';
 
 type BillingInterval = 'monthly' | 'annual';
 
@@ -333,7 +334,7 @@ async function handleGetSubscription() {
 
     return NextResponse.json({
       planType: userSubscription.planType,
-      isActive: userSubscription.isActive && new Date() < userSubscription.currentPeriodEnd,
+      isActive: isSubscriptionActive(userSubscription),
       currentPeriodStart: userSubscription.currentPeriodStart,
       currentPeriodEnd: userSubscription.currentPeriodEnd,
       cancelAtPeriodEnd: userSubscription.cancelAtPeriodEnd,

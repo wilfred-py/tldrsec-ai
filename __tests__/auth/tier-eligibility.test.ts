@@ -8,6 +8,7 @@ import {
   isMaxEligible,
   hasActiveAccess,
   getActiveTrialCutoffDate,
+  isSubscriptionActive,
 } from '@/lib/auth/tier-eligibility';
 
 const future = () => new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -113,5 +114,51 @@ describe('getActiveTrialCutoffDate', () => {
 
   it('exposes the grace constant', () => {
     expect(MAX_ELIGIBILITY_GRACE_MS).toBe(5 * 60 * 1000);
+  });
+});
+
+describe('isSubscriptionActive', () => {
+  it('returns false for null / undefined', () => {
+    expect(isSubscriptionActive(null)).toBe(false);
+    expect(isSubscriptionActive(undefined)).toBe(false);
+  });
+
+  it('returns false when isActive=false even with future period end', () => {
+    expect(
+      isSubscriptionActive({ isActive: false, currentPeriodEnd: future() })
+    ).toBe(false);
+  });
+
+  it('returns true when isActive=true and period end is in the future', () => {
+    expect(
+      isSubscriptionActive({ isActive: true, currentPeriodEnd: future() })
+    ).toBe(true);
+  });
+
+  it('returns false when period end is in the past, even with isActive=true', () => {
+    expect(
+      isSubscriptionActive({ isActive: true, currentPeriodEnd: expired() })
+    ).toBe(false);
+  });
+
+  it('treats the Lifetime Seat sentinel (9999-12-31) as active', () => {
+    // ADR-0004: Lifetime Seat holders carry currentPeriodEnd = 9999-12-31.
+    // Should compose cleanly with the active predicate.
+    expect(
+      isSubscriptionActive({
+        isActive: true,
+        currentPeriodEnd: new Date('9999-12-31T00:00:00.000Z'),
+      })
+    ).toBe(true);
+  });
+
+  it('uses strict greater-than: period end == now is reported inactive', () => {
+    // 1ms edge case: a subscription expiring at exactly the current instant
+    // is inactive. Chosen for symmetry with the two `<` call sites the
+    // predicate replaces (app/api/user, services subscription-service).
+    const now = new Date();
+    expect(
+      isSubscriptionActive({ isActive: true, currentPeriodEnd: now })
+    ).toBe(false);
   });
 });

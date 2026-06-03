@@ -1,5 +1,6 @@
 import { logger } from '../../../lib/logging';
 import { getPrismaClient } from '../../../lib/db/prisma';
+import { isSubscriptionActive } from '../../../lib/auth/tier-eligibility';
 import { PlanType, UserSubscription as PrismaUserSubscription } from '@prisma/client';
 import { SubscriptionTier, OptimizationLevel, getOptimizationLevelForTier } from './tokenOptimizer';
 import {
@@ -209,7 +210,7 @@ export async function getUserSubscription(userId: string): Promise<UserSubscript
     const subscription: UserSubscription = {
       userId,
       tier: mapPlanTypeToSubscriptionTier(userSubscription.planType),
-      isActive: userSubscription.isActive && new Date() < userSubscription.currentPeriodEnd,
+      isActive: isSubscriptionActive(userSubscription),
       features: SUBSCRIPTION_FEATURES[getPlanKey(userSubscription.planType)].features,
       limits: {
         monthlyFilings: usagePeriod.filingLimit,
