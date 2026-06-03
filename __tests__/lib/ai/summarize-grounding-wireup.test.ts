@@ -273,3 +273,185 @@ describe('summarizeFiling — post-parse grounding wire-up', () => {
     expect(monitoring.incrementCounter).not.toHaveBeenCalledWith('ai.why_it_matters_violation', expect.anything());
   });
 });
+
+/**
+ * Wire-up integration tests for the inlined Numeric Grounding Guard.
+ *
+ * These replace the deleted seam tests at
+ * `__tests__/lib/ai/numeric-grounding.test.ts` (which targeted the former
+ * `lib/ai/parsers/numeric-grounding.ts` export directly). The Guard is now a
+ * private function inside the Summarize module — verified at the
+ * `summarizeFiling` interface, which is the actual production seam.
+ *
+ * Source doc length must exceed NUMERIC_GROUNDING_MIN_SOURCE_LEN (1000 chars)
+ * for the validator to engage — a padded JPM S-3 prospectus is used to clear
+ * that threshold and to exercise the `offeringAmount` /
+ * `shelfRegistration.totalAuthorized` walk paths.
+ */
+const NUMERIC_GROUNDING_PADDING =
+  '\n' + 'context filler for grounding validator min-length threshold. '.repeat(40) + '\n';
+
+function buildShelfFilingContent(coreText: string): string {
+  return NUMERIC_GROUNDING_PADDING + coreText + NUMERIC_GROUNDING_PADDING;
+}
+
+async function createNumericTestSummary(formType: string): Promise<string> {
+  const id = `summary-${Date.now()}-${Math.random()}`;
+  __mockDb.set(id, {
+    id,
+    tickerId: 'numeric-ticker',
+    filingType: formType,
+    processingStatus: 'PENDING',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return id;
+}
+
+describe('summarizeFiling — numeric grounding wire-up', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    __mockDb.clear();
+    delete process.env.ENRICHMENT_DISABLE_NUMERIC_GROUNDING;
+  });
+
+  it('nulls fabricated $5B offeringAmount when source doc only authorizes $80B', async () => {
+    const summaryId = await createNumericTestSummary('S-3');
+    const sourceDoc = buildShelfFilingContent(
+      'Up to $80,000,000,000, or the equivalent thereof in any other currency, of these securities ' +
+      'may be offered from time to time pursuant to this shelf registration.',
+    );
+    mockOpenRouterResponse({
+      company: 'JPMorgan Chase & Co.',
+      summary: 'JPMorgan shelf registration covering debt and equity securities.',
+      offeringType: 'Shelf Registration',
+      offeringAmount: '$5B',
+      shelfRegistration: {
+        totalAuthorized: '$5B',
+        remainingCapacity: '$5B',
+      },
+    });
+
+    await summarizeFiling(sourceDoc, {
+      summaryId,
+      metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: 'S-3' },
+      userTier: 'MAX',
+      isTrialing: false,
+    });
+
+    const stored = await prisma.summary.findUnique({ where: { id: summaryId } });
+    const json = stored?.summaryJSON as Record<string, unknown> | undefined;
+    expect(json?.offeringAmount).toBeNull();
+    const shelf = json?.shelfRegistration as Record<string, unknown> | undefined;
+    expect(shelf?.totalAuthorized).toBeNull();
+    expect(shelf?.remainingCapacity).toBeNull();
+    expect(monitoring.incrementCounter).toHaveBeenCalledWith(
+      'ai.numeric_grounding_violation',
+      1,
+      expect.objectContaining({ path: 'offeringAmount' }),
+    );
+  });
+
+  it('preserves grounded $80B when AI emits the value exactly in the source', async () => {
+    const summaryId = await createNumericTestSummary('S-3');
+    const sourceDoc = buildShelfFilingContent(
+      'Up to $80,000,000,000 of these securities may be offered from time to time.',
+    );
+    mockOpenRouterResponse({
+      company: 'JPMorgan Chase & Co.',
+      summary: 'JPMorgan shelf registration covering debt and equity securities.',
+      offeringType: 'Shelf Registration',
+      shelfRegistration: {
+        totalAuthorized: '$80B',
+      },
+    });
+
+    await summarizeFiling(sourceDoc, {
+      summaryId,
+      metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: 'S-3' },
+      userTier: 'MAX',
+      isTrialing: false,
+    });
+
+    const stored = await prisma.summary.findUnique({ where: { id: summaryId } });
+    const json = stored?.summaryJSON as Record<string, unknown> | undefined;
+    const shelf = json?.shelfRegistration as Record<string, unknown> | undefined;
+    expect(shelf?.totalAuthorized).toBe('$80B');
+    expect(monitoring.incrementCounter).not.toHaveBeenCalledWith(
+      'ai.numeric_grounding_violation',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('preserves required Form 4 transactions[].shares when ungrounded; records unredactable', async () => {
+    const summaryId = await createNumericTestSummary('4');
+    const sourceDoc = buildShelfFilingContent(
+      'Insider sold a small number of shares last week in a routine 10b5-1 disposition.',
+    );
+    mockOpenRouterResponse({
+      company: 'JPMorgan Chase & Co.',
+      summary: 'Insider disposition by routine 10b5-1 plan; small share count.',
+      filerName: 'Jamie Dimon',
+      transactions: [
+        {
+          code: 'S',
+          type: 'Sale',
+          shares: '999,999',
+          pricePerShare: '$50.00',
+          sharesOwnedFollowing: '1,234,567',
+        },
+      ],
+    });
+
+    await summarizeFiling(sourceDoc, {
+      summaryId,
+      metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: '4' },
+      userTier: 'MAX',
+      isTrialing: false,
+    });
+
+    const stored = await prisma.summary.findUnique({ where: { id: summaryId } });
+    const json = stored?.summaryJSON as Record<string, unknown> | undefined;
+    const txs = json?.transactions as Array<Record<string, unknown>> | undefined;
+    // Required field — must NOT be nulled even when ungrounded.
+    expect(txs?.[0]?.shares).toBe('999,999');
+    expect(monitoring.incrementCounter).toHaveBeenCalledWith(
+      'ai.numeric_grounding_violation_unredactable',
+      1,
+      expect.objectContaining({ path: 'transactions' }),
+    );
+  });
+
+  it('honors ENRICHMENT_DISABLE_NUMERIC_GROUNDING=1 kill switch', async () => {
+    process.env.ENRICHMENT_DISABLE_NUMERIC_GROUNDING = '1';
+    const summaryId = await createNumericTestSummary('S-3');
+    const sourceDoc = buildShelfFilingContent(
+      'Up to $80,000,000,000 of these securities may be offered from time to time.',
+    );
+    mockOpenRouterResponse({
+      company: 'JPMorgan Chase & Co.',
+      summary: 'JPMorgan shelf registration covering debt and equity securities.',
+      offeringType: 'Shelf Registration',
+      offeringAmount: '$5B',
+    });
+
+    await summarizeFiling(sourceDoc, {
+      summaryId,
+      metadata: { ticker: 'JPM', companyName: 'JPMorgan Chase & Co.', formType: 'S-3' },
+      userTier: 'MAX',
+      isTrialing: false,
+    });
+
+    const stored = await prisma.summary.findUnique({ where: { id: summaryId } });
+    const json = stored?.summaryJSON as Record<string, unknown> | undefined;
+    // Kill switch active — fabricated value survives.
+    expect(json?.offeringAmount).toBe('$5B');
+    expect(monitoring.incrementCounter).not.toHaveBeenCalledWith(
+      'ai.numeric_grounding_violation',
+      expect.anything(),
+      expect.anything(),
+    );
+    delete process.env.ENRICHMENT_DISABLE_NUMERIC_GROUNDING;
+  });
+});
