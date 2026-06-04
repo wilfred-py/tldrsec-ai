@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,8 +41,6 @@ interface ProfileStepProps {
   onBack: () => void;
   isSubmitting: boolean;
   isTransitioning: boolean;
-  /** When present (Variant B), renders below AUM radios, above footer. */
-  inlineDisclosure?: ReactNode;
 }
 
 export function ProfileStep({
@@ -58,7 +56,6 @@ export function ProfileStep({
   onBack,
   isSubmitting,
   isTransitioning,
-  inlineDisclosure,
 }: ProfileStepProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -206,7 +203,6 @@ export function ProfileStep({
                     );
                   })}
                 </div>
-                {inlineDisclosure}
               </div>
             )}
           </div>

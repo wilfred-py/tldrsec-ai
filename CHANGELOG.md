@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.40.1] - 2026-06-04
+
+### Removed
+- `lib/hooks/use-onboarding-variant.ts` — deleted; the PostHog flag
+  `onboarding-email-notice-variant` was never created, variant resolution
+  always hit the 500ms fallback to `step4`, and the 30-day `ob_variant`
+  cookie TTL has now elapsed so no returning users remain bucketed in
+  `inline`. All A/B infrastructure is gone.
+- `components/onboarding/inline-email-notice.tsx` — Variant B component
+  (inline disclosure inside ProfileStep AUM sub-step) deleted.
+- `__tests__/components/onboarding/inline-email-notice.test.tsx` — tests
+  for the deleted component deleted.
+
+### Changed
+- `app/(auth)/onboarding/onboarding-client.tsx` — removed `useOnboardingVariant`
+  hook, `!resolved` skeleton guard, `inlineDisclosure` wiring, and Variant B
+  branch in `handleProfileComplete`. Step 4 (ConfirmStep) now renders
+  unconditionally. `handleCompleteOnboarding` no longer accepts a
+  `profileOverride` argument.
+- `components/onboarding/profile-step.tsx` — removed `inlineDisclosure`
+  optional prop and its render slot below the AUM radios.
+- `app/(auth)/onboarding/types.ts` — replaced `ONBOARDING_STEPS_BASE`,
+  `ONBOARDING_STEPS_WITH_CONFIRM`, `getOnboardingSteps`, and
+  `OnboardingVariantKey` with a single `ONBOARDING_STEPS` constant (4 steps).
+- `lib/analytics/events.ts` — removed `ONBOARDING_VARIANT_ASSIGNED` event;
+  narrowed `ONBOARDING_COMPLETED.variant` to `'step4-polished'` and
+  `step_count` to `4`.
+- Tests updated to match: variant mocks removed, 3-step and inline-variant
+  test blocks deleted.
+
+This completes the deferred P2 cleanup from PR #495 (v0.0.25.9).
+
 ## [0.0.40.0] - 2026-06-01
 
 ### Added

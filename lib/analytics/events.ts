@@ -28,7 +28,6 @@ export const EVENTS = {
   // Onboarding funnel
   ONBOARDING_STEP_COMPLETED: 'onboarding_step_completed',
   ONBOARDING_COMPLETED: 'onboarding_completed',
-  ONBOARDING_VARIANT_ASSIGNED: 'onboarding_variant_assigned',
 
   // Conversion funnel
   CHECKOUT_INITIATED: 'checkout_initiated',
@@ -119,15 +118,11 @@ export type EventProps = {
     total_duration_ms: number;
     companies_count: number;
     sectors_count: number;
-    variant: 'step4' | 'inline' | 'step4-polished';
-    step_count: 3 | 4;
+    variant: 'step4-polished';
+    step_count: 4;
     email_frequency: 'IMMEDIATE' | 'DAILY' | 'NONE';
     ticker_count: number;
     duration_ms: number;
-  };
-  [EVENTS.ONBOARDING_VARIANT_ASSIGNED]: {
-    variant: 'step4' | 'inline';
-    source: 'posthog' | 'session' | 'cookie' | 'fallback';
   };
   [EVENTS.CHECKOUT_INITIATED]: {
     plan: PlanTier;

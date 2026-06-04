@@ -98,25 +98,6 @@ describe('ProfileStep — lifted state props', () => {
     });
   });
 
-  it('renders inlineDisclosure slot on subStep 2 when provided (Variant B)', () => {
-    const disclosure = <div data-testid="inline-disclosure">Email notice here</div>;
-    render(
-      <ProfileStep
-        {...defaults()}
-        subStep={2}
-        selectedRole="personal-investor"
-        inlineDisclosure={disclosure}
-      />
-    );
-    expect(screen.getByTestId('inline-disclosure')).toBeInTheDocument();
-  });
-
-  it('does NOT render inlineDisclosure on subStep 1 even when provided', () => {
-    const disclosure = <div data-testid="inline-disclosure">Email notice here</div>;
-    render(<ProfileStep {...defaults()} subStep={1} inlineDisclosure={disclosure} />);
-    expect(screen.queryByTestId('inline-disclosure')).not.toBeInTheDocument();
-  });
-
   it('Complete Setup disabled while isSubmitting', () => {
     render(
       <ProfileStep

@@ -20,13 +20,11 @@ import { SectorStep } from "@/components/onboarding/sector-step";
 import { CompanyStep } from "@/components/onboarding/company-step";
 import { ProfileStep, type ProfileSubStep } from "@/components/onboarding/profile-step";
 import { ConfirmStep } from "@/components/onboarding/confirm-step";
-import { InlineEmailNotice } from "@/components/onboarding/inline-email-notice";
 import type { CompanyItem } from "./types";
 import type { UserRole, AumBracket } from "@/components/onboarding/profile-step";
-import { getOnboardingSteps } from "./types";
+import { ONBOARDING_STEPS } from "./types";
 import { useAnalytics } from "@/lib/hooks/use-analytics";
 import { EVENTS } from "@/lib/analytics/events";
-import { useOnboardingVariant } from "@/lib/hooks/use-onboarding-variant";
 
 const STEP_NAMES = ["sectors", "companies", "profile", "confirm"] as const;
 
@@ -43,8 +41,7 @@ export default function OnboardingPage() {
   const [selectedEquities, setSelectedEquities] = useState<string[]>([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Lifted profile state (was inside ProfileStep) — required for Variant A
-  // Back-from-step-4 to preserve role/AUM/customRoleText.
+  // Lifted profile state for back-navigation from step 4.
   const [profileSubStep, setProfileSubStep] = useState<ProfileSubStep>(1);
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [customRoleText, setCustomRoleText] = useState("");
@@ -58,14 +55,9 @@ export default function OnboardingPage() {
   const stepStartRef = useRef<number>(Date.now());
   const { trackEvent, identifyUser } = useAnalytics();
 
-  // A/B variant — resolved async, bucket-stable on Clerk userId.
-  const { variant, resolved } = useOnboardingVariant(userId);
-  const steps = getOnboardingSteps(variant ?? "step4");
-  const TOTAL_STEPS_FOR_VARIANT = steps.length;
+  const TOTAL_STEPS_FOR_VARIANT = ONBOARDING_STEPS.length;
 
-  // Email frequency — wired as real state (was readonly before). Variant A
-  // toggle mutates this; Variant B inherits the default and redirects to
-  // Settings for changes (per plan §667).
+  // Email frequency — toggled on the Review step.
   const [emailFrequency, setEmailFrequency] = useState<NotificationPreference>(
     DEFAULT_NOTIFICATION_PREFERENCES.emailFrequency
   );
@@ -77,8 +69,7 @@ export default function OnboardingPage() {
   );
   const [uiPreferences] = useState<UIPreferences>(DEFAULT_UI_PREFERENCES);
 
-  // Identify PostHog user once Clerk hydrates — required for valid A/B
-  // bucketing (§3A in review notes).
+  // Identify PostHog user once Clerk hydrates.
   useEffect(() => {
     if (!userId) return;
     identifyUser({ id: userId, email: userEmail, name: userName });
@@ -152,21 +143,13 @@ export default function OnboardingPage() {
     }
   };
 
-  // Called from ProfileStep (Variant B — last step) or from ConfirmStep
-  // Finish (Variant A). Variant A's Finish doesn't supply a profile — we
-  // read from lifted state.
-  const handleCompleteOnboarding = async (profileOverride?: {
-    role: UserRole;
-    aumBracket?: AumBracket;
-    customRoleText?: string;
-  }) => {
+  const handleCompleteOnboarding = async () => {
     if (submittingRef.current) return;
 
-    const profile = profileOverride ?? {
+    const profile = {
       role: selectedRole!,
       aumBracket: selectedAum ?? undefined,
-      customRoleText:
-        selectedRole === "other" ? customRoleText : undefined,
+      customRoleText: selectedRole === "other" ? customRoleText : undefined,
     };
 
     if (!profile.role) {
@@ -212,13 +195,7 @@ export default function OnboardingPage() {
         throw new Error(result.error || "Failed to complete onboarding");
       }
 
-      // Funnel events — variant-aware. Emit "step4-polished" as the canonical
-      // label so PostHog funnels keyed on this property survive the inline →
-      // step4 transition without dropping data. Original assignment ("inline" /
-      // "step4") still flows through ONBOARDING_VARIANT_ASSIGNED for historical
-      // attribution.
       const now = Date.now();
-      const resolvedVariant = "step4-polished";
       const lastStepName = STEP_NAMES[currentStep - 1] ?? "profile";
       trackEvent(EVENTS.ONBOARDING_STEP_COMPLETED, {
         step_name: lastStepName,
@@ -229,8 +206,8 @@ export default function OnboardingPage() {
         total_duration_ms: now - onboardingStartRef.current,
         companies_count: formattedTickers.length,
         sectors_count: selectedSectors.length,
-        variant: resolvedVariant,
-        step_count: TOTAL_STEPS_FOR_VARIANT as 3 | 4,
+        variant: 'step4-polished',
+        step_count: TOTAL_STEPS_FOR_VARIANT as 4,
         email_frequency: emailFrequency.toUpperCase() as
           | "IMMEDIATE"
           | "DAILY"
@@ -256,25 +233,14 @@ export default function OnboardingPage() {
     }
   };
 
-  // Variant B: ProfileStep's Complete CTA fires submit directly.
-  // Variant A: ProfileStep's Complete CTA advances to step 4 instead.
-  const handleProfileComplete = (profile: {
-    role: UserRole;
-    aumBracket?: AumBracket;
-    customRoleText?: string;
-  }) => {
-    if (variant === "step4") {
-      // Lift-state is authoritative; ignore the profile payload (it's the
-      // same data). Advance to the Confirm step.
-      handleNext();
-    } else {
-      void handleCompleteOnboarding(profile);
-    }
+  const handleProfileComplete = () => {
+    handleNext();
   };
 
   const handleConfirmFinish = () => {
     void handleCompleteOnboarding();
   };
+
 
   const handleZeroTickers = () => {
     toast.error("You need at least one ticker before finishing onboarding.");
@@ -297,7 +263,7 @@ export default function OnboardingPage() {
   // -----------------------------------------------------------------------
   // Render guards
   // -----------------------------------------------------------------------
-  if (isLoading || initializing || !resolved) {
+  if (isLoading || initializing) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -327,18 +293,13 @@ export default function OnboardingPage() {
   // -----------------------------------------------------------------------
   // Main render — two-column layout with vertical progress
   // -----------------------------------------------------------------------
-  const inlineDisclosure =
-    variant === "inline" ? (
-      <InlineEmailNotice tickers={selectedEquities} />
-    ) : undefined;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="flex gap-6 sm:gap-10 w-full max-w-4xl">
           {/* Left: vertical progress */}
           <div className="flex-shrink-0 flex items-center">
-            <VerticalProgress currentStep={currentStep} steps={steps} />
+            <VerticalProgress currentStep={currentStep} steps={ONBOARDING_STEPS} />
           </div>
 
           {/* Right: main content */}
@@ -385,13 +346,12 @@ export default function OnboardingPage() {
                     onAumChange={setSelectedAum}
                     onComplete={handleProfileComplete}
                     onBack={handleBack}
-                    isSubmitting={isSubmitting && variant === "inline"}
+                    isSubmitting={false}
                     isTransitioning={isTransitioning}
-                    inlineDisclosure={inlineDisclosure}
                   />
                 )}
 
-                {currentStep === 4 && variant === "step4" && (
+                {currentStep === 4 && (
                   <ConfirmStep
                     tickers={selectedEquities}
                     emailFrequency={emailFrequency}
