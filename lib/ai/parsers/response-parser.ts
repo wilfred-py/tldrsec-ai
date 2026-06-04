@@ -8,9 +8,21 @@
  * If the prompt is correct, the response is correct. We don't repair broken JSON.
  */
 
-import { ParserMetrics } from './types';
 import { parseJSONResponse, ParseResult as SimpleParseResult } from './simple-parser';
 import { SECFilingType } from '../prompts/prompt-types';
+
+/**
+ * Metrics for parser performance
+ */
+export interface ParserMetrics {
+  extractionSuccess: boolean;
+  validationSuccess: boolean;
+  extractionTimeMs: number;
+  validationTimeMs: number;
+  extractionMethod: string;
+  errorType?: string;
+  documentType?: SECFilingType;
+}
 import { secLogger as logger } from '../../../utils/logger';
 import { canonicalizeFormType } from '../utils/form-type-utils';
 import { jsonParsingMonitor } from '../../monitoring/json-parsing-monitor';

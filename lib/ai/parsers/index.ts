@@ -8,6 +8,3 @@
 
 export * from './response-parser';
 export * from './simple-parser';
-export * from './streaming';
-export * from './types';
-export * from './metrics';
