@@ -17,10 +17,6 @@ jest.mock('../../lib/db', () => ({
     $queryRaw: jest.fn().mockResolvedValue([{ id: 'mock-filing-id' }]),
   },
 }));
-jest.mock('../../lib/db/connection-manager', () => ({
-  optimizeConnections: jest.fn().mockResolvedValue(undefined),
-  checkDatabaseConnection: jest.fn().mockResolvedValue(undefined),
-}));
 jest.mock('../../lib/ai/summarize', () => ({
   summarizeFiling: jest.fn().mockResolvedValue({
     summaryText: 'Mock summary text',
