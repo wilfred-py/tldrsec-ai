@@ -142,22 +142,6 @@ jest.mock('../lib/db', () => ({
   prisma: sharedMockPrisma,
 }));
 
-// Mock the monitoring services with proper error handling
-jest.mock('../lib/monitoring/alert-service', () => ({
-  alertService: {
-    createAlert: jest.fn().mockResolvedValue('mock-alert-id'),
-    checkThresholds: jest.fn().mockResolvedValue([]),
-    getAlertStatistics: jest.fn().mockResolvedValue({
-      total: 0,
-      byType: {},
-      byStatus: {},
-      trends: {},
-    }),
-    getRecentAlerts: jest.fn().mockResolvedValue([]),
-    resolveAlert: jest.fn().mockResolvedValue(true),
-  },
-}));
-
 // Create a mock Prisma client that can be used in transactions
 const mockPrismaClient = {
   errorAlert: {
