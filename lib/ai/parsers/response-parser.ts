@@ -25,7 +25,8 @@ export interface ParserMetrics {
 }
 import { secLogger as logger } from '../../../utils/logger';
 import { canonicalizeFormType } from '../utils/form-type-utils';
-import { jsonParsingMonitor } from '../../monitoring/json-parsing-monitor';
+import { logger as structuredLogger } from '../../logging';
+import { monitoring } from '../../monitoring';
 import {
   normalizeTransaction as centralNormalizeTx,
   parseStringTransaction as centralParseStringTx,
@@ -579,6 +580,84 @@ export interface ParseResult<T = unknown> {
   metrics?: ParserMetrics;
 }
 
+// ─── JSON parsing telemetry (private to Response Parser) ────────────────────
+//
+// Emits per-attempt monitoring counters and structured logs for each parse
+// outcome so the prompt-improvement loop and dashboards can attribute parse
+// failures to form type and method. Inlined from the former
+// `lib/monitoring/json-parsing-monitor.ts` (412 LOC) for the same reason as
+// the Why It Matters Guard / Ticker Grounding Guard inlines documented in
+// CONTEXT.md: the only production caller is this module, and the former
+// implementation's `JSONParsingMonitor` singleton stored aggregate counters
+// (`recentFailures[]`, `parseTimes[]`, `totalAttempts`) plus reporting methods
+// (`getMetrics`, `getRecentFailures`, `generatePromptImprovementReport`,
+// `resetMetrics`) with **zero non-test readers** — observability flowed only
+// through `monitoring.incrementCounter` and `parsingLogger.*`, never through
+// the singleton's state. The in-memory aggregation was dead surface.
+const parsingLogger = structuredLogger.child('json-parsing-monitor');
+
+function truncateForParsingLog(text: string | undefined, maxLength: number): string {
+  if (!text) return '';
+  const sanitized = text
+    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[SSN]');
+  return sanitized.length <= maxLength
+    ? sanitized
+    : sanitized.substring(0, maxLength) + '... [truncated]';
+}
+
+function recordParsingAttempt(result: SimpleParseResult, formType: string): void {
+  monitoring.incrementCounter('ai.parsing.total', 1, { formType });
+
+  if (result.success) {
+    switch (result.method) {
+      case 'direct':
+        monitoring.incrementCounter('ai.parsing.direct_success', 1, { formType });
+        parsingLogger.debug('Direct JSON parse success', {
+          formType,
+          parseTimeMs: result.parseTimeMs,
+        });
+        return;
+      case 'codeblock-stripped':
+        monitoring.incrementCounter('ai.parsing.codeblock_stripped', 1, { formType });
+        parsingLogger.info('JSON parsed after stripping markdown code block', {
+          formType,
+          parseTimeMs: result.parseTimeMs,
+        });
+        return;
+      case 'bracket-repaired':
+        monitoring.incrementCounter('ai.parsing.bracket_repaired', 1, { formType });
+        parsingLogger.info('JSON parsed after bracket repair', {
+          formType,
+          parseTimeMs: result.parseTimeMs,
+          diagnostics: result.diagnostics,
+        });
+        return;
+    }
+    return;
+  }
+
+  if (result.validationErrors && result.validationErrors.length > 0) {
+    monitoring.incrementCounter('ai.parsing.validation_failure', 1, {
+      formType,
+      missingFields: result.validationErrors.join(','),
+    });
+    parsingLogger.warn('JSON parsed but failed schema validation', {
+      formType,
+      missingFields: result.validationErrors,
+      diagnostics: result.diagnostics,
+    });
+  } else if (result.error) {
+    monitoring.incrementCounter('ai.parsing.json_error', 1, { formType });
+    parsingLogger.error('JSON parse error - prompt improvement needed', {
+      formType,
+      error: result.error,
+      diagnostics: result.diagnostics,
+      responsePreview: truncateForParsingLog(result.rawResponse, 500),
+    });
+  }
+}
+
 /**
  * Parse a Claude API response to extract structured data
  *
@@ -610,7 +689,7 @@ export function parseResponse<T = unknown>(
     const simpleResult: SimpleParseResult = parseJSONResponse(response, filingType);
 
     // Phase 5: Record parsing metrics for monitoring and prompt improvement
-    jsonParsingMonitor.recordParsingAttempt(simpleResult, filingType);
+    recordParsingAttempt(simpleResult, filingType);
 
     metrics.extractionTimeMs = simpleResult.parseTimeMs;
     metrics.extractionMethod = simpleResult.method;
