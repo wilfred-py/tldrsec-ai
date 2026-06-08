@@ -23,11 +23,6 @@ import {
   hasUsableFinancialSection,
 } from './prompts/context-manager';
 import { getEnrichmentContext } from './web-search-context';
-import {
-  isWhyItMattersEnabled,
-  isProviderEnabled,
-  isEarningsMiniDeepDiveEnabled,
-} from './enrichment-flags';
 import { getXSentiment, type XSentimentEnrichment } from './x-sentiment-provider';
 import { isMaxEligible } from '../auth/tier-eligibility';
 // Removed Anthropic SDK import - using OpenRouter client
@@ -1392,6 +1387,81 @@ function truncateDocumentContent(content: string, maxTokens: number): string {
 
 // Component logger
 const componentLogger = logger.child('claude-summarizer');
+
+// ─── Enrichment rollout gates (private to Summarize) ────────────────────────
+//
+// PostHog feature-flag evaluations gating the enrichment path. Inlined from
+// the former `lib/ai/enrichment-flags.ts` for the same reason as the Why It
+// Matters Guard / Ticker Grounding Guard / Numeric Grounding Guard / Historical
+// Context inlines documented in CONTEXT.md and ADR-0002: the only production
+// caller is this Summarize module, the extraction was for testability rather
+// than leverage, and the unit-test surface asserted on internal flag-name
+// constants past the interface.
+//
+// `accessionNumber` flows through as PostHog's `distinctId` for stable
+// per-filing bucketing. Every gate fails-safe-off — any thrown error or
+// missing client resolves to `false`, so a PostHog outage cannot accidentally
+// enable enrichment.
+const ENRICHMENT_TOP_LEVEL_FLAG = 'why_it_matters_enrichment';
+
+const ENRICHMENT_PROVIDER_FLAGS: Record<string, string> = {
+  counterparty: 'why_it_matters_counterparty',
+  governance: 'why_it_matters_governance',
+  debt_issuance: 'why_it_matters_debt',
+  earnings: 'why_it_matters_earnings',
+  capital_return: 'why_it_matters_capital_return',
+  x_sentiment: 'x_sentiment_enrichment',
+};
+
+const EARNINGS_MINI_DEEP_DIVE_FLAG = 'enable_earnings_mini_deep_dive';
+
+async function evaluateEnrichmentFlag(flagKey: string, distinctId: string): Promise<boolean> {
+  // Dev/QA bypass: ENRICHMENT_FORCE_ENABLE=1 short-circuits every flag to true so
+  // test scripts can exercise enrichment without provisioning PostHog flags.
+  // NEVER set this in production — it disables the kill-switch.
+  if (process.env.ENRICHMENT_FORCE_ENABLE === '1') {
+    return true;
+  }
+  try {
+    // Dynamic import prevents posthog-node (Node-only deps like `readline`)
+    // from being pulled into any client bundle that transitively imports
+    // this module via the summarize pipeline.
+    const { getServerPostHog } = await import('../analytics/posthog-server');
+    const posthog = getServerPostHog();
+    if (!posthog) {
+      return false;
+    }
+    const value = await posthog.getFeatureFlag(flagKey, distinctId);
+    return value === true || value === 'true';
+  } catch (error) {
+    componentLogger.warn(`PostHog flag evaluation failed for ${flagKey}, defaulting to off`, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+async function isWhyItMattersEnabled(accessionNumber: string): Promise<boolean> {
+  return evaluateEnrichmentFlag(ENRICHMENT_TOP_LEVEL_FLAG, accessionNumber);
+}
+
+async function isProviderEnabled(providerName: string, accessionNumber: string): Promise<boolean> {
+  const flagKey = ENRICHMENT_PROVIDER_FLAGS[providerName];
+  if (!flagKey) {
+    componentLogger.warn(`Unknown provider name for flag lookup: ${providerName}`);
+    return false;
+  }
+  return evaluateEnrichmentFlag(flagKey, accessionNumber);
+}
+
+/**
+ * Gate for the materialitySignal field on 10-K/10-Q summaries.
+ * Cohort-gated per autoplan plan: Day 1 internal, Day 4 = 10%, Day 14 = 100%.
+ * Kill-switch: unsubscribe rate > 1.5x 7-day baseline triggers auto-rollback.
+ */
+async function isEarningsMiniDeepDiveEnabled(accessionNumber: string): Promise<boolean> {
+  return evaluateEnrichmentFlag(EARNINGS_MINI_DEEP_DIVE_FLAG, accessionNumber);
+}
 
 /**
  * Get the appropriate prompt for a filing type with context

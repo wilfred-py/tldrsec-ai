@@ -43,10 +43,12 @@ jest.mock('@/lib/ai/openrouter-client', () => ({
   openRouterClient: { sendMessage: jest.fn() },
 }));
 
-jest.mock('@/lib/ai/enrichment-flags', () => ({
-  isWhyItMattersEnabled: jest.fn(async () => false),
-  isProviderEnabled: jest.fn(async () => false),
-  isEarningsMiniDeepDiveEnabled: jest.fn(async () => false),
+// PostHog flag evaluation is private to summarize.ts (formerly
+// `lib/ai/enrichment-flags.ts`, inlined into the Summarize module — see
+// CONTEXT.md "Enrichment Flags"). Force every flag off via the dynamic-import
+// seam so the B3 sectionizer is exercised without enrichment side effects.
+jest.mock('@/lib/analytics/posthog-server', () => ({
+  getServerPostHog: () => ({ getFeatureFlag: jest.fn(async () => false) }),
 }));
 
 jest.mock('@/lib/ai/web-search-context', () => ({

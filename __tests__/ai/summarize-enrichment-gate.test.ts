@@ -2,8 +2,7 @@
  * Phase 4 review item 16A: tier gate ordering test.
  *
  * Verifies that summarizeFiling checks MAX-eligibility BEFORE invoking
- * PostHog feature-flag eval (`isWhyItMattersEnabled`) or the provider
- * eligibility check (`isProviderEnabled`). Order matters because:
+ * PostHog feature-flag evaluation or any provider call. Order matters because:
  *
  *   1. PostHog evaluations cost money and rate-limit budget. Calling them
  *      for non-Max users wastes that budget and pollutes the cohort metrics.
@@ -17,11 +16,15 @@
  * The 16A change reorders the existing `if (ENRICHMENT_FORM_TYPES.has(...))`
  * branch so the tier check is the FIRST predicate. This test would have
  * failed before the change.
+ *
+ * PostHog flag evaluation is now private to summarize.ts (inlined from the
+ * former `lib/ai/enrichment-flags.ts` — see CONTEXT.md "Enrichment Flags"),
+ * so we mock the underlying `posthog-server` dynamic import and assert on
+ * `getFeatureFlag` rather than the deleted enrichment-flags entry points.
  */
 
 import { summarizeFiling } from '@/lib/ai/summarize';
 import { openRouterClient } from '@/lib/ai/openrouter-client';
-import { isWhyItMattersEnabled, isProviderEnabled } from '@/lib/ai/enrichment-flags';
 import { getEnrichmentContext } from '@/lib/ai/web-search-context';
 import { getXSentiment } from '@/lib/ai/x-sentiment-provider';
 
@@ -46,10 +49,12 @@ jest.mock('@/lib/ai/openrouter-client', () => ({
   openRouterClient: { sendMessage: jest.fn() },
 }));
 
-jest.mock('@/lib/ai/enrichment-flags', () => ({
-  isWhyItMattersEnabled: jest.fn(),
-  isProviderEnabled: jest.fn(),
-  isEarningsMiniDeepDiveEnabled: jest.fn(async () => false),
+// The dynamic `import('../analytics/posthog-server')` inside Summarize resolves
+// to this mock. `getFeatureFlag` returning `true` opens every gate; the
+// per-test tier check is what determines whether the flag is consulted at all.
+const mockGetFeatureFlag = jest.fn();
+jest.mock('@/lib/analytics/posthog-server', () => ({
+  getServerPostHog: () => ({ getFeatureFlag: mockGetFeatureFlag }),
 }));
 
 jest.mock('@/lib/ai/web-search-context', () => ({
@@ -80,8 +85,6 @@ jest.mock('@/lib/logging', () => ({
 }));
 
 const mockedSendMessage = openRouterClient.sendMessage as jest.Mock;
-const mockedIsWhyItMattersEnabled = isWhyItMattersEnabled as jest.Mock;
-const mockedIsProviderEnabled = isProviderEnabled as jest.Mock;
 const mockedGetEnrichmentContext = getEnrichmentContext as jest.Mock;
 const mockedGetXSentiment = getXSentiment as jest.Mock;
 
@@ -104,6 +107,25 @@ const baseMetadata = {
   accessionNumber: 'acc-gate-test',
 };
 
+// Flag keys consulted by the enrichment branches (why-it-matters and
+// x-sentiment). Excludes `enable_earnings_mini_deep_dive` which is evaluated
+// unconditionally to build the prompt schema, independent of the tier gate.
+const ENRICHMENT_GATE_FLAGS: readonly string[] = [
+  'why_it_matters_enrichment',
+  'why_it_matters_counterparty',
+  'why_it_matters_governance',
+  'why_it_matters_debt',
+  'why_it_matters_earnings',
+  'why_it_matters_capital_return',
+  'x_sentiment_enrichment',
+];
+
+function enrichmentFlagCalls(): unknown[][] {
+  return mockGetFeatureFlag.mock.calls.filter(
+    ([flagKey]) => ENRICHMENT_GATE_FLAGS.includes(flagKey as string),
+  );
+}
+
 describe('summarizeFiling enrichment gate (review 16A)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -113,11 +135,10 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       usage: { inputTokens: 100, outputTokens: 50 },
       cost: { totalCost: 0.001 },
     });
-    // If anything escapes the gate, these would resolve and would be
-    // observable via the call-count assertion. Default to permissive so
-    // a missing gate would fail loudly.
-    mockedIsWhyItMattersEnabled.mockResolvedValue(true);
-    mockedIsProviderEnabled.mockResolvedValue(true);
+    // If anything escapes the gate, the flag eval would resolve and would be
+    // observable via the call-count assertion. Default to permissive (`true`)
+    // so a missing gate would fail loudly.
+    mockGetFeatureFlag.mockResolvedValue(true);
     mockedGetEnrichmentContext.mockResolvedValue([]);
     mockedGetXSentiment.mockResolvedValue({ enrichment: null, skipReason: 'mock' });
   });
@@ -131,10 +152,11 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
     });
 
     // Both enrichment branches (why-it-matters + x-sentiment) gate on tier
-    // FIRST, so neither flag eval should fire for a PRO user without a
-    // trial. If the gate is reordered or removed, this assertion catches it.
-    expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
-    expect(mockedIsProviderEnabled).not.toHaveBeenCalled();
+    // FIRST, so no enrichment flag should be consulted for a PRO user without
+    // a trial. The earnings-mini-deep-dive flag is evaluated unconditionally
+    // to build the prompt schema and is intentionally excluded from the gate
+    // assertion.
+    expect(enrichmentFlagCalls()).toEqual([]);
     expect(mockedGetEnrichmentContext).not.toHaveBeenCalled();
     expect(mockedGetXSentiment).not.toHaveBeenCalled();
   });
@@ -146,7 +168,7 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       isTrialing: false,
       trialEndsAt: null,
     });
-    expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
+    expect(enrichmentFlagCalls()).toEqual([]);
     expect(mockedGetEnrichmentContext).not.toHaveBeenCalled();
     expect(mockedGetXSentiment).not.toHaveBeenCalled();
   });
@@ -157,7 +179,7 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
     await summarizeFiling(ENRICHABLE_8K_CONTENT, {
       metadata: baseMetadata,
     });
-    expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
+    expect(enrichmentFlagCalls()).toEqual([]);
     expect(mockedGetEnrichmentContext).not.toHaveBeenCalled();
     expect(mockedGetXSentiment).not.toHaveBeenCalled();
   });
@@ -171,7 +193,7 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
     });
     // Why-it-matters branch fires its flag eval; x-sentiment branch fires
     // both top-level flag and provider flag (composed inside the same `if`).
-    expect(mockedIsWhyItMattersEnabled).toHaveBeenCalled();
+    expect(enrichmentFlagCalls().length).toBeGreaterThan(0);
   });
 
   it('runs enrichment for active-trial users (Max-eligible via trial)', async () => {
@@ -182,7 +204,7 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       isTrialing: true,
       trialEndsAt: futureTrialEnd,
     });
-    expect(mockedIsWhyItMattersEnabled).toHaveBeenCalled();
+    expect(enrichmentFlagCalls().length).toBeGreaterThan(0);
   });
 
   it('skips enrichment for users with EXPIRED trial', async () => {
@@ -193,15 +215,14 @@ describe('summarizeFiling enrichment gate (review 16A)', () => {
       isTrialing: true,
       trialEndsAt: pastTrialEnd,
     });
-    expect(mockedIsWhyItMattersEnabled).not.toHaveBeenCalled();
+    expect(enrichmentFlagCalls()).toEqual([]);
   });
 });
 
 describe('summarizeFiling defense-in-depth scrub of whyItMatters', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedIsWhyItMattersEnabled.mockResolvedValue(true);
-    mockedIsProviderEnabled.mockResolvedValue(true);
+    mockGetFeatureFlag.mockResolvedValue(true);
     mockedGetEnrichmentContext.mockResolvedValue([]);
     mockedGetXSentiment.mockResolvedValue({ enrichment: null, skipReason: 'mock' });
   });

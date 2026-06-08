@@ -41,11 +41,6 @@ jest.mock('../../lib/ai/enrichment-spend', () => ({
   })),
 }));
 
-jest.mock('../../lib/ai/enrichment-flags', () => ({
-  isWhyItMattersEnabled: jest.fn(async () => true),
-  isProviderEnabled: jest.fn(async () => true),
-}));
-
 import {
   isMAFiling,
   isGovernanceFiling,
