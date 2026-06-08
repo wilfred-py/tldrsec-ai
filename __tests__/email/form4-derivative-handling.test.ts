@@ -17,12 +17,6 @@ jest.mock('../../utils/logger', () => ({
   },
 }));
 
-jest.mock('../../lib/monitoring/json-parsing-monitor', () => ({
-  jsonParsingMonitor: {
-    recordParsingAttempt: jest.fn(),
-  },
-}));
-
 describe('Derivative transaction handling (Bug 4 & 5)', () => {
   describe('newStake derivation for derivative-only filings (Bug 5)', () => {
     it('should suffix newStake with "derivative securities" when all transactions are derivative-type', () => {
