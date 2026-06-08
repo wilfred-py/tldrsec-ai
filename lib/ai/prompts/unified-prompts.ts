@@ -35,9 +35,9 @@ export interface FilingPromptConfig {
    * FORM_SCHEMAS['10-K' | '10-Q'] before the model sees it, and the
    * MATERIALITY SIGNAL section is stripped from the form's extraction
    * guidance. Production callers gate this via PostHog flag
-   * `enable_earnings_mini_deep_dive` (see `isEarningsMiniDeepDiveEnabled`
-   * in `lib/ai/enrichment-flags.ts`). Autoplan Decision #33 — schema/prompt
-   * is the single feature-flag layer.
+   * `enable_earnings_mini_deep_dive` (resolved by `isEarningsMiniDeepDiveEnabled`,
+   * a private function inside the Summarize module `lib/ai/summarize.ts`).
+   * Autoplan Decision #33 — schema/prompt is the single feature-flag layer.
    */
   enableEarningsMiniDeepDive?: boolean;
 }
