@@ -40,11 +40,10 @@ describe('Budget Manipulation Security Tests - DEPRECATED', () => {
 
   describe('OpenRouter Credit Monitoring (New System)', () => {
     it('should rely on OpenRouter for credit limits', () => {
-      // This is a placeholder test documenting the new approach
+      // This is a placeholder test documenting the new approach.
       // OpenRouter handles credit limits via:
       // 1. HTTP 402 errors when credits exhausted
       // 2. /api/v1/auth/key endpoint for credit status
-      // See: lib/ai/openrouter-credit-monitor.ts
       expect(true).toBe(true);
     });
   });
