@@ -2,30 +2,10 @@
  * Type definitions for SEC filing prompts
  */
 
-import { ClaudeRequestOptions } from '../claude-client';
-
-/**
- * Basic prompt template with variable substitution
- */
-export interface PromptTemplate {
-  template: string;
-  variables: string[];
-  defaultValues?: Record<string, string>;
-}
-
-/**
- * Basic prompt template with variable substitution
- */
-export interface PromptTemplate {
-  template: string;
-  variables: string[];
-  defaultValues?: Record<string, string>;
-}
-
 /**
  * SEC Filing Types supported by the system
  */
-export type SECFilingType = 
+export type SECFilingType =
   | '10-K'       // Annual report
   | '10-Q'       // Quarterly report
   | '8-K'        // Current report (material events)
@@ -68,39 +48,4 @@ export interface ContextWindowConfig {
   overlapSize: number;       // Overlap between chunks in tokens
   useSemanticChunking: boolean; // Whether to use semantic boundaries
   chunkStrategy: 'fixed' | 'section-based' | 'adaptive'; // Chunking strategy
-}
-
-/**
- * Template for filing-specific prompts
- */
-export interface FilingPromptTemplate {
-  filingType: SECFilingType;
-  description: string;
-  systemPrompt: string;
-  userPrompt: string;
-  config: {
-    maxInputTokens: number;
-    maxOutputTokens: number;
-    temperature: number;
-    exampleIncluded: boolean;
-    systemPrompt: string;
-  };
-  contextConfig: ContextWindowConfig;
-}
-
-/**
- * Request parameters for generating a prompt
- */
-export interface PromptRequest {
-  filingType: SECFilingType;
-  content: string;
-  companyName: string;
-  ticker: string;
-  filingDate: string;
-  section?: SECFilingSection;
-  fiscalYear?: string;
-  fiscalQuarter?: string;
-  accessionNumber?: string;
-  promptConfig?: Partial<ClaudeRequestOptions>;
-  contextConfig?: Partial<ContextWindowConfig>;
 }
