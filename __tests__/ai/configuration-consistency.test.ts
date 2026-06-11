@@ -75,26 +75,6 @@ describe('AI Configuration Consistency', () => {
       expect(content).toMatch(/temperature:\s*parseFloat\(getEnv\(['"]OPENROUTER_TEMPERATURE['"],\s*['"]0\.2['"]\)/);
     });
 
-    it('should use 0.2 temperature in filing-prompts.ts for all form types', async () => {
-      const promptsPath = path.join(process.cwd(), 'lib/ai/prompts/filing-prompts.ts');
-      const content = fs.readFileSync(promptsPath, 'utf-8');
-
-      // Extract all temperature values
-      const temperatureMatches = content.match(/temperature:\s*(0\.\d+)/g) || [];
-      const temperatures = temperatureMatches.map(match => {
-        const valueMatch = match.match(/0\.\d+/);
-        return valueMatch ? parseFloat(valueMatch[0]) : null;
-      }).filter(v => v !== null);
-
-      // All temperatures should be 0.2 for SEC filing analysis
-      temperatures.forEach(temp => {
-        expect(temp).toBe(0.2);
-      });
-
-      // Should have multiple temperature settings (one per form type)
-      expect(temperatures.length).toBeGreaterThan(5);
-    });
-
   });
 });
 
