@@ -162,10 +162,6 @@ jest.mock('../../lib/slack/webhook-service', () => ({
   }
 }));
 
-jest.mock('../../lib/slack/alert-rules', () => ({
-  evaluateAlertRules: jest.fn().mockReturnValue([])
-}));
-
 jest.mock('../../lib/db/concurrency', () => ({
   updateUserBudgetWithLock: jest.fn().mockResolvedValue({
     previousBudget: 0,
