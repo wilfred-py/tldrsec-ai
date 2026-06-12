@@ -1,12 +1,13 @@
 /**
  * OpenRouter Credit Monitor
  *
- * Monitors OpenRouter API credit status and provides alerts when credits are low.
+ * Fetches OpenRouter API credit status and renders it for the daily Slack
+ * report. The only production caller is `lib/slack/daily-report-handler.ts`.
+ *
  * See: docs/plans/2026-01-02-remove-budget-system-add-credit-monitoring.md
  */
 
 import { logger } from '../logging';
-import { ApiError, ErrorCode } from '../error-handling';
 
 const creditLogger = logger.child('openrouter-credit-monitor');
 
@@ -156,168 +157,4 @@ export function formatCreditStatusForSlack(status: CreditStatus): {
     emoji: '✅',
     color: '#28a745'  // Green
   };
-}
-
-/**
- * Check if credits are critically low (should stop processing)
- */
-export function shouldStopProcessingDueToCredits(status: CreditStatus): boolean {
-  return status.limitReached || status.credits <= 0;
-}
-
-/**
- * Get warning threshold
- */
-export function getCreditWarningThreshold(): number {
-  return WARNING_THRESHOLD;
-}
-
-/**
- * Check if an error indicates insufficient OpenRouter credits
- */
-export function isInsufficientCreditsError(error: unknown): boolean {
-  if (error instanceof ApiError) {
-    return error.code === ErrorCode.AI_INSUFFICIENT_CREDITS;
-  }
-
-  if (error instanceof Error) {
-    const message = error.message.toLowerCase();
-    return message.includes('402') ||
-           message.includes('payment required') ||
-           message.includes('insufficient credits') ||
-           message.includes('credit limit') ||
-           message.includes('out of credits') ||
-           message.includes('no credits');
-  }
-
-  return false;
-}
-
-/**
- * Send Slack alert for insufficient credits
- * Posts to the pipeline-monitor channel
- */
-export async function sendInsufficientCreditsAlert(
-  error: Error,
-  context?: {
-    userId?: string;
-    operation?: string;
-    filingId?: string;
-  }
-): Promise<void> {
-  const webhookUrl = process.env.SLACK_WEBHOOK_URL || process.env.SLACK_ALERTS_WEBHOOK_URL;
-
-  if (!webhookUrl) {
-    creditLogger.warn('No Slack webhook configured, cannot send insufficient credits alert');
-    return;
-  }
-
-  try {
-    // Fetch current credit status for additional context
-    const creditStatus = await getOpenRouterCreditStatus();
-
-    const payload = {
-      text: '🚨 *CRITICAL: OpenRouter Credits Exhausted*',
-      attachments: [
-        {
-          color: '#dc3545',
-          blocks: [
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: '*AI Processing Halted - No Credits Available*\n\nThe OpenRouter API has returned a payment required error. All AI summarization operations are currently failing.'
-              }
-            },
-            {
-              type: 'section',
-              fields: [
-                {
-                  type: 'mrkdwn',
-                  text: `*Error:*\n\`${error.message.substring(0, 200)}\``
-                },
-                {
-                  type: 'mrkdwn',
-                  text: `*Credit Status:*\n${creditStatus.error ? 'Unable to fetch' : `$${creditStatus.credits.toFixed(2)} remaining`}`
-                },
-                ...(context?.userId ? [{
-                  type: 'mrkdwn',
-                  text: `*User:*\n${context.userId}`
-                }] : []),
-                ...(context?.operation ? [{
-                  type: 'mrkdwn',
-                  text: `*Operation:*\n${context.operation}`
-                }] : [])
-              ]
-            },
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: '*Required Action:*\n1. Add credits to OpenRouter account: https://openrouter.ai/credits\n2. Verify credit limit settings\n3. Processing will resume automatically once credits are available'
-              }
-            },
-            {
-              type: 'context',
-              elements: [
-                {
-                  type: 'mrkdwn',
-                  text: `⏰ ${new Date().toISOString()}`
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    };
-
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      creditLogger.error('Failed to send insufficient credits alert to Slack', {
-        status: response.status,
-        statusText: response.statusText
-      });
-    } else {
-      creditLogger.info('Insufficient credits alert sent to Slack');
-    }
-  } catch (alertError) {
-    creditLogger.error('Exception sending insufficient credits alert', {
-      error: alertError instanceof Error ? alertError.message : 'Unknown error'
-    });
-  }
-}
-
-/**
- * Handle an insufficient credits error - logs and sends alert
- * Call this when catching an AI error to check if it's a credit issue
- */
-export async function handlePotentialCreditError(
-  error: unknown,
-  context?: {
-    userId?: string;
-    operation?: string;
-    filingId?: string;
-  }
-): Promise<boolean> {
-  if (!isInsufficientCreditsError(error)) {
-    return false;
-  }
-
-  creditLogger.error('🚨 Insufficient OpenRouter credits detected', {
-    error: error instanceof Error ? error.message : String(error),
-    ...context
-  });
-
-  // Send Slack alert
-  await sendInsufficientCreditsAlert(
-    error instanceof Error ? error : new Error(String(error)),
-    context
-  );
-
-  return true;
 }
