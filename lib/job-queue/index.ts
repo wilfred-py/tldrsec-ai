@@ -32,7 +32,6 @@ export type JobType =
   | 'SEND_FILING_NOTIFICATION'
   // Phase 2: Async processing job types
   | 'ASYNC_SUMMARIZE_FILING'
-  | 'ASYNC_EMAIL_DIGEST'
   | 'ASYNC_FILING_CLEANUP'
   | 'ASYNC_WEBHOOK_NOTIFICATION'
   // Phase 3: 3-phase async pipeline (202 pattern)
@@ -129,22 +128,21 @@ export class JobQueueService {
         'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
         'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
         'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION',
-        'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION',
+        'ASYNC_SUMMARIZE_FILING', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION',
         'ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'
       ];
-      
+
       if (!validJobTypes.includes(jobType)) {
         throw new Error(`Invalid job type: ${jobType}`);
       }
-      
+
       // Validate and sanitize payload
       const sanitizedPayload = sanitizeJSON(payload) as JobPayload;
-      
-      // Check for malicious patterns in payload (skip for email and filing jobs)
+
+      // Check for malicious patterns in payload (skip for filing jobs)
       // Skip security scanning for filing jobs as they contain SEC URLs and filing data that may trigger false positives
       // Also skip 3-phase pipeline jobs as they contain execution IDs and market context that may trigger false positives
       const skipSecurityScan = [
-        'ASYNC_EMAIL_DIGEST',
         'ASYNC_SUMMARIZE_FILING',
         'ASYNC_DISCOVER_FILINGS',
         'ASYNC_FETCH_FILING',
@@ -264,7 +262,7 @@ export class JobQueueService {
           'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
           'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
           'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION',
-          'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION'
+          'ASYNC_SUMMARIZE_FILING', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION'
         ];
 
         if (!validJobTypes.includes(jobType)) {
@@ -334,7 +332,7 @@ export class JobQueueService {
         'CHECK_FILINGS', 'PROCESS_FILING', 'ARCHIVE_FILINGS',
         'CHECK_10K_FILINGS', 'CHECK_10Q_FILINGS', 'CHECK_8K_FILINGS', 'CHECK_FORM4_FILINGS',
         'SUMMARIZE_FILING', 'SEND_FILING_NOTIFICATION',
-        'ASYNC_SUMMARIZE_FILING', 'ASYNC_EMAIL_DIGEST', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION',
+        'ASYNC_SUMMARIZE_FILING', 'ASYNC_FILING_CLEANUP', 'ASYNC_WEBHOOK_NOTIFICATION',
         'ASYNC_DISCOVER_FILINGS', 'ASYNC_FETCH_FILING', 'ASYNC_SUMMARIZE_CACHED'
       ];
 
