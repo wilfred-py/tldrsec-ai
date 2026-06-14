@@ -1305,7 +1305,7 @@ async function handleCleanupLocks(request: NextRequest) {
 
 async function handleCleanupDlq(request: NextRequest) {
   const { getPrismaClient } = await import('@/lib/db/prisma');
-  const { DeadLetterQueueService } = await import('@/lib/job-queue/dead-letter-queue');
+  const { cleanupOldDeadLetterEntries } = await import('@/lib/job-queue/dead-letter-queue');
   const { CronJobMonitor } = await import('@/lib/monitoring/cron-monitor');
   const { CronAuthService } = await import('@/lib/cron/auth-service');
 
@@ -1332,7 +1332,7 @@ async function handleCleanupDlq(request: NextRequest) {
     // Step 1: Clean reprocessed DLQ entries older than 30 days
     try {
       console.log('Cleaning old reprocessed DLQ entries (>30 days)');
-      const cleanedReprocessed = await DeadLetterQueueService.cleanupOldEntries(30);
+      const cleanedReprocessed = await cleanupOldDeadLetterEntries(30);
       results.dlqCleaned = cleanedReprocessed;
       console.log(`Cleaned ${cleanedReprocessed} old reprocessed DLQ entries`);
     } catch (error) {

@@ -7,7 +7,6 @@
 import { NextRequest } from 'next/server';
 import { POST, GET } from '@/app/api/cron/route';
 import { getPrismaClient } from '@/lib/db/prisma';
-import { DeadLetterQueueService } from '@/lib/job-queue/dead-letter-queue';
 import { CronAuthService } from '@/lib/cron/auth-service';
 
 // Mock dependencies
@@ -16,9 +15,8 @@ jest.mock('@/lib/db/prisma', () => ({
 }));
 
 jest.mock('@/lib/job-queue/dead-letter-queue', () => ({
-  DeadLetterQueueService: {
-    cleanupOldEntries: jest.fn()
-  }
+  __esModule: true,
+  cleanupOldDeadLetterEntries: jest.fn()
 }));
 
 jest.mock('@/lib/cron/auth-service', () => ({
@@ -38,7 +36,7 @@ jest.mock('@/lib/monitoring/cron-monitor', () => ({
 
 describe('DLQ Cleanup Endpoint', () => {
   let mockPrisma: any;
-  let cleanupSpy: jest.SpyInstance;
+  let cleanupSpy: jest.Mock;
   let authSpy: jest.SpyInstance;
 
   beforeEach(() => {
@@ -57,13 +55,14 @@ describe('DLQ Cleanup Endpoint', () => {
 
     (getPrismaClient as jest.Mock).mockReturnValue(mockPrisma);
 
-    // Setup spies for static methods
-    cleanupSpy = jest.spyOn(DeadLetterQueueService, 'cleanupOldEntries');
+    // The whole module is jest-mocked above; require returns the mocked exports.
+    // (import * as gives an empty namespace under ts-jest ESM mode for this file.)
+    const dlqMock = require('@/lib/job-queue/dead-letter-queue');
+    cleanupSpy = dlqMock.cleanupOldDeadLetterEntries as jest.Mock;
     authSpy = jest.spyOn(CronAuthService, 'authenticateRequest');
   });
 
   afterEach(() => {
-    cleanupSpy.mockRestore();
     authSpy.mockRestore();
   });
 
