@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { stripe, SUBSCRIPTION_PLANS, getPriceIdForPlan, createCheckoutSession } from '@/lib/stripe';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
-import { PaymentLogger } from '@/lib/audit/payment-logger';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { TRIAL_CONFIG } from '@/lib/auth/trial-config';
 
@@ -12,6 +11,24 @@ const DirectCheckoutSchema = z.object({
   email: z.string().email(),
   planType: z.enum(['PRO', 'MAX']),
 });
+
+// Console-only audit trail for checkout attempts. The prior `lib/audit/payment-logger.ts`
+// wrote to `prisma.securityAuditLog`, a table that does not exist in the schema — every
+// DB write silently failed in its catch handler. The console line is what was actually
+// landing in production logs.
+function logCheckoutAudit(event: {
+  type: 'checkout_started' | 'checkout_failed';
+  email: string;
+  amount?: number;
+  error?: string;
+}) {
+  console.log(`[Payment Audit] ${event.type}`, {
+    timestamp: new Date().toISOString(),
+    email: event.email,
+    amount: event.amount,
+    error: event.error,
+  });
+}
 
 // Apply rate limiting wrapper
 const checkoutRateLimit = rateLimit(rateLimitConfigs.checkout);
@@ -26,17 +43,10 @@ export async function POST(request: NextRequest) {
     const { email, planType } = DirectCheckoutSchema.parse(body);
     parsedEmail = email;
 
-    // Extract request metadata for audit logging
-    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    // Log checkout attempt
-    await PaymentLogger.checkoutStarted({
+    logCheckoutAudit({
+      type: 'checkout_started',
       email,
-      planType,
       amount: SUBSCRIPTION_PLANS[planType].monthlyPrice,
-      ipAddress,
-      userAgent,
     });
 
     if (!stripe) {
@@ -87,10 +97,10 @@ export async function POST(request: NextRequest) {
         stripe.subscriptions.list({ customer: customer.id, status: 'trialing', limit: 1 }),
       ]);
       if (activeSubs.data.length > 0 || trialingSubs.data.length > 0) {
-        await PaymentLogger.checkoutFailed({
+        logCheckoutAudit({
+          type: 'checkout_failed',
           email,
           error: 'active_subscription_exists',
-          ipAddress,
         });
         return NextResponse.json(
           {
@@ -132,12 +142,12 @@ export async function POST(request: NextRequest) {
       sessionUrl: session.url
     });
   } catch (error) {
-    // Log checkout failure
     if (parsedEmail) {
-      await PaymentLogger.checkoutFailed({
+      logCheckoutAudit({
+        type: 'checkout_failed',
         email: parsedEmail,
         error: error instanceof Error ? error.message : 'Unknown error',
-      }).catch(() => {}); // Don't let logger failure mask the real error
+      });
     }
 
     console.error('Checkout API error:', error);

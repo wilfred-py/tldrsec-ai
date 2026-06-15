@@ -104,11 +104,6 @@ const sharedMockPrisma = {
     findMany: jest.fn().mockResolvedValue([]),
     aggregate: jest.fn().mockResolvedValue({ _avg: {}, _count: {} }),
   },
-  securityAuditLog: {
-    create: jest.fn().mockResolvedValue({ id: 'mock-audit-id' }),
-    findMany: jest.fn().mockResolvedValue([]),
-    count: jest.fn().mockResolvedValue(0),
-  },
   distributedLock: {
     findFirst: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockResolvedValue({ id: 'mock-lock-id' }),
@@ -156,9 +151,4 @@ const mockPrismaClient = {
     findMany: jest.fn().mockResolvedValue([]),
     aggregate: jest.fn().mockResolvedValue({ _avg: {}, _count: {} }),
   },
-  securityAuditLog: {
-    create: jest.fn().mockResolvedValue({ id: 'mock-audit-id' }),
-    findMany: jest.fn().mockResolvedValue([]),
-    count: jest.fn().mockResolvedValue(0),
-  },
-}; 
+};
