@@ -1,10 +1,13 @@
 /**
- * Tests for cached-summary-delivery — the onboarding email ranking + send path.
+ * Tests for cached-summary-delivery — the [Onboarding] first-email module.
  *
- * Mocks Prisma + sendFilingSummaryEmail. Covers:
+ * Mocks Prisma + sendFilingSummaryEmail + sendEmail + getEmailTemplate.
+ * Covers:
  * - calculateCompositeScore (pure function — direct unit tests)
  * - pickBestSummaryForUser (two-stage select, ranking, tiebreaker)
- * - deliverFirstOnboardingEmail (idempotency, all DeliveryResult branches)
+ * - deliverFirstOnboardingEmail happy path (idempotency, cached-summary branches)
+ * - deliverFirstOnboardingEmail fallback path (the absorbed
+ *   onboarding-fallback-notice — subject line, template, send, persistence)
  * - deliverCachedSummaries (deprecated shim)
  */
 
@@ -36,12 +39,23 @@ jest.mock('@/lib/email/summary-service', () => ({
     mockSendFilingSummaryEmail(...args),
 }));
 
+const mockSendEmail = jest.fn();
+jest.mock('@/lib/email', () => ({
+  sendEmail: (...args: unknown[]) => mockSendEmail(...args),
+}));
+
+const mockGetEmailTemplate = jest.fn();
+jest.mock('@/lib/email/templates', () => ({
+  getEmailTemplate: (...args: unknown[]) => mockGetEmailTemplate(...args),
+}));
+
 import {
   calculateCompositeScore,
   pickBestSummaryForUser,
   deliverFirstOnboardingEmail,
   deliverCachedSummaries,
 } from '@/lib/onboarding/cached-summary-delivery';
+import { EmailType } from '@/lib/email/types';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -338,33 +352,57 @@ describe('deliverFirstOnboardingEmail', () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       onboardingFirstEmailSentAt: new Date('2026-01-01'),
     });
-    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com');
+    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
     expect(result).toEqual({ delivered: false, reason: 'already_sent' });
     expect(mockSendFilingSummaryEmail).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
     expect(mockPrisma.user.update).not.toHaveBeenCalled();
   });
 
-  it('returns no_tickers when user has zero tickers', async () => {
+  it('falls back to the "watching your tickers" notice when user has zero tickers', async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       onboardingFirstEmailSentAt: null,
     });
+    // pickBestSummaryForUser sees zero tickers → returns null → fallback path.
+    // The fallback path re-queries tickers (also empty).
     mockPrisma.ticker.findMany.mockResolvedValue([]);
-    mockPrisma.ticker.count.mockResolvedValue(0);
-    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com');
-    expect(result.delivered).toBe(false);
-    expect(result.reason).toBe('no_tickers');
+    mockGetEmailTemplate.mockResolvedValue({
+      html: '<p>fallback</p>',
+      text: 'fallback',
+    });
+    mockSendEmail.mockResolvedValue({ success: true });
+    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+    expect(result).toEqual({ delivered: true, reason: 'fallback_sent' });
+    expect(mockSendFilingSummaryEmail).not.toHaveBeenCalled();
+    expect(mockGetEmailTemplate).toHaveBeenCalledWith(
+      EmailType.ONBOARDING_FALLBACK_NOTICE,
+      expect.objectContaining({
+        recipientName: 'Wilfred',
+        trackedTickers: [],
+      }),
+    );
   });
 
-  it('returns no_cached_summaries when tickers exist but no candidates', async () => {
+  it('falls back to the "watching your tickers" notice when tickers exist but no cached candidates', async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       onboardingFirstEmailSentAt: null,
     });
     mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'OBSCURE' }]);
     mockPrisma.summary.findMany.mockResolvedValue([]);
-    mockPrisma.ticker.count.mockResolvedValue(1);
-    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com');
-    expect(result.delivered).toBe(false);
-    expect(result.reason).toBe('no_cached_summaries');
+    mockGetEmailTemplate.mockResolvedValue({
+      html: '<p>fallback</p>',
+      text: 'fallback',
+    });
+    mockSendEmail.mockResolvedValue({ success: true });
+    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+    expect(result).toEqual({ delivered: true, reason: 'fallback_sent' });
+    expect(mockGetEmailTemplate).toHaveBeenCalledWith(
+      EmailType.ONBOARDING_FALLBACK_NOTICE,
+      expect.objectContaining({
+        recipientName: 'Wilfred',
+        trackedTickers: ['OBSCURE'],
+      }),
+    );
   });
 
   it('on success: sends email + persists onboardingFirstEmailSentAt + onboardingFirstSummaryId', async () => {
@@ -376,7 +414,7 @@ describe('deliverFirstOnboardingEmail', () => {
     mockPrisma.summary.findUnique.mockResolvedValue(mkUnique());
     mockSendFilingSummaryEmail.mockResolvedValue({ success: true });
 
-    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com');
+    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
     expect(result.delivered).toBe(true);
     expect(result.summaryId).toBe('sum_winner');
     expect(mockPrisma.user.update).toHaveBeenCalledWith(
@@ -399,7 +437,7 @@ describe('deliverFirstOnboardingEmail', () => {
     mockPrisma.summary.findUnique.mockResolvedValue(mkUnique());
     mockSendFilingSummaryEmail.mockResolvedValue({ success: true });
 
-    await deliverFirstOnboardingEmail('user_1', 'a@b.com');
+    await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
     expect(mockPrisma.summaryEmailDelivery.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -423,7 +461,7 @@ describe('deliverFirstOnboardingEmail', () => {
       error: 'rate limited',
     });
 
-    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com');
+    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
     expect(result).toEqual({
       delivered: false,
       reason: 'email_failed',
@@ -446,7 +484,7 @@ describe('deliverFirstOnboardingEmail', () => {
       new Error('unique constraint violation')
     );
 
-    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com');
+    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
     // Should still report delivered:true — the email was sent
     expect(result.delivered).toBe(true);
   });
@@ -460,10 +498,113 @@ describe('deliverFirstOnboardingEmail', () => {
     mockPrisma.summary.findUnique.mockResolvedValue(mkUnique());
     mockSendFilingSummaryEmail.mockRejectedValue(new Error('network blew up'));
 
-    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com');
+    const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
     expect(result.delivered).toBe(false);
     expect(result.reason).toBe('internal_error');
     expect(result.error).toContain('network blew up');
+  });
+
+  // --------------------------------------------------------------------------
+  // Fallback-path tests — absorbed from the deleted
+  // lib/email/onboarding-fallback-service.ts seam. Exercise the same behaviour
+  // through the deepened interface so observable outcomes are still anchored.
+  // --------------------------------------------------------------------------
+
+  describe('fallback path (no cached summary)', () => {
+    beforeEach(() => {
+      // Set up the "no cached candidate" precondition once per case.
+      mockPrisma.user.findUnique.mockResolvedValue({
+        onboardingFirstEmailSentAt: null,
+      });
+      mockPrisma.summary.findMany.mockResolvedValue([]);
+      mockGetEmailTemplate.mockResolvedValue({
+        html: '<p>fallback</p>',
+        text: 'fallback',
+      });
+      mockSendEmail.mockResolvedValue({ success: true });
+    });
+
+    it('subject uses first 3 tickers verbatim when ≤3', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([
+        { symbol: 'AAPL' },
+        { symbol: 'MSFT' },
+      ]);
+      await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+      const subject = mockSendEmail.mock.calls[0][0].subject;
+      expect(subject).toBe("We're watching AAPL, MSFT");
+    });
+
+    it('subject truncates to first 3 tickers + "+N" overflow when >3', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([
+        { symbol: 'AAPL' },
+        { symbol: 'MSFT' },
+        { symbol: 'GOOGL' },
+        { symbol: 'NVDA' },
+        { symbol: 'COIN' },
+      ]);
+      await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+      const subject = mockSendEmail.mock.calls[0][0].subject;
+      expect(subject).toBe("We're watching AAPL, MSFT, GOOGL +2");
+    });
+
+    it('subject falls back to generic copy when user has no tickers', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([]);
+      await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+      const subject = mockSendEmail.mock.calls[0][0].subject;
+      expect(subject).toBe("We're watching your tickers");
+    });
+
+    it('tags email with type:onboarding-fallback-notice', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+      const tags = mockSendEmail.mock.calls[0][0].tags;
+      expect(tags).toContain('type:onboarding-fallback-notice');
+    });
+
+    it('on success: persists onboardingFirstEmailSentAt without summaryId', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user_1' },
+          data: { onboardingFirstEmailSentAt: expect.any(Date) },
+        }),
+      );
+      const updateData = mockPrisma.user.update.mock.calls[0][0].data;
+      expect(updateData.onboardingFirstSummaryId).toBeUndefined();
+    });
+
+    it('returns fallback_failed with error.message when sendEmail.success=false', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockSendEmail.mockResolvedValue({
+        success: false,
+        error: { message: 'rate limited', code: '429' },
+      });
+      const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+      expect(result).toEqual({
+        delivered: false,
+        reason: 'fallback_failed',
+        error: 'rate limited',
+      });
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('returns internal_error when getEmailTemplate throws', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockGetEmailTemplate.mockRejectedValue(new Error('template explosion'));
+      const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+      expect(result.delivered).toBe(false);
+      expect(result.reason).toBe('internal_error');
+      expect(result.error).toContain('template explosion');
+    });
+
+    it('returns internal_error when sendEmail throws (not just returns failure)', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockSendEmail.mockRejectedValue(new Error('network down'));
+      const result = await deliverFirstOnboardingEmail('user_1', 'a@b.com', 'Wilfred');
+      expect(result.reason).toBe('internal_error');
+      expect(result.error).toContain('network down');
+    });
   });
 });
 

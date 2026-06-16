@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { getPrismaClient } from '@/lib/db/prisma';
+import { sendEmail } from '@/lib/email';
 import { sendFilingSummaryEmail } from '@/lib/email/summary-service';
+import { getEmailTemplate } from '@/lib/email/templates';
+import { EmailType } from '@/lib/email/types';
 import { SUCCESS_STATUSES } from '@/lib/db/summary-status';
 
 // ---------------------------------------------------------------------------
@@ -307,9 +310,15 @@ export async function pickBestSummaryForUser(
 }
 
 /**
- * Deliver the single best cached summary as one email through the production
- * wrapper. Idempotent on `User.onboardingFirstEmailSentAt` — re-running for
- * the same user is a no-op.
+ * Deliver the single best cached summary as one email — and when no cached
+ * summary is available, deliver the long-tail "we're watching your tickers"
+ * fallback notice instead. Idempotent on `User.onboardingFirstEmailSentAt`:
+ * whichever path runs writes the column, so re-running for the same user is
+ * always a no-op regardless of which path delivered.
+ *
+ * The two paths share one [Onboarding] First Email interface so callers never
+ * branch on `reason` to compose a second send — the "you'll receive an email
+ * shortly" promise is honoured in a single function call.
  *
  * Returns delivery metadata for the caller to log/instrument.
  */
@@ -320,6 +329,8 @@ export interface DeliveryResult {
     | 'no_tickers'
     | 'no_cached_summaries'
     | 'email_failed'
+    | 'fallback_sent'
+    | 'fallback_failed'
     | 'internal_error';
   summaryId?: string;
   score?: number;
@@ -328,11 +339,13 @@ export interface DeliveryResult {
 
 export async function deliverFirstOnboardingEmail(
   userId: string,
-  userEmail: string
+  userEmail: string,
+  recipientName: string,
 ): Promise<DeliveryResult> {
   const prisma = getPrismaClient();
 
-  // Idempotency guard — set once, never re-send.
+  // Idempotency guard — set once, never re-send. Covers both the cached-summary
+  // happy path AND the fallback notice path; both write the same column.
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { onboardingFirstEmailSentAt: true },
@@ -343,13 +356,16 @@ export async function deliverFirstOnboardingEmail(
 
   const winner = await pickBestSummaryForUser(userId);
   if (!winner) {
-    // Caller is responsible for sending the fallback notice; this function
-    // only handles the cached-summary happy path. Reason is reported back.
-    const tickerCount = await prisma.ticker.count({ where: { userId } });
-    return {
-      delivered: false,
-      reason: tickerCount === 0 ? 'no_tickers' : 'no_cached_summaries',
-    };
+    const trackedTickers = await prisma.ticker.findMany({
+      where: { userId },
+      select: { symbol: true },
+    });
+    return deliverFallbackNotice({
+      userId,
+      userEmail,
+      recipientName,
+      trackedTickers: trackedTickers.map((t) => t.symbol),
+    });
   }
 
   try {
@@ -411,20 +427,92 @@ export async function deliverFirstOnboardingEmail(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Fallback notice — private implementation, reached when no cached summary
+// is available across the user's tickers.
+// ---------------------------------------------------------------------------
+
+interface FallbackInput {
+  userId: string;
+  userEmail: string;
+  recipientName: string;
+  trackedTickers: string[];
+}
+
+async function deliverFallbackNotice(
+  input: FallbackInput,
+): Promise<DeliveryResult> {
+  const prisma = getPrismaClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app';
+  const dashboardUrl = `${appUrl}/dashboard`;
+  const unsubscribeUrl = `${appUrl}/dashboard/settings`;
+
+  try {
+    const { html, text } = await getEmailTemplate(
+      EmailType.ONBOARDING_FALLBACK_NOTICE,
+      {
+        recipientName: input.recipientName,
+        trackedTickers: input.trackedTickers,
+        dashboardUrl,
+        unsubscribeUrl,
+      } as Record<string, unknown>,
+    );
+
+    const subject =
+      input.trackedTickers.length > 0
+        ? `We're watching ${input.trackedTickers.slice(0, 3).join(', ')}${input.trackedTickers.length > 3 ? ` +${input.trackedTickers.length - 3}` : ''}`
+        : "We're watching your tickers";
+
+    const result = await sendEmail({
+      to: input.userEmail,
+      subject,
+      html,
+      text,
+      tags: ['type:onboarding-fallback-notice'],
+    });
+
+    if (!result.success) {
+      return {
+        delivered: false,
+        reason: 'fallback_failed',
+        error: result.error?.message,
+      };
+    }
+
+    // Mark the onboarding-first-email column so this user never gets the
+    // cached path or the fallback again. summaryId stays null (no summary
+    // was sent).
+    await prisma.user.update({
+      where: { id: input.userId },
+      data: { onboardingFirstEmailSentAt: new Date() },
+    });
+
+    return { delivered: true, reason: 'fallback_sent' };
+  } catch (err) {
+    return {
+      delivered: false,
+      reason: 'internal_error',
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 /**
  * @deprecated Use `deliverFirstOnboardingEmail` instead.
  *
  * Kept as a thin shim ONLY for the legacy `/api/onboarding?action=deliver-summaries`
  * route in `app/api/onboarding/route.ts`. Once that route is removed (follow-up
  * cleanup once the 3 client trigger sites are deleted), this function and the
- * route both go away.
+ * route both go away. The shim passes an empty `recipientName` because the
+ * deprecated route never had access to one — fallback subject lines remain
+ * usable even when the recipient name is blank.
  */
 export async function deliverCachedSummaries(
   userId: string,
   userEmail: string,
-  _userName: string
+  userName: string,
 ): Promise<{ delivered: number; reason?: string; error?: string }> {
-  const result = await deliverFirstOnboardingEmail(userId, userEmail);
+  const result = await deliverFirstOnboardingEmail(userId, userEmail, userName);
   return {
     delivered: result.delivered ? 1 : 0,
     ...(result.reason ? { reason: result.reason } : {}),
