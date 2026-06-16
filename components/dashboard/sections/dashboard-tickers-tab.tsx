@@ -1,6 +1,6 @@
 import { getUserAndTickers } from '@/lib/db/get-user-and-tickers';
 import { TickersPanel } from '@/components/dashboard/tickers-panel';
-import { THREE_TIER_LIMITS } from '@/lib/subscription/three-tier-limits';
+import { TICKER_LIMIT_BY_TIER } from '@/lib/auth/tier-eligibility';
 
 // Async server component for the Tickers tab content. Calls the cached
 // getUserAndTickers helper so it dedupes with the parallel stats/activity/
@@ -14,7 +14,7 @@ export async function DashboardTickersTab({ authProviderId }: { authProviderId: 
       <TickersPanel
         initialCompanies={[]}
         subscriptionTier="FREE"
-        tickerLimit={THREE_TIER_LIMITS.FREE}
+        tickerLimit={TICKER_LIMIT_BY_TIER.FREE}
       />
     );
   }
@@ -23,7 +23,7 @@ export async function DashboardTickersTab({ authProviderId }: { authProviderId: 
     <TickersPanel
       initialCompanies={data.initialCompanies}
       subscriptionTier={data.dbUser.subscriptionTier}
-      tickerLimit={THREE_TIER_LIMITS[data.dbUser.subscriptionTier]}
+      tickerLimit={TICKER_LIMIT_BY_TIER[data.dbUser.subscriptionTier]}
     />
   );
 }

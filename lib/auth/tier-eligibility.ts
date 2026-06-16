@@ -109,3 +109,62 @@ export function isSubscriptionActive(sub: SubscriptionActiveFields | null | unde
   if (!sub) return false;
   return sub.isActive && sub.currentPeriodEnd.getTime() > Date.now();
 }
+
+// ---------------------------------------------------------------------------
+// Ticker-tracking limit per [Subscription] tier
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum number of tracked tickers per tier. `-1` means unlimited — both
+ * FREE and MAX are unlimited; PRO is capped at 25.
+ *
+ * The canonical map for "given a tier, how many tickers can the user track?"
+ * Three call sites consult this:
+ *   - app/api/user/tickers/route.ts        (POST add-ticker enforcement)
+ *   - app/(auth)/onboarding/types.ts       (onboarding soft-cap derivation)
+ *   - components/dashboard/sections/dashboard-tickers-tab.tsx
+ *                                          (TickersPanel header copy)
+ *
+ * Replaces lib/subscription/three-tier-limits.ts, which split the limit
+ * table from the tier-eligibility authority even though the limit IS a
+ * tier-driven predicate. Collapsing the seam means a maintainer changing
+ * tier behaviour reads ONE place — limits, active-trial, max-eligibility,
+ * subscription-active all live alongside.
+ */
+export const TICKER_LIMIT_BY_TIER = {
+  FREE: -1,
+  PRO: 25,
+  MAX: -1,
+} as const;
+
+export type TickerLimitTier = keyof typeof TICKER_LIMIT_BY_TIER;
+
+/**
+ * True when the user has hit (or exceeded) the ticker-tracking limit for
+ * their tier and the next add should be rejected. `-1` (unlimited) never
+ * limits.
+ */
+export function isTickerLimitReached(currentCount: number, tier: TickerLimitTier): boolean {
+  const limit = TICKER_LIMIT_BY_TIER[tier];
+  if (limit === -1) return false;
+  return currentCount >= limit;
+}
+
+export interface TickerLimitInfo {
+  limit: number;
+  tier: TickerLimitTier;
+  unlimited: boolean;
+}
+
+/**
+ * Build the rejection payload's tier+limit triple for the
+ * `/api/user/tickers` 403 response.
+ */
+export function getTickerLimitInfo(tier: TickerLimitTier): TickerLimitInfo {
+  const limit = TICKER_LIMIT_BY_TIER[tier];
+  return {
+    limit,
+    tier,
+    unlimited: limit === -1,
+  };
+}
