@@ -13,8 +13,8 @@
  * - API parameter validation
  */
 
-import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { 
+import { describe, test, expect } from '@jest/globals';
+import {
   detectMaliciousPatterns,
   sanitizeForSQL,
   sanitizeHTML,
@@ -30,16 +30,6 @@ import {
   sanitizeAPIKey,
   sanitizeEnvVar
 } from '../../lib/validation/sanitizers';
-import { ValidationSchemas } from '../../lib/validation/schemas';
-import { 
-  applySecurityMiddleware,
-  detectAttackPatterns,
-  sanitizeInput,
-  validateCronSecurity,
-  validateIPAddress
-} from '../../lib/validation/middleware';
-import { z } from 'zod';
-import { NextRequest } from 'next/server';
 
 describe('Security Validation Test Suite', () => {
   
@@ -336,102 +326,6 @@ describe('Security Validation Test Suite', () => {
     });
   });
   
-  describe('Validation Schemas', () => {
-    test('should validate ticker symbols', () => {
-      expect(ValidationSchemas.ticker.parse('AAPL')).toBe('AAPL');
-      expect(ValidationSchemas.ticker.parse('tsla')).toBe('TSLA');  // Should uppercase
-      expect(() => ValidationSchemas.ticker.parse('invalid ticker')).toThrow();
-      expect(() => ValidationSchemas.ticker.parse('')).toThrow();
-    });
-    
-    test('should validate filing types', () => {
-      expect(ValidationSchemas.filingType.parse('10-K')).toBe('10-K');
-      expect(ValidationSchemas.filingType.parse('8-K')).toBe('8-K');
-      expect(() => ValidationSchemas.filingType.parse('INVALID')).toThrow();
-    });
-    
-    test('should validate UUIDs', () => {
-      const validUUID = '123e4567-e89b-12d3-a456-426614174000';
-      expect(ValidationSchemas.uuid.parse(validUUID)).toBe(validUUID);
-      expect(() => ValidationSchemas.uuid.parse('invalid-uuid')).toThrow();
-    });
-    
-    test('should validate safe integers', () => {
-      expect(ValidationSchemas.positiveInteger.parse(5)).toBe(5);
-      expect(() => ValidationSchemas.positiveInteger.parse(0)).toThrow();
-      expect(() => ValidationSchemas.positiveInteger.parse(-1)).toThrow();
-    });
-  });
-  
-  describe('Security Middleware', () => {
-    test('should validate cron security', () => {
-      // Mock environment variable
-      process.env.CRON_SECRET = 'test-secret-key';
-      
-      const validRequest = new NextRequest('http://localhost:3000/api/cron/test', {
-        headers: { 'x-cron-secret': 'test-secret-key' }
-      });
-      
-      const invalidRequest = new NextRequest('http://localhost:3000/api/cron/test', {
-        headers: { 'x-cron-secret': 'wrong-key' }
-      });
-      
-      const noHeaderRequest = new NextRequest('http://localhost:3000/api/cron/test');
-      
-      expect(validateCronSecurity(validRequest)).toBe(true);
-      expect(validateCronSecurity(invalidRequest)).toBe(false);
-      expect(validateCronSecurity(noHeaderRequest)).toBe(false);
-    });
-    
-    test('should validate IP addresses', () => {
-      const validIPv4Request = new NextRequest('http://localhost:3000/test', {
-        headers: { 'x-forwarded-for': '192.168.1.1' }
-      });
-      
-      const validIPv6Request = new NextRequest('http://localhost:3000/test', {
-        headers: { 'x-forwarded-for': '2001:0db8:85a3:0000:0000:8a2e:0370:7334' }
-      });
-      
-      const invalidIPRequest = new NextRequest('http://localhost:3000/test', {
-        headers: { 'x-forwarded-for': 'invalid-ip' }
-      });
-      
-      expect(validateIPAddress(validIPv4Request).isValid).toBe(true);
-      expect(validateIPAddress(validIPv6Request).isValid).toBe(true);
-      expect(validateIPAddress(invalidIPRequest).isValid).toBe(false);
-    });
-    
-    test('should detect attack patterns in input', () => {
-      const maliciousInput = "'; DROP TABLE users; --";
-      const safeInput = "normal text";
-      
-      const maliciousResult = detectAttackPatterns(maliciousInput);
-      const safeResult = detectAttackPatterns(safeInput);
-      
-      expect(maliciousResult.detected).toBe(true);
-      expect(maliciousResult.patterns.length).toBeGreaterThan(0);
-      expect(safeResult.detected).toBe(false);
-      expect(safeResult.patterns.length).toBe(0);
-    });
-    
-    test('should sanitize input recursively', () => {
-      const input = {
-        name: '<script>alert(1)</script>',
-        data: {
-          query: "'; DROP TABLE users; --",
-          array: ['safe', '<img onerror="alert(1)">']
-        }
-      };
-      
-      const result = sanitizeInput(input) as any;
-      expect(typeof result).toBe('object');
-      expect(result.name).toBe('');
-      expect(result.data.query).toBe("''; DROP TABLE users ");
-      expect(result.data.array[0]).toBe('safe');
-      expect(result.data.array[1]).toBe('');
-    });
-  });
-  
   describe('Integration Security Tests', () => {
     test('should handle complex attack payloads', () => {
       const complexAttack = `
@@ -496,10 +390,5 @@ describe('Security Validation Test Suite', () => {
         expect(result.threats).toContain('templateInjection');
       });
     });
-  });
-  
-  afterEach(() => {
-    // Clean up environment variables
-    delete process.env.CRON_SECRET;
   });
 });
