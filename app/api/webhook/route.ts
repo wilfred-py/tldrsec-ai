@@ -10,7 +10,7 @@ import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
-import { checkIPTrialAbuse } from '@/lib/security/trial-abuse-prevention';
+import { TRIAL_CONFIG } from '@/lib/auth/trial-config';
 import { validateWebhookSignature, getPlanTypeFromPriceId, isFoundingLifetimePriceId, stripe } from '@/lib/stripe';
 import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod, syncLifetimeSeat, revokeLifetimeSeat } from '@/lib/stripe/sync-subscription';
 import { isLifetimeSentinel } from '@/lib/stripe/constants';
@@ -113,9 +113,19 @@ async function handleClerkWebhook(req: Request) {
           // no longer set for new users.
           if (ipAddress !== 'unknown') {
             try {
-              const abuseCheck = await checkIPTrialAbuse(ipAddress);
-              if (!abuseCheck.allowed) {
-                console.warn(`[trial-abuse] IP ${ipAddress} flagged: ${abuseCheck.reason}`);
+              const windowStart = new Date(
+                Date.now() - TRIAL_CONFIG.IP_WINDOW_DAYS * 24 * 60 * 60 * 1000
+              );
+              const userCount = await prisma.user.count({
+                where: {
+                  signupIpAddress: ipAddress,
+                  createdAt: { gte: windowStart },
+                },
+              });
+              if (userCount >= TRIAL_CONFIG.MAX_TRIALS_PER_IP) {
+                console.warn(
+                  `[trial-abuse] IP ${ipAddress} flagged: Maximum trial signups reached for this IP address`
+                );
               }
             } catch (err) {
               console.error('[trial-abuse] Check failed:', err);
