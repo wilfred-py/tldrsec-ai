@@ -172,16 +172,6 @@ jest.mock('../../lib/cron/auth-service', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    runSecFilingMonitoring: jest.fn().mockResolvedValue({
-      tickersChecked: 0,
-      newFilingsFound: 0,
-      errorCount: 0
-    })
-  }
-}));
-
 jest.mock('../../lib/security/secure-random', () => ({
   generateSecureExecutionId: jest.fn().mockReturnValue('test-execution-id-123')
 }));
@@ -253,7 +243,6 @@ jest.mock('../../services/company/filings', () => ({
 import { getPrismaClient } from '../../lib/db/prisma';
 import { GET as tierAwareRoute } from '../../app/api/cron/route';
 import { CronAuthService } from '../../lib/cron/auth-service';
-import { CronSecFilingService } from '../../lib/cron/sec-filing-service';
 
 // Get reference to the mocked Prisma instance
 const mockPrismaInstance = (getPrismaClient as jest.Mock)();
@@ -281,7 +270,6 @@ const mockRateLimiter = rateLimiter as jest.Mocked<typeof rateLimiter>;
 
 // Mock service references
 const mockCronAuthService = CronAuthService as jest.Mocked<typeof CronAuthService>;
-const mockCronSecFilingService = CronSecFilingService as jest.Mocked<typeof CronSecFilingService>;
 
 
 // Mock CronJobMonitor
@@ -1685,12 +1673,6 @@ describe('Comprehensive Cron Integration Tests', () => {
       clientIP: '127.0.0.1' 
     });
     mockCronAuthService.detectPlatform.mockReturnValue('test');
-    
-    mockCronSecFilingService.runSecFilingMonitoring.mockResolvedValue({
-      tickersChecked: 0,
-      newFilingsFound: 0,
-      errorCount: 0
-    });
-    
+
   }
 });

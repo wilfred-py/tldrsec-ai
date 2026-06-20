@@ -15,10 +15,114 @@
 
 import { logger } from '../../logging';
 import type { JobPayload } from '../../job-queue';
-import { CronSecFilingService } from '../sec-filing-service';
+import { checkTickerForNewFilings } from '../../sec-edgar/ticker-monitoring';
 import { getPriorityForTier } from '../tier-eligibility';
 
 const discoveryLogger = logger.child('discovery-handler');
+
+/**
+ * Filing record assembled by the RSS-driven discovery walk below.
+ *
+ * Wider than the SEC EDGAR RSS row — accession + form metadata are
+ * normalized to strings, and the originating ticker is folded in so
+ * downstream handlers can ship jobs by symbol without re-joining.
+ */
+interface DiscoveredFiling {
+  id: string;
+  accessionNumber: string;
+  formType: string;
+  filingDate: string;
+  url: string;
+  ticker: string;
+  title: string;
+}
+
+/**
+ * Walk a list of tickers and return any new [Filing]s observed since each
+ * ticker's last RSS check. Tickers without a CIK or without a
+ * `TickerMonitoring` row are skipped silently; failures on one ticker
+ * never abort the loop.
+ *
+ * Private to the discovery handler — `handleDiscovery` is the only
+ * caller. RSS retrieval delegates to `checkTickerForNewFilings` in the
+ * SEC EDGAR Access surface.
+ */
+async function checkRssForNewFilings(
+  tickers: Array<{ symbol: string; companyName: string | null; cik: string | null }>,
+): Promise<DiscoveredFiling[]> {
+  const allNewFilings: DiscoveredFiling[] = [];
+
+  for (const tickerItem of tickers) {
+    try {
+      if (!tickerItem.cik) {
+        discoveryLogger.debug(`Skipping ticker ${tickerItem.symbol} - no CIK`);
+        continue;
+      }
+
+      const { getPrismaClient } = await import('../../db/prisma');
+      const prisma = getPrismaClient();
+
+      const tickerMonitoring = await prisma.tickerMonitoring.findFirst({
+        where: { cik: tickerItem.cik },
+      });
+
+      if (!tickerMonitoring) {
+        discoveryLogger.debug(
+          `No TickerMonitoring record for ${tickerItem.symbol} (CIK: ${tickerItem.cik})`,
+        );
+        continue;
+      }
+
+      const activeTicker = {
+        id: tickerMonitoring.id,
+        cik: tickerMonitoring.cik,
+        symbol: tickerMonitoring.symbol,
+        companyName:
+          tickerMonitoring.companyName || tickerItem.companyName || '',
+        rssUrl: tickerMonitoring.rssUrl || '',
+        lastChecked: tickerMonitoring.lastChecked,
+        lastAccessionSeen: tickerMonitoring.lastAccessionSeen,
+        subscriberCount: 1,
+      };
+
+      const newFilings = await checkTickerForNewFilings(activeTicker);
+
+      discoveryLogger.debug(`Checked ${tickerItem.symbol} for new filings`, {
+        ticker: tickerItem.symbol,
+        newFilingsFound: newFilings.length,
+      });
+
+      for (const filing of newFilings) {
+        allNewFilings.push({
+          id: `${tickerItem.symbol}-${filing.accessionNumber}`,
+          accessionNumber: filing.accessionNumber,
+          formType: filing.filingType,
+          filingDate: filing.filingDate.toISOString().split('T')[0],
+          url: filing.filingUrl,
+          ticker: tickerItem.symbol,
+          title: filing.title,
+        });
+      }
+    } catch (error) {
+      discoveryLogger.error(`Failed to check filings for ${tickerItem.symbol}`, {
+        ticker: tickerItem.symbol,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  discoveryLogger.info(`Discovered ${allNewFilings.length} new filings via RSS`, {
+    tickersChecked: tickers.length,
+    filingsFound: allNewFilings.length,
+    filings: allNewFilings.map((f) => ({
+      ticker: f.ticker,
+      form: f.formType,
+      accession: f.accessionNumber,
+    })),
+  });
+
+  return allNewFilings;
+}
 
 export interface DiscoveryJobPayload extends JobPayload {
   executionId: string;
@@ -283,10 +387,8 @@ export async function handleDiscovery(
     });
 
     // STEP 3: Check RSS feeds for new filings (ONCE per ticker, not per user)
-    // We pass null for userId since we're doing ticker-centric discovery
-    const allNewFilings = await CronSecFilingService.checkForNewFilings(
-      tickersWithCik.map(t => ({ id: t.symbol, symbol: t.symbol, companyName: t.companyName, cik: t.cik })),
-      null // No specific user - ticker-centric discovery
+    const allNewFilings = await checkRssForNewFilings(
+      tickersWithCik.map(t => ({ symbol: t.symbol, companyName: t.companyName, cik: t.cik })),
     );
 
     discoveryLogger.info(`[${executionId}] RSS filings discovered across all tickers`, {
