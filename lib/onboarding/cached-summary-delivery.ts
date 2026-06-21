@@ -1,7 +1,23 @@
 import { z } from 'zod';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { sendFilingSummaryEmail } from '@/lib/email/summary-service';
-import { SUCCESS_STATUSES } from '@/lib/db/summary-status';
+
+// ---------------------------------------------------------------------------
+// Summary.processingStatus success values (private implementation).
+//
+// Historical writers emit different cases ("COMPLETED", "SUCCESS", "CACHE_HIT",
+// plus lowercase/title-case variants). Until the column is migrated to a Prisma
+// enum (deferred — see plan TODOS), this is the "summary is usable" predicate
+// for the candidate query below.
+// ---------------------------------------------------------------------------
+
+const SUCCESS_STATUSES = [
+  'COMPLETED',
+  'SUCCESS',
+  'CACHE_HIT',
+  'completed',
+  'Success',
+] as const;
 
 // ---------------------------------------------------------------------------
 // Analysis-depth scoring (private implementation)
