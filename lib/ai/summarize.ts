@@ -11,7 +11,7 @@
 
 import { openRouterClient } from './openrouter-client';
 import { modelConfig, getDefaultModel } from './config';
-import { parseResponse } from './parsers';
+import { parseResponse } from './parsers/response-parser';
 import { SECFilingType } from './prompts/prompt-types';
 import { generateFilingPrompt as generateUnifiedPrompt } from './prompts/unified-prompts';
 import {
