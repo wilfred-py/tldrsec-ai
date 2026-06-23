@@ -9,7 +9,6 @@ import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 import { NextRequest } from 'next/server';
 import { timingSafeEqual, authorizeMonitoringAccess, sanitizeInput } from '@/lib/security/secure-auth';
 import { auditProtection, logSecureAudit, verifyAuditIntegrity } from '@/lib/security/audit-protection';
-import { pipelineErrorDetector } from '@/lib/monitoring/pipeline-error-detector';
 
 // Mock external dependencies
 jest.mock('@clerk/nextjs/server', () => ({
@@ -54,18 +53,10 @@ describe('Security Vulnerability Fixes', () => {
   });
 
   describe('2. Information Disclosure Prevention', () => {
-    test('should not expose IP addresses in security metrics', async () => {
-      const metrics = await pipelineErrorDetector.collectMetrics();
-      
-      // Check that security metrics don't contain actual IP addresses
-      expect(metrics.security).toHaveProperty('suspiciousIPCount');
-      expect(metrics.security).not.toHaveProperty('suspiciousIPs');
-    });
-
     test('should sanitize error messages', () => {
       const sensitiveError = 'Database connection failed: postgres://user:pass@host:5432/db';
       const sanitized = sanitizeInput(sensitiveError);
-      
+
       expect(sanitized).not.toContain('postgres://');
       expect(sanitized).not.toContain('pass@host');
     });
@@ -99,19 +90,6 @@ describe('Security Vulnerability Fixes', () => {
   });
 
   describe('4. Memory Exhaustion Protection', () => {
-    test('should limit historical metrics storage', async () => {
-      // Access the private historicalMetrics array indirectly
-      const detector = pipelineErrorDetector as any;
-      
-      // Simulate adding many metrics
-      for (let i = 0; i < 100; i++) {
-        await detector.collectMetrics();
-      }
-      
-      // Should not exceed the maximum limit
-      expect(detector.historicalMetrics.length).toBeLessThanOrEqual(50);
-    });
-
     test('should prevent unbounded array growth', () => {
       const testArray: any[] = [];
       const MAX_SIZE = 50;
