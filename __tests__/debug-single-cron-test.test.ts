@@ -115,10 +115,6 @@ jest.mock('../lib/db/cost-validation', () => ({
   validateCostUpdate: jest.fn().mockReturnValue({ valid: true })
 }));
 
-jest.mock('../lib/db/transaction-manager', () => ({
-  FilingTransactionManager: jest.fn()
-}));
-
 jest.mock('../lib/db/async-audit', () => ({
   createAsyncAuditLog: jest.fn()
 }));
