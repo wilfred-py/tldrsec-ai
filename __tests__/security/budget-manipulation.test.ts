@@ -44,7 +44,9 @@ describe('Budget Manipulation Security Tests - DEPRECATED', () => {
       // OpenRouter handles credit limits via:
       // 1. HTTP 402 errors when credits exhausted
       // 2. /api/v1/auth/key endpoint for credit status
-      // See: lib/ai/openrouter-credit-monitor.ts
+      // See: lib/slack/daily-report-handler.ts (inlined from the former
+      // lib/ai/openrouter-credit-monitor.ts; the Slack daily-report handler
+      // was its only production caller).
       expect(true).toBe(true);
     });
   });
