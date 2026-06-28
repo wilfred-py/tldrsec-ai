@@ -172,15 +172,25 @@ jest.mock('../../lib/cron/auth-service', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    runSecFilingMonitoring: jest.fn().mockResolvedValue({
-      tickersChecked: 0,
-      newFilingsFound: 0,
-      errorCount: 0
-    })
-  }
-}));
+// `lib/cron/sec-filing-service` was deleted — its `checkForNewFilings` adapter
+// was inlined into `lib/cron/handlers/discovery-handler.ts:checkForNewFilingsFromRss`,
+// and `runSecFilingMonitoring` was already dead (no production caller for months;
+// see the deleted file's header comment). This virtual stub keeps the test
+// file parseable until the suite (already CI-ignored — see pr-validation.yml)
+// is migrated through the discovery-handler interface.
+jest.mock(
+  '../../lib/cron/sec-filing-service',
+  () => ({
+    CronSecFilingService: {
+      runSecFilingMonitoring: jest.fn().mockResolvedValue({
+        tickersChecked: 0,
+        newFilingsFound: 0,
+        errorCount: 0,
+      }),
+    },
+  }),
+  { virtual: true },
+);
 
 jest.mock('../../lib/security/secure-random', () => ({
   generateSecureExecutionId: jest.fn().mockReturnValue('test-execution-id-123')
@@ -253,6 +263,10 @@ jest.mock('../../services/company/filings', () => ({
 import { getPrismaClient } from '../../lib/db/prisma';
 import { GET as tierAwareRoute } from '../../app/api/cron/route';
 import { CronAuthService } from '../../lib/cron/auth-service';
+// `lib/cron/sec-filing-service` was deleted; the virtual jest.mock above
+// satisfies the runtime mock used by the (already CI-ignored) tests below.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore -- virtual module: see jest.mock above and pr-validation.yml ignore list
 import { CronSecFilingService } from '../../lib/cron/sec-filing-service';
 
 // Get reference to the mocked Prisma instance

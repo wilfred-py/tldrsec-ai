@@ -40,20 +40,17 @@ jest.mock('../../../lib/db/prisma', () => ({
   getPrismaClient: jest.fn(() => mockPrisma),
 }));
 
-// Mock ticker-monitoring module
+// Mock ticker-monitoring module. The discovery handler now calls
+// `checkTickerForNewFilings` directly (the former `CronSecFilingService.checkForNewFilings`
+// adapter was inlined as a private helper inside discovery-handler.ts —
+// see lib/cron/handlers/discovery-handler.ts:checkForNewFilingsFromRss).
 jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({
   getActiveTickersForMonitoring: jest.fn().mockResolvedValue([]),
   getUnprocessedFilings: jest.fn(),
   markFilingAsProcessed: jest.fn(async (id: string) => {
     markFilingAsProcessedCalls.push({ id });
   }),
-}));
-
-// Mock the CronSecFilingService
-jest.mock('../../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    checkForNewFilings: jest.fn(),
-  },
+  checkTickerForNewFilings: jest.fn().mockResolvedValue([]),
 }));
 
 // Mock logging to avoid console noise
@@ -125,9 +122,12 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'TSLA', companyName: 'Tesla, Inc.' },
     ]);
 
-    // Mock: RSS returns empty (no new filings in RSS feed)
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
+    // Mock: RSS returns empty (no new filings in RSS feed).
+    // checkTickerForNewFilings default mock already returns [], so per-ticker
+    // RSS lookups inside checkForNewFilingsFromRss yield no filings.
+    // tickerMonitoring.findFirst returns null so the inline helper skips RSS
+    // (cleaner than fully mocking the row + accession scan).
+    mockPrisma.tickerMonitoring.findFirst.mockResolvedValue(null);
 
     // Mock: getUnprocessedFilings returns orphaned filings
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
@@ -202,9 +202,10 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'AAPL', companyName: 'Apple Inc.' },
     ]);
 
-    // Mock: RSS returns empty
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
+    // Mock: RSS returns empty — checkTickerForNewFilings default mock returns [],
+    // and tickerMonitoring.findFirst returns null so the RSS path short-circuits
+    // cleanly without exercising the SEC fetch.
+    mockPrisma.tickerMonitoring.findFirst.mockResolvedValue(null);
 
     // Mock: getUnprocessedFilings returns the filing
     const { getUnprocessedFilings, markFilingAsProcessed } = await import('../../../lib/sec-edgar/ticker-monitoring');
@@ -240,14 +241,14 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
   });
 
   it('should handle both RSS new filings AND unprocessed backlog', async () => {
-    // Setup: RSS returns one new filing, database has one unprocessed filing
-    const rssNewFiling = {
-      id: 'NVDA-0001950047-26-000400',
+    // Setup: RSS returns one new filing, database has one unprocessed filing.
+    // checkForNewFilingsFromRss now consumes the raw checkTickerForNewFilings
+    // shape and reshapes internally — assert through that seam.
+    const rssRawHit = {
       accessionNumber: '0001950047-26-000400',
-      formType: '8-K',
-      filingDate: '2026-01-08',
-      url: 'https://www.sec.gov/test-nvda',
-      ticker: 'NVDA',
+      filingType: '8-K',
+      filingDate: new Date('2026-01-08'),
+      filingUrl: 'https://www.sec.gov/test-nvda',
       title: '8-K - NVIDIA Corporation',
     };
 
@@ -282,9 +283,25 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'NVDA', companyName: 'NVIDIA Corporation' },
     ]);
 
-    // Mock: RSS returns one new filing
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
+    // Mock: TickerMonitoring rows so RSS path proceeds for NVDA only.
+    mockPrisma.tickerMonitoring.findFirst.mockImplementation(async (args: { where: { cik: string } }) => {
+      if (args.where.cik === '0001045810') {
+        return {
+          id: 'monitor-nvda',
+          cik: '0001045810',
+          symbol: 'NVDA',
+          companyName: 'NVIDIA Corporation',
+          rssUrl: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=&dateb=&owner=include&count=40&output=atom',
+          lastChecked: new Date(),
+          lastAccessionSeen: null,
+        };
+      }
+      return null;
+    });
+
+    // Mock: RSS returns one new filing for NVDA's monitoring row.
+    const { checkTickerForNewFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
+    (checkTickerForNewFilings as jest.Mock).mockResolvedValueOnce([rssRawHit]);
 
     // Mock: getUnprocessedFilings returns one backlog filing
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
@@ -330,13 +347,11 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     // Setup: Same filing in both RSS and unprocessed backlog
     const sharedAccessionNumber = '0001950047-26-000500';
 
-    const rssNewFiling = {
-      id: 'AAPL-' + sharedAccessionNumber,
+    const rssRawHit = {
       accessionNumber: sharedAccessionNumber,
-      formType: '10-K',
-      filingDate: '2026-01-08',
-      url: 'https://www.sec.gov/test-shared',
-      ticker: 'AAPL',
+      filingType: '10-K',
+      filingDate: new Date('2026-01-08'),
+      filingUrl: 'https://www.sec.gov/test-shared',
       title: '10-K - Apple Inc.',
     };
 
@@ -366,9 +381,20 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'AAPL', companyName: 'Apple Inc.' },
     ]);
 
+    // Mock: TickerMonitoring row exists for AAPL so RSS path runs.
+    mockPrisma.tickerMonitoring.findFirst.mockResolvedValueOnce({
+      id: 'monitor-aapl',
+      cik: '0000320193',
+      symbol: 'AAPL',
+      companyName: 'Apple Inc.',
+      rssUrl: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000320193&type=&dateb=&owner=include&count=40&output=atom',
+      lastChecked: new Date(),
+      lastAccessionSeen: null,
+    });
+
     // Mock: RSS returns the filing
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
+    const { checkTickerForNewFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
+    (checkTickerForNewFilings as jest.Mock).mockResolvedValueOnce([rssRawHit]);
 
     // Mock: getUnprocessedFilings also returns the same filing
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
