@@ -8,15 +8,55 @@ import { DealTermsCard, DealTerms } from './sections/DealTermsCard';
 import { HangingBulletItem } from './sections/BulletList';
 import { FilingTemplateData } from '../../../../lib/email/types';
 import { extract8KData } from '../../../../lib/email/8k-data-extractor';
-import { getItemDescription } from '../../../../lib/constants/sec-item-descriptions';
 import { StalenessBanner } from './sections/StalenessBanner';
 import { XSentimentBlock } from './sections/XSentimentBlock';
-
-export { getItemDescription };
 
 interface Form8KMinimalistTemplateProps {
   filing: FilingTemplateData;
 }
+
+/**
+ * 8-K Item Number → human-readable description (from SEC Form 8-K
+ * General Instructions, item titles). Used to render the items row of
+ * the 8-K email template. The 8-K template is the only renderer that
+ * needs these strings; the AI prompts use their own paraphrased
+ * descriptions in-line. Missing item numbers render bare (`Item 9.99`
+ * instead of `Item 9.99 - …`).
+ */
+const ITEM_DESCRIPTIONS: Record<string, string> = {
+  '1.01': 'Entry into a Material Definitive Agreement',
+  '1.02': 'Termination of a Material Definitive Agreement',
+  '1.03': 'Bankruptcy or Receivership',
+  '1.04': 'Mine Safety',
+  '1.05': 'Material Cybersecurity Incidents',
+  '2.01': 'Completion of Acquisition or Disposition of Assets',
+  '2.02': 'Results of Operations and Financial Condition',
+  '2.03': 'Creation of a Direct Financial Obligation',
+  '2.04': 'Triggering Events That Accelerate or Increase a Direct Financial Obligation',
+  '2.05': 'Costs Associated with Exit or Disposal Activities',
+  '2.06': 'Material Impairments',
+  '3.01': 'Notice of Delisting or Failure to Satisfy a Continued Listing Rule',
+  '3.02': 'Unregistered Sales of Equity Securities',
+  '3.03': 'Material Modification to Rights of Security Holders',
+  '4.01': "Changes in Registrant's Certifying Accountant",
+  '4.02': 'Non-Reliance on Previously Issued Financial Statements',
+  '5.01': 'Changes in Control of Registrant',
+  '5.02': 'Departure/Election of Directors or Officers',
+  '5.03': 'Amendments to Articles of Incorporation or Bylaws',
+  '5.04': 'Temporary Suspension of Trading Under Employee Benefit Plans',
+  '5.05': 'Amendment to Code of Ethics',
+  '5.06': 'Change in Shell Company Status',
+  '5.07': 'Submission of Matters to a Vote of Security Holders',
+  '5.08': 'Shareholder Nominations Pursuant to Exchange Act Rule 14a-11',
+  '6.01': 'ABS Informational and Computational Material',
+  '6.02': 'Change of Servicer or Trustee',
+  '6.03': 'Change in Credit Enhancement or Other External Support',
+  '6.04': 'Failure to Make a Required Distribution',
+  '6.05': 'Securities Act Updating Disclosure',
+  '7.01': 'Regulation FD Disclosure',
+  '8.01': 'Other Events',
+  '9.01': 'Financial Statements and Exhibits',
+};
 
 /**
  * 8-K Item Numbers and their materiality
@@ -315,7 +355,7 @@ export function Form8KMinimalistTemplate({ filing }: Form8KMinimalistTemplatePro
   // Format items for display with human-readable descriptions
   const itemsDisplay = itemNumbers.length > 0
     ? itemNumbers.map(item => {
-        const desc = getItemDescription(item);
+        const desc = ITEM_DESCRIPTIONS[item];
         return desc ? `Item ${item} - ${desc}` : `Item ${item}`;
       }).join(' | ')
     : '';
