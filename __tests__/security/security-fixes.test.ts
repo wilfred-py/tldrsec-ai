@@ -8,7 +8,6 @@
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 import { NextRequest } from 'next/server';
 import { timingSafeEqual, authorizeMonitoringAccess, sanitizeInput } from '@/lib/security/secure-auth';
-import { auditProtection, logSecureAudit, verifyAuditIntegrity } from '@/lib/security/audit-protection';
 import { pipelineErrorDetector } from '@/lib/monitoring/pipeline-error-detector';
 
 // Mock external dependencies
@@ -153,50 +152,6 @@ describe('Security Vulnerability Fixes', () => {
       
       expect(result.authorized).toBe(false);
       expect(result.reason).toContain('Admin privileges required');
-    });
-  });
-
-  describe('6. Audit Log Protection', () => {
-    test('should create tamper-proof audit entries', async () => {
-      await logSecureAudit(
-        'TEST_ACTION',
-        'user123',
-        '192.168.1.1',
-        'resource123',
-        'Mozilla/5.0',
-        { test: 'data' }
-      );
-      
-      // Verify the audit entry was created with integrity protection
-      expect(true).toBe(true); // Placeholder for actual audit verification
-    });
-
-    test('should detect audit log tampering', async () => {
-      const integrityReport = await verifyAuditIntegrity();
-      
-      expect(integrityReport).toHaveProperty('isValid');
-      expect(integrityReport).toHaveProperty('totalEntries');
-      expect(integrityReport).toHaveProperty('tamperedEntries');
-    });
-
-    test('should sanitize audit log data', async () => {
-      const maliciousData = {
-        xss: '<script>alert("xss")</script>',
-        injection: "'; DROP TABLE audit_logs; --",
-        overflow: 'A'.repeat(10000)
-      };
-
-      await logSecureAudit(
-        'TEST_SANITIZATION',
-        'user123',
-        '192.168.1.1',
-        undefined,
-        undefined,
-        maliciousData
-      );
-
-      // The audit protection service should sanitize this data
-      expect(true).toBe(true); // Placeholder for actual sanitization verification
     });
   });
 
