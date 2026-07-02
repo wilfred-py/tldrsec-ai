@@ -167,11 +167,6 @@ jest.mock('../../lib/slack/alert-rules', () => ({
 }));
 
 jest.mock('../../lib/db/concurrency', () => ({
-  updateUserBudgetWithLock: jest.fn().mockResolvedValue({
-    previousBudget: 0,
-    newBudget: 0.02,
-    updated: true
-  }),
   isConcurrencyError: jest.fn().mockReturnValue(false)
 }));
 
