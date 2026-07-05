@@ -456,10 +456,11 @@ class Monitoring {
 // Create and export a singleton instance
 export const monitoring = new Monitoring();
 
-// Export all monitoring services
-export * from './pipeline-health-monitoring-system';
-export * from './sec-api-monitor';
-export * from './pipeline-error-detector';
+// Re-export the JSON-parsing monitor for callers that reach it via
+// `@/lib/monitoring` rather than the direct file. This is the only
+// re-export retained; the former `pipeline-health-monitoring-system`,
+// `sec-api-monitor`, and `pipeline-error-detector` re-exports covered
+// modules with zero production callers and have been deleted.
 export * from './json-parsing-monitor';
 
 export default monitoring;
