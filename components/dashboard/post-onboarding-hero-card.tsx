@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Mail, X, ExternalLink, FileText } from 'lucide-react';
 
 /**
- * Optional summary chosen by `pickBestSummaryForUser`. When present, the card
+ * Optional summary chosen by `sendFirstOnboardingEmail`. When present, the card
  * renders the summary-content variant; the inbox-CTA is demoted to a secondary
  * link. When absent, the card falls back to the original inbox-CTA layout.
  */
@@ -85,7 +85,7 @@ export function PostOnboardingHeroCard({
   }
 
   // Variant B: original inbox-CTA card (no chosen pick — fallback notice path
-  // or first dashboard visit before pickBestSummaryForUser has run)
+  // or first dashboard visit before sendFirstOnboardingEmail has run)
   const headline = firstName
     ? `Your first summaries are on the way, ${firstName}`
     : 'Your first summaries are on the way';
@@ -160,7 +160,7 @@ export function PostOnboardingHeroCard({
 /**
  * Summary-content variant of the post-onboarding hero card.
  *
- * Renders the chosen pick from `pickBestSummaryForUser` as the first wow
+ * Renders the chosen pick from `sendFirstOnboardingEmail` as the first wow
  * moment. The dashboard render is <500ms so the user sees real summary
  * content immediately; the email arrives shortly after as a confirmation
  * + persistence layer.

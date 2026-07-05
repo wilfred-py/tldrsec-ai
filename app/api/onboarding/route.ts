@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { getPrismaClient } from '@/lib/db/prisma';
-import { deliverCachedSummaries } from '@/lib/onboarding/cached-summary-delivery';
+import { sendFirstOnboardingEmail } from '@/lib/onboarding/first-email-delivery';
 import { sendEmail } from '@/lib/email';
 import { getEmailTemplate } from '@/lib/email/templates';
 import { EmailType } from '@/lib/email/types';
@@ -63,8 +63,21 @@ async function handleDeliverSummaries() {
     }
 
     const userName = dbUser.name || user.firstName || 'there';
-    const result = await deliverCachedSummaries(dbUser.id, primaryEmail, userName);
-    return NextResponse.json(result);
+    const deliveryResult = await sendFirstOnboardingEmail({
+      userId: dbUser.id,
+      userEmail: primaryEmail,
+      recipientName: userName,
+      trackedTickers: [],
+    });
+    // Legacy response shape: {delivered: 0|1, reason?}. New callers should
+    // hit the module directly; this endpoint stays for the client trigger
+    // sites (dashboard-client.tsx, dashboard-onboarding.tsx, tutorial-guide.tsx)
+    // that fire-and-forget after tutorial completion.
+    return NextResponse.json({
+      delivered: deliveryResult.delivered ? 1 : 0,
+      ...(deliveryResult.reason ? { reason: deliveryResult.reason } : {}),
+      ...(deliveryResult.error ? { error: deliveryResult.error } : {}),
+    });
   } catch (error) {
     console.error('[deliver-summaries] Error:', error);
     return NextResponse.json({ delivered: 0, reason: 'internal_error' }, { status: 500 });

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { sendFilingSummaryEmail } from '@/lib/email/summary-service';
+import { sendEmail } from '@/lib/email';
+import { getEmailTemplate } from '@/lib/email/templates';
+import { EmailType } from '@/lib/email/types';
 import { SUCCESS_STATUSES } from '@/lib/db/summary-status';
 
 // ---------------------------------------------------------------------------
@@ -73,12 +76,9 @@ function analysisDepthScore(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Composite scoring for cached-summary ranking (private implementation)
+// ---------------------------------------------------------------------------
 
-/**
- * Materiality weights for onboarding scoring. Form-type → "intrinsic
- * importance to a retail investor." See plan: 10-K/10-Q dominate, 8-K
- * material, Form 4 routine.
- */
 const MATERIALITY_WEIGHTS: Record<string, number> = {
   '10-K': 100,
   '10-Q': 95,
@@ -107,21 +107,15 @@ const IMPORTANCE_WEIGHTS: Record<string, number> = {
   low: 15,
 };
 
-/** Composite-score weights. Sum = 1.0. Tunable but document the rationale here. */
 const SCORE_WEIGHTS = {
-  importance: 0.25, // AI-extracted; null on legacy data so weight kept modest
-  materiality: 0.40, // form-type intrinsic importance — dominant on legacy data
-  analysisDepth: 0.20, // structural-fidelity: enrichment markers (xSentiment etc.)
-  recency: 0.15, // linear decay over 365 days
+  importance: 0.25,
+  materiality: 0.40,
+  analysisDepth: 0.20,
+  recency: 0.15,
 } as const;
 
-/** Stage-1 candidate cap. Trades coverage vs memory + sort cost. */
 const STAGE_1_CANDIDATE_LIMIT = 50;
 
-/**
- * Look up the importance weight for a Summary row. Case-insensitive.
- * Returns the fallback for null or unrecognized values.
- */
 function importanceWeight(
   importance: string | null | undefined,
   fallback = 0
@@ -130,17 +124,7 @@ function importanceWeight(
   return IMPORTANCE_WEIGHTS[importance.toLowerCase()] ?? fallback;
 }
 
-/**
- * Pure function: composite score for a Summary candidate.
- *
- *   score = importance(0.25) + materiality(0.40) + analysisDepth(0.20)
- *         + recency(0.15)
- *
- * Weights chosen so legacy summaries (importance=null, smartSubject=null,
- * sparse summaryJSON) degrade gracefully to materiality + recency. New
- * enriched summaries dominate via analysisDepth + importance.
- */
-export function calculateCompositeScore(input: {
+function compositeScore(input: {
   filingType: string;
   filingDate: Date;
   importance: string | null;
@@ -174,12 +158,10 @@ export function calculateCompositeScore(input: {
   );
 }
 
-/** Tiebreaker order: importance DESC NULLS LAST, filingDate DESC, id ASC. */
 function tiebreak(
   a: { importance: string | null; filingDate: Date; id: string },
   b: { importance: string | null; filingDate: Date; id: string }
 ): number {
-  // Use -1 as fallback so null importance sorts BELOW all known values.
   const aImp = importanceWeight(a.importance, -1);
   const bImp = importanceWeight(b.importance, -1);
   if (aImp !== bImp) return bImp - aImp;
@@ -189,7 +171,7 @@ function tiebreak(
   return a.id.localeCompare(b.id);
 }
 
-export interface RankedSummary {
+interface CandidateSummary {
   id: string;
   filingType: string;
   filingDate: Date;
@@ -203,21 +185,9 @@ export interface RankedSummary {
   score: number;
 }
 
-/**
- * Pick the single best cached summary across all of a user's tickers.
- *
- * Two-stage select for memory efficiency:
- *   Stage 1 — thin candidate pull (no summaryJSON, no summaryText): score
- *             50 candidates by formula.
- *   Stage 2 — fat re-fetch by id of the winner only: full row for email
- *             render.
- *
- * Returns null if the user has no tickers, or no cached summaries are
- * available across their tickers (the long-tail unique-ticker case).
- */
-export async function pickBestSummaryForUser(
+async function pickBestCachedSummary(
   userId: string
-): Promise<RankedSummary | null> {
+): Promise<CandidateSummary | null> {
   const prisma = getPrismaClient();
 
   const tickers = await prisma.ticker.findMany({
@@ -227,11 +197,6 @@ export async function pickBestSummaryForUser(
   if (tickers.length === 0) return null;
   const symbols = tickers.map((t) => t.symbol);
 
-  // Stage 1: thin candidate pull — fields needed for ranking + the
-  // analysisDepth long-text bonus. summaryText is selected (it's already
-  // filtered non-empty by the WHERE clause) so the longSummaryText signal
-  // fires during ranking; the full row (filingUrl, ticker relation, etc.)
-  // is fetched in Stage 2 for the winner only.
   const candidates = await prisma.summary.findMany({
     where: {
       ticker: { symbol: { in: symbols } },
@@ -255,7 +220,7 @@ export async function pickBestSummaryForUser(
 
   const scored = candidates.map((c) => ({
     ...c,
-    score: calculateCompositeScore({
+    score: compositeScore({
       filingType: c.filingType,
       filingDate: c.filingDate,
       importance: c.importance,
@@ -273,7 +238,6 @@ export async function pickBestSummaryForUser(
   const winnerId = scored[0].id;
   const winnerScore = scored[0].score;
 
-  // Stage 2: fetch the winner's full row for email + hero card render.
   const winner = await prisma.summary.findUnique({
     where: { id: winnerId },
     select: {
@@ -306,19 +270,69 @@ export async function pickBestSummaryForUser(
   };
 }
 
-/**
- * Deliver the single best cached summary as one email through the production
- * wrapper. Idempotent on `User.onboardingFirstEmailSentAt` — re-running for
- * the same user is a no-op.
- *
- * Returns delivery metadata for the caller to log/instrument.
- */
-export interface DeliveryResult {
+// ---------------------------------------------------------------------------
+// Fallback notice send (private implementation)
+// ---------------------------------------------------------------------------
+
+interface FallbackSendOutcome {
+  sent: boolean;
+  error?: string;
+}
+
+async function sendFallbackNotice(args: {
+  email: string;
+  recipientName: string;
+  trackedTickers: string[];
+}): Promise<FallbackSendOutcome> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app';
+  const dashboardUrl = `${appUrl}/dashboard`;
+  const unsubscribeUrl = `${appUrl}/dashboard/settings`;
+
+  const { html, text } = await getEmailTemplate(
+    EmailType.ONBOARDING_FALLBACK_NOTICE,
+    {
+      recipientName: args.recipientName,
+      trackedTickers: args.trackedTickers,
+      dashboardUrl,
+      unsubscribeUrl,
+    } as Record<string, unknown>
+  );
+
+  const subject =
+    args.trackedTickers.length > 0
+      ? `We're watching ${args.trackedTickers.slice(0, 3).join(', ')}${args.trackedTickers.length > 3 ? ` +${args.trackedTickers.length - 3}` : ''}`
+      : "We're watching your tickers";
+
+  const result = await sendEmail({
+    to: args.email,
+    subject,
+    html,
+    text,
+    tags: ['type:onboarding-fallback-notice'],
+  });
+
+  if (!result.success) {
+    return { sent: false, error: result.error?.message };
+  }
+  return { sent: true };
+}
+
+// ---------------------------------------------------------------------------
+// Public interface — the "First Onboarding Email" module
+// ---------------------------------------------------------------------------
+
+export interface FirstOnboardingEmailArgs {
+  userId: string;
+  userEmail: string;
+  recipientName: string;
+  trackedTickers: string[];
+}
+
+export interface FirstOnboardingEmailResult {
   delivered: boolean;
+  path?: 'cached' | 'fallback';
   reason?:
     | 'already_sent'
-    | 'no_tickers'
-    | 'no_cached_summaries'
     | 'email_failed'
     | 'internal_error';
   summaryId?: string;
@@ -326,108 +340,131 @@ export interface DeliveryResult {
   error?: string;
 }
 
-export async function deliverFirstOnboardingEmail(
-  userId: string,
-  userEmail: string
-): Promise<DeliveryResult> {
+/**
+ * Deliver the "First Onboarding Email" to a new user: pick the strongest
+ * cached [Summary] across the user's tickers and send it as one email
+ * through the production wrapper. When no cached summary is available for
+ * any of the tickers (the long-tail unique-ticker case, or the user has no
+ * tickers at all), fall through to the "we're watching your tickers"
+ * fallback notice so the "you'll receive an email shortly" promise isn't
+ * broken silently.
+ *
+ * Idempotent on `User.onboardingFirstEmailSentAt`: re-running for the same
+ * user is a no-op. The cached path additionally sets
+ * `User.onboardingFirstSummaryId`; the fallback path does not (no summary
+ * was sent).
+ *
+ * Returns delivery metadata for the caller to log/instrument. Both delivery
+ * paths report through the same result shape via the `path` field.
+ */
+export async function sendFirstOnboardingEmail(
+  args: FirstOnboardingEmailArgs
+): Promise<FirstOnboardingEmailResult> {
   const prisma = getPrismaClient();
 
-  // Idempotency guard — set once, never re-send.
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: args.userId },
     select: { onboardingFirstEmailSentAt: true },
   });
   if (user?.onboardingFirstEmailSentAt) {
     return { delivered: false, reason: 'already_sent' };
   }
 
-  const winner = await pickBestSummaryForUser(userId);
-  if (!winner) {
-    // Caller is responsible for sending the fallback notice; this function
-    // only handles the cached-summary happy path. Reason is reported back.
-    const tickerCount = await prisma.ticker.count({ where: { userId } });
-    return {
-      delivered: false,
-      reason: tickerCount === 0 ? 'no_tickers' : 'no_cached_summaries',
-    };
+  const winner = await pickBestCachedSummary(args.userId);
+
+  if (winner) {
+    try {
+      const result = await sendFilingSummaryEmail(args.userEmail, {
+        companyName: winner.ticker.companyName,
+        ticker: winner.ticker.symbol,
+        filingType: winner.filingType,
+        filingDate: winner.filingDate,
+        summary: winner.summaryText,
+        filingUrl: winner.url || winner.filingUrl,
+        summaryData: winner.summaryJSON as Record<string, unknown> | undefined,
+        userId: args.userId,
+        summaryId: winner.id,
+        importance: winner.importance ?? undefined,
+        smartSubject: winner.smartSubject ?? undefined,
+      });
+
+      if (!result.success) {
+        return {
+          delivered: false,
+          path: 'cached',
+          reason: 'email_failed',
+          summaryId: winner.id,
+          error: result.error,
+        };
+      }
+
+      await prisma.user.update({
+        where: { id: args.userId },
+        data: {
+          onboardingFirstEmailSentAt: new Date(),
+          onboardingFirstSummaryId: winner.id,
+        },
+      });
+
+      try {
+        await prisma.summaryEmailDelivery.create({
+          data: {
+            summaryId: winner.id,
+            userId: args.userId,
+            emailAddress: args.userEmail,
+            deliveryStatus: 'sent',
+            metadata: { source: 'onboarding-best-pick' },
+          },
+        });
+      } catch {
+        // Unique constraint violation is OK — already delivered.
+      }
+
+      return {
+        delivered: true,
+        path: 'cached',
+        summaryId: winner.id,
+        score: winner.score,
+      };
+    } catch (err) {
+      return {
+        delivered: false,
+        path: 'cached',
+        reason: 'internal_error',
+        summaryId: winner.id,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 
   try {
-    const result = await sendFilingSummaryEmail(userEmail, {
-      companyName: winner.ticker.companyName,
-      ticker: winner.ticker.symbol,
-      filingType: winner.filingType,
-      filingDate: winner.filingDate,
-      summary: winner.summaryText,
-      filingUrl: winner.url || winner.filingUrl,
-      summaryData: winner.summaryJSON as Record<string, unknown> | undefined,
-      userId,
-      summaryId: winner.id,
-      importance: winner.importance ?? undefined,
-      smartSubject: winner.smartSubject ?? undefined,
+    const outcome = await sendFallbackNotice({
+      email: args.userEmail,
+      recipientName: args.recipientName,
+      trackedTickers: args.trackedTickers,
     });
 
-    if (!result.success) {
+    if (!outcome.sent) {
       return {
         delivered: false,
+        path: 'fallback',
         reason: 'email_failed',
-        summaryId: winner.id,
-        error: result.error,
+        error: outcome.error,
       };
     }
 
-    // Persist idempotency markers + chosen-pick on User row.
     await prisma.user.update({
-      where: { id: userId },
-      data: {
-        onboardingFirstEmailSentAt: new Date(),
-        onboardingFirstSummaryId: winner.id,
-      },
+      where: { id: args.userId },
+      data: { onboardingFirstEmailSentAt: new Date() },
     });
 
-    // Best-effort delivery tracking row.
-    try {
-      await prisma.summaryEmailDelivery.create({
-        data: {
-          summaryId: winner.id,
-          userId,
-          emailAddress: userEmail,
-          deliveryStatus: 'sent',
-          metadata: { source: 'onboarding-best-pick' },
-        },
-      });
-    } catch {
-      // Unique constraint violation is OK — already delivered.
-    }
-
-    return { delivered: true, summaryId: winner.id, score: winner.score };
+    return { delivered: true, path: 'fallback' };
   } catch (err) {
     return {
       delivered: false,
+      path: 'fallback',
       reason: 'internal_error',
-      summaryId: winner.id,
       error: err instanceof Error ? err.message : String(err),
     };
   }
-}
-
-/**
- * @deprecated Use `deliverFirstOnboardingEmail` instead.
- *
- * Kept as a thin shim ONLY for the legacy `/api/onboarding?action=deliver-summaries`
- * route in `app/api/onboarding/route.ts`. Once that route is removed (follow-up
- * cleanup once the 3 client trigger sites are deleted), this function and the
- * route both go away.
- */
-export async function deliverCachedSummaries(
-  userId: string,
-  userEmail: string,
-  _userName: string
-): Promise<{ delivered: number; reason?: string; error?: string }> {
-  const result = await deliverFirstOnboardingEmail(userId, userEmail);
-  return {
-    delivered: result.delivered ? 1 : 0,
-    ...(result.reason ? { reason: result.reason } : {}),
-    ...(result.error ? { error: result.error } : {}),
-  };
 }
