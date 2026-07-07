@@ -14,8 +14,6 @@ declare global {
 // NOTE: Environment validation removed from module load.
 // Validation was causing Vercel build failures since it runs during
 // "Collecting page data" phase when DATABASE_URL is not available.
-// The validation still exists in lib/config/startup-validation.ts for
-// explicit use in application code if needed.
 
 /**
  * Configure Prisma client with improved connection handling
