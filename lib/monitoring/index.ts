@@ -456,10 +456,9 @@ class Monitoring {
 // Create and export a singleton instance
 export const monitoring = new Monitoring();
 
-// Export all monitoring services
-export * from './pipeline-health-monitoring-system';
-export * from './sec-api-monitor';
-export * from './pipeline-error-detector';
+// Export json-parsing-monitor for lib/ai/parsers/response-parser.ts.
+// The former pipeline-health-monitoring-system / sec-api-monitor /
+// pipeline-error-detector re-exports were dead orbitals and are gone.
 export * from './json-parsing-monitor';
 
 export default monitoring;
