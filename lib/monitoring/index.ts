@@ -458,7 +458,6 @@ export const monitoring = new Monitoring();
 
 // Export all monitoring services
 export * from './pipeline-health-monitoring-system';
-export * from './sec-api-monitor';
 export * from './pipeline-error-detector';
 export * from './json-parsing-monitor';
 
