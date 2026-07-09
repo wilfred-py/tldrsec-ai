@@ -59,8 +59,6 @@ const DEFAULT_CONCURRENCY_OPTIONS: Required<ConcurrencyOptions> = {
   isolationLevel: 'ReadCommitted'
 };
 
-// Budget concurrency options have been moved to budget-operations module
-
 /**
  * Creates an optimistic lock error
  */
@@ -320,10 +318,6 @@ export async function upsertTickerMonitoringWithLock(
   }, options);
 }
 
-// Budget operations have been moved to dedicated module for better organization
-// Import and re-export for backwards compatibility
-export { updateUserBudgetWithLock } from './budget-operations';
-
 /**
  * Executes multiple operations in parallel with individual failure isolation
  */
@@ -446,13 +440,3 @@ export function calculateBackoffWithJitter(
   const exponentialDelay = Math.min(baseDelay * Math.pow(multiplier, attempt - 1), maxDelay);
   return exponentialDelay + Math.random() * jitterMs;
 }
-
-// Note: Cost validation has been moved to a dedicated module
-// Import from the shared validation module instead
-import { validateCostUpdate as sharedValidateCostUpdate } from './cost-validation';
-
-/**
- * Re-export cost validation for backwards compatibility
- * @deprecated Use direct import from './cost-validation' instead
- */
-export const validateCostUpdate = sharedValidateCostUpdate;

@@ -5,12 +5,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, jest } from '@jest/globals';
-import { 
-  isConcurrencyError, 
+import {
+  isConcurrencyError,
   withOptimisticLocking,
   executeWithIsolation,
-  updateTickerMonitoringWithLock,
-  updateUserBudgetWithLock
+  updateTickerMonitoringWithLock
 } from '../../../lib/db/concurrency';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { getPrismaClient } from '../../../lib/db/prisma';
@@ -214,30 +213,6 @@ describe('Database Integration Tests', () => {
         // Ignore cleanup errors
       }
     }
-  });
-
-  it('should handle concurrent budget updates safely (deprecated - now no-op)', async () => {
-    if (!testUserId) {
-      console.log('Skipping test - no test user available');
-      return;
-    }
-
-    // Budget operations are now deprecated no-ops
-    const concurrentUpdates = Array.from({ length: 5 }, () =>
-      updateUserBudgetWithLock(
-        testUserId,
-        0.1, // Small cost
-        0,   // Expected current budget
-        1.0, // Daily limit
-        { maxRetries: 3, enableAuditLogging: false }
-      )
-    );
-
-    const results = await Promise.allSettled(concurrentUpdates);
-
-    // All should succeed since budget operations are now no-ops
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    expect(successful).toBe(5);
   });
 
   it('should handle concurrent ticker monitoring updates', async () => {
