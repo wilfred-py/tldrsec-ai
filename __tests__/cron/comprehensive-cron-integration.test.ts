@@ -25,7 +25,6 @@ import * as rssParser from '../../lib/sec-edgar/rss-parser';
 import * as summaryService from '../../services/filing/summaryGenerationService';
 import * as emailService from '../../services/filing/sendEmailSummary';
 import { getUserProcessingStatuses, getEligibleUsers } from '../../lib/cron/tier-eligibility';
-import { updateUserBudgetWithLock } from '../../lib/db/concurrency';
 import { rateLimiter } from '../../lib/security/rate-limiter';
 
 // Mock all external dependencies
@@ -142,25 +141,6 @@ jest.mock('../../lib/logging', () => ({
     error: jest.fn()
   }
 }));
-jest.mock('../../lib/db/cost-validation', () => ({
-  validateCostUpdate: jest.fn().mockReturnValue({ 
-    valid: true, 
-    sanitizedCost: 0.5 
-  })
-}));
-jest.mock('../../lib/db/transaction-manager', () => ({
-  FilingTransactionManager: {
-    processFilingWithTransaction: jest.fn().mockResolvedValue({
-      success: true,
-      data: { cost: 0.5 },
-      transactionId: 'test-transaction-id'
-    })
-  }
-}));
-jest.mock('../../lib/db/async-audit', () => ({
-  createAsyncAuditLog: jest.fn().mockResolvedValue(undefined)
-}));
-
 // Mock the cron service classes that the route depends on
 jest.mock('../../lib/cron/auth-service', () => ({
   CronAuthService: {
@@ -273,9 +253,6 @@ const mockEmailService = emailService as jest.Mocked<typeof emailService>;
 const mockTierEligibility = {
   getUserProcessingStatuses: getUserProcessingStatuses as jest.MockedFunction<typeof getUserProcessingStatuses>,
   getEligibleUsers: getEligibleUsers as jest.MockedFunction<typeof getEligibleUsers>
-};
-const mockConcurrency = {
-  updateUserBudgetWithLock: updateUserBudgetWithLock as jest.MockedFunction<typeof updateUserBudgetWithLock>
 };
 const mockRateLimiter = rateLimiter as jest.Mocked<typeof rateLimiter>;
 
@@ -493,12 +470,6 @@ describe('Comprehensive Cron Integration Tests', () => {
       messageId: 'email-123'
     });
     
-    // Setup default concurrency mocks
-    mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
-      previousBudget: 0,
-      newBudget: 0.02,
-      updated: true
-    });
   });
 
   afterEach(() => {
@@ -609,12 +580,6 @@ describe('Comprehensive Cron Integration Tests', () => {
           { symbol: 'TSLA', cik: '1318605', valid: true }
         ]);
         mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([]);
-        mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
-          previousBudget: 0,
-          newBudget: 0.05,
-          updated: true
-        });
-
         const request = createMockRequest({
           authorization: `Bearer ${process.env.CRON_SECRET}`
         });
@@ -940,12 +905,6 @@ describe('Comprehensive Cron Integration Tests', () => {
           subscriptionTier: 'INSTITUTION'
         });
 
-        mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
-          previousBudget: 0,
-          newBudget: 0,
-          updated: true
-        });
-
         const request = createMockRequest({
           authorization: `Bearer ${process.env.CRON_SECRET}`
         });
@@ -1244,32 +1203,12 @@ describe('Comprehensive Cron Integration Tests', () => {
         subscriptionTier: 'PROFESSIONAL'
       });
 
-      mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
-        previousBudget: 0,
-        newBudget: 0.03,
-        updated: true
-      });
-
       mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue();
-      
+
       mockEmailService.sendEmailSummary.mockResolvedValue({
         success: true,
         messageId: 'email-123'
       });
-
-      // Override FilingTransactionManager to actually call the callback for this test
-      const { FilingTransactionManager } = require('../../lib/db/transaction-manager');
-      (FilingTransactionManager.processFilingWithTransaction as jest.Mock).mockImplementation(
-        async (filingId: string, userId: string, callback: Function) => {
-          // Call the actual callback to trigger summarization
-          const result = await callback(mockPrismaInstance as any);
-          return {
-            success: true,
-            data: result,
-            transactionId: 'test-transaction-id'
-          };
-        }
-      );
 
       const request = createMockRequest({
         authorization: `Bearer ${process.env.CRON_SECRET}`
@@ -1378,12 +1317,6 @@ describe('Comprehensive Cron Integration Tests', () => {
         subscriptionTier: 'FREE'
       });
 
-      mockConcurrency.updateUserBudgetWithLock.mockResolvedValue({
-        previousBudget: 0,
-        newBudget: 0.02,
-        updated: true
-      });
-
       // Email fails
       mockEmailService.sendEmailSummary.mockResolvedValue({
         success: false,
@@ -1391,20 +1324,6 @@ describe('Comprehensive Cron Integration Tests', () => {
       });
 
       mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue();
-
-      // Override FilingTransactionManager to actually call the callback for this test
-      const { FilingTransactionManager } = require('../../lib/db/transaction-manager');
-      (FilingTransactionManager.processFilingWithTransaction as jest.Mock).mockImplementation(
-        async (filingId: string, userId: string, callback: Function) => {
-          // Call the actual callback to trigger summarization
-          const result = await callback(mockPrismaInstance as any);
-          return {
-            success: true,
-            data: result,
-            transactionId: 'test-transaction-id'
-          };
-        }
-      );
 
       const request = createMockRequest({
         authorization: `Bearer ${process.env.CRON_SECRET}`
@@ -1510,85 +1429,6 @@ describe('Comprehensive Cron Integration Tests', () => {
         const response = await tierAwareRoute(request);
         expect(response.status).toBe(429);
         expect(mockMonitor.complete).toHaveBeenCalledWith('FAILED', 'Rate limit exceeded');
-      });
-    });
-
-    describe('Database Concurrency Tests', () => {
-      it('should handle concurrency conflicts gracefully', async () => {
-        const mockUsers = [
-          {
-            id: 'user-1',
-            email: 'test@test.com',
-            subscriptionTier: 'PROFESSIONAL',
-            lastCronProcessed: null,
-            processingBudget: 0.60,
-            budgetUsed: 0,
-            tickers: [{ id: 'tick-1', symbol: 'AAPL', companyName: 'Apple Inc.' }]
-          }
-        ];
-
-        mockPrismaInstance.user.findMany.mockResolvedValue(mockUsers);
-        mockTierEligibility.getEligibleUsers.mockReturnValue([
-          { tier: 'PROFESSIONAL', userId: 'user-1' }
-        ]);
-
-        mockTickerMonitoring.validateUserTickers.mockResolvedValue([
-          { symbol: 'AAPL', cik: '320193', valid: true }
-        ]);
-
-        mockTickerMonitoring.checkTickerForNewFilings.mockResolvedValue([
-          {
-            accessionNumber: '0001628280-24-007006',
-            filingType: '10-Q',
-            filingDate: new Date('2024-01-15'),
-            filingUrl: 'https://www.sec.gov/filing123',
-            rssEntryDate: new Date('2024-01-15')
-          }
-        ]);
-
-        // Mock getUnprocessedFilingsForTicker to return filings for processing in Phase 2
-        mockTickerMonitoring.getUnprocessedFilingsForTicker.mockResolvedValue([
-          {
-            id: 'filing-db-id-789',
-            accessionNumber: '0001628280-24-007006',
-            filingType: '10-Q',
-            filingDate: new Date('2024-01-15'),
-            filingUrl: 'https://www.sec.gov/filing123',
-            rssEntryDate: new Date('2024-01-15'),
-            title: 'Quarterly Report - Q4 2023'
-          }
-        ]);
-
-        mockSummaryService.generateAISummaryWithRetry.mockResolvedValue({
-          summary: 'Test summary',
-          cost: 0.03,
-          keyPoints: [],
-          tokensUsed: 1000,
-          inputTokens: 800,
-          outputTokens: 200
-        });
-
-        mockPrismaInstance.user.findUnique.mockResolvedValue({
-          budgetUsed: 0,
-          subscriptionTier: 'PROFESSIONAL'
-        });
-
-        // Mock concurrency conflict
-        const concurrencyError = new Error('P2034: Transaction failed due to a write conflict or a deadlock');
-        concurrencyError.name = 'PrismaClientKnownRequestError';
-        (concurrencyError as any).code = 'P2034';
-
-        mockConcurrency.updateUserBudgetWithLock.mockRejectedValue(concurrencyError);
-
-        const request = createMockRequest({
-          authorization: `Bearer ${process.env.CRON_SECRET}`
-        });
-
-        const response = await tierAwareRoute(request);
-        const result = await response.json();
-
-        expect(response.status).toBe(200);
-        expect(result.results.errorBreakdown.concurrencyConflicts).toBeGreaterThan(0);
       });
     });
 
