@@ -8,9 +8,9 @@
  *   1. The config default falls back to 'wilf@tldrsec.app' (not 'no-reply').
  *      Env override (EMAIL_DEFAULT_REPLY_TO) still works for staging.
  *
- *   2. Both welcome-service code paths (queueWelcomeEmail + sendWelcomeEmail)
- *      set replyTo EXPLICITLY on the EmailMessage, so a future config rollback
- *      can't silently re-break replies. Belt-and-braces.
+ *   2. queueWelcomeEmail (the welcome-service code path) sets replyTo
+ *      EXPLICITLY on the EmailMessage, so a future config rollback can't
+ *      silently re-break replies. Belt-and-braces.
  *
  * The source-grep style is intentional: it catches the specific regression
  * pattern (sending without explicit replyTo) without booting prisma/clerk/resend.
@@ -55,22 +55,14 @@ describe('reply-to regression', () => {
 
     // Match either the literal "wilf@tldrsec.app" or the FOUNDER_REPLY_TO constant.
     // The constant lives in lib/email/config.ts; either is acceptable as long as
-    // both code paths set replyTo to something other than no-reply@.
+    // queueWelcomeEmail sets replyTo to something other than no-reply@.
     const REPLY_TO_PATTERN = /replyTo:\s*(FOUNDER_REPLY_TO|['"]wilf@tldrsec\.app['"])/;
 
     it('queueWelcomeEmail sets an explicit replyTo on the EmailMessage', () => {
       const queueFnIdx = source.indexOf('export async function queueWelcomeEmail');
       expect(queueFnIdx).toBeGreaterThan(-1);
-      const exportIdx = source.indexOf('export async function sendWelcomeEmail');
-      const queueBody = source.slice(queueFnIdx, exportIdx > 0 ? exportIdx : undefined);
+      const queueBody = source.slice(queueFnIdx);
       expect(queueBody).toMatch(REPLY_TO_PATTERN);
-    });
-
-    it('sendWelcomeEmail sets an explicit replyTo on the EmailMessage', () => {
-      const sendFnIdx = source.indexOf('export async function sendWelcomeEmail');
-      expect(sendFnIdx).toBeGreaterThan(-1);
-      const sendBody = source.slice(sendFnIdx);
-      expect(sendBody).toMatch(REPLY_TO_PATTERN);
     });
 
     it('contains no remaining no-reply@ literal in welcome-service', () => {
