@@ -1199,14 +1199,10 @@ export const FORM_SCHEMAS: Record<string, JSONSchema> = {
 /**
  * Universal grounding block (PR 3 of the anti-hallucination plan).
  *
- * Strict json_schema mode (Phase F) forces the model to emit values for
- * every required property. The strict-schema converter makes optional
- * fields `type: ['X', 'null']`, which means null IS a valid emission - but
- * the model needs to be reminded that null is the *preferred* emission for
- * unknowns. Without this universal block, anti-hallucination pressure
- * exists only in fields whose individual descriptions explicitly forbid
- * inference. The other ~25 numeric fields across all 12 schemas have no
- * such pressure.
+ * Reminds the model that null is the *preferred* emission for unknowns.
+ * Without this universal block, anti-hallucination pressure exists only
+ * in fields whose individual descriptions explicitly forbid inference.
+ * The other ~25 numeric fields across all 12 schemas have no such pressure.
  *
  * Gated on process.env.GROUNDING_PROMPT_ENABLED !== '0' so SREs can flip
  * the env without redeploy if the block makes the model emit nulls
