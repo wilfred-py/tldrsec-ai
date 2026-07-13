@@ -148,11 +148,6 @@ came from the CEO/Eng phases and are out of scope for the deadline-driven ship
   codes, 10-K narrative compression, or sentiment scoring. Build a golden-set
   diff harness (sample 50 recently-emailed summaries, regenerate on grok-4.3,
   human-rate on a 5-point rubric).
-- **`lib/error-handling/model-fallback.ts` mislabel cleanup.** Line 54 labels
-  `claude-sonnet-4-20250514` as "Claude 3 Opus" with $15/$75 (Opus) prices.
-  Either correct the label/prices or delete the entire `ClaudeModels` map (we
-  don't use it; everything runs on xAI Grok now). Used by
-  `__tests__/error-handling/model-fallback.test.ts` so requires test update.
 - **Cost-impact dashboard.** The Grok 4.3 migration is a 4.17× input / 5.0×
   output cost increase. Pull last 30 days of `lib/ai/cost-tracker.ts` data,
   project new monthly burn, and post the delta to PostHog/Slack so the next
