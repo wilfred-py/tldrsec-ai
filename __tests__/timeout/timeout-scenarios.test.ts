@@ -43,13 +43,21 @@ jest.mock('../../lib/cron/user-processing-service', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    runSecFilingMonitoring: jest.fn().mockResolvedValue({
-      filingMonitoring: { checked: 0, found: 0 }
-    })
-  }
-}));
+// `lib/cron/sec-filing-service` was deleted — its `checkForNewFilings`
+// adapter was inlined into discovery-handler.ts. `runSecFilingMonitoring`
+// was already dead. Virtual stub keeps this suite (already CI-ignored — see
+// pr-validation.yml `timeout-scenarios` exclusion) parseable.
+jest.mock(
+  '../../lib/cron/sec-filing-service',
+  () => ({
+    CronSecFilingService: {
+      runSecFilingMonitoring: jest.fn().mockResolvedValue({
+        filingMonitoring: { checked: 0, found: 0 },
+      }),
+    },
+  }),
+  { virtual: true },
+);
 
 describe('Timeout Handling Edge Cases', () => {
   let mockRequest: NextRequest;
