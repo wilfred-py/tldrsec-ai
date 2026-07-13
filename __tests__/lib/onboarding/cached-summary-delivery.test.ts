@@ -36,12 +36,24 @@ jest.mock('@/lib/email/summary-service', () => ({
     mockSendFilingSummaryEmail(...args),
 }));
 
+const mockSendEmail = jest.fn();
+jest.mock('@/lib/email', () => ({
+  sendEmail: (...args: unknown[]) => mockSendEmail(...args),
+}));
+
+const mockGetEmailTemplate = jest.fn();
+jest.mock('@/lib/email/templates', () => ({
+  getEmailTemplate: (...args: unknown[]) => mockGetEmailTemplate(...args),
+}));
+
 import {
   calculateCompositeScore,
   pickBestSummaryForUser,
   deliverFirstOnboardingEmail,
   deliverCachedSummaries,
+  sendOnboardingFirstEmail,
 } from '@/lib/onboarding/cached-summary-delivery';
+import { EmailType } from '@/lib/email/types';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -512,5 +524,283 @@ describe('deliverCachedSummaries (deprecated shim)', () => {
     });
     const result = await deliverCachedSummaries('user_1', 'a@b.com', 'Wilfred');
     expect(result).toEqual({ delivered: 0, reason: 'already_sent' });
+  });
+});
+
+// ============================================================================
+// sendOnboardingFirstEmail (orchestrator: cached path + long-tail fallback)
+// ============================================================================
+
+describe('sendOnboardingFirstEmail', () => {
+  const baseArgs = {
+    userId: 'user_1',
+    email: 'a@b.com',
+    recipientName: 'Wilfred',
+    trackedTickers: ['AAPL', 'MSFT', 'GOOGL'],
+  };
+
+  beforeEach(() => {
+    mockGetEmailTemplate.mockResolvedValue({
+      html: '<p>fallback</p>',
+      text: 'fallback',
+    });
+  });
+
+  describe('cached-summary happy path', () => {
+    it('returns the cached delivery result when a winner is found', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        onboardingFirstEmailSentAt: null,
+      });
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([
+        {
+          id: 'sum_a',
+          filingType: '10-K',
+          filingDate: new Date(),
+          importance: 'high',
+          smartSubject: null,
+          summaryText: 's',
+          summaryJSON: null,
+        },
+      ]);
+      mockPrisma.summary.findUnique.mockResolvedValue({
+        id: 'sum_a',
+        filingType: '10-K',
+        filingDate: new Date(),
+        filingUrl: 'u',
+        url: null,
+        summaryText: 's',
+        summaryJSON: null,
+        importance: 'high',
+        smartSubject: null,
+        ticker: { symbol: 'AAPL', companyName: 'Apple' },
+      });
+      mockSendFilingSummaryEmail.mockResolvedValue({ success: true });
+
+      const result = await sendOnboardingFirstEmail(baseArgs);
+      expect(result.delivered).toBe(true);
+      expect(result.summaryId).toBe('sum_a');
+      // Fallback path never invoked when cached path delivered.
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      expect(mockGetEmailTemplate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fallback branch', () => {
+    beforeEach(() => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        onboardingFirstEmailSentAt: null,
+      });
+      mockSendEmail.mockResolvedValue({ success: true });
+    });
+
+    it('falls back when no cached summaries exist across the user tickers', async () => {
+      // User has tickers but no Summary rows match.
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([]);
+      mockPrisma.ticker.count.mockResolvedValue(1);
+
+      const result = await sendOnboardingFirstEmail(baseArgs);
+      expect(result.delivered).toBe(true);
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      expect(mockGetEmailTemplate).toHaveBeenCalledWith(
+        EmailType.ONBOARDING_FALLBACK_NOTICE,
+        expect.objectContaining({
+          recipientName: 'Wilfred',
+          trackedTickers: ['AAPL', 'MSFT', 'GOOGL'],
+        })
+      );
+      // Cached-summary email sender never called for fallback.
+      expect(mockSendFilingSummaryEmail).not.toHaveBeenCalled();
+    });
+
+    it('falls back when the user has no tickers at all', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([]);
+      mockPrisma.ticker.count.mockResolvedValue(0);
+
+      const result = await sendOnboardingFirstEmail({
+        ...baseArgs,
+        trackedTickers: [],
+      });
+      expect(result.delivered).toBe(true);
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      // No-ticker case still falls back; subject uses the generic copy.
+      const sentSubject = (mockSendEmail.mock.calls[0][0] as { subject: string })
+        .subject;
+      expect(sentSubject).toBe("We're watching your tickers");
+    });
+
+    it('truncates fallback subject to first 3 tickers + overflow when >3', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([]);
+      mockPrisma.ticker.count.mockResolvedValue(1);
+
+      await sendOnboardingFirstEmail({
+        ...baseArgs,
+        trackedTickers: ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'COIN'],
+      });
+      const sentSubject = (mockSendEmail.mock.calls[0][0] as { subject: string })
+        .subject;
+      expect(sentSubject).toBe("We're watching AAPL, MSFT, GOOGL +2");
+    });
+
+    it('tags the fallback email type:onboarding-fallback-notice', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([]);
+      mockPrisma.ticker.count.mockResolvedValue(1);
+
+      await sendOnboardingFirstEmail(baseArgs);
+      const tags = (
+        mockSendEmail.mock.calls[0][0] as { tags?: string[] }
+      ).tags;
+      expect(tags).toContain('type:onboarding-fallback-notice');
+    });
+
+    it('marks onboardingFirstEmailSentAt after successful fallback send', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([]);
+      mockPrisma.ticker.count.mockResolvedValue(1);
+
+      await sendOnboardingFirstEmail(baseArgs);
+      // Cached path's update is never called; fallback path's update is.
+      const updateCalls = mockPrisma.user.update.mock.calls;
+      expect(updateCalls).toHaveLength(1);
+      expect(updateCalls[0][0]).toEqual(
+        expect.objectContaining({
+          where: { id: 'user_1' },
+          data: { onboardingFirstEmailSentAt: expect.any(Date) },
+        })
+      );
+    });
+
+    it('does NOT set onboardingFirstSummaryId on the fallback path', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([]);
+      mockPrisma.ticker.count.mockResolvedValue(1);
+
+      await sendOnboardingFirstEmail(baseArgs);
+      const updateData = mockPrisma.user.update.mock.calls[0][0].data;
+      expect(updateData.onboardingFirstSummaryId).toBeUndefined();
+    });
+
+    it('returns email_failed when the fallback send returns success:false', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([]);
+      mockPrisma.ticker.count.mockResolvedValue(1);
+      mockSendEmail.mockResolvedValue({
+        success: false,
+        error: { message: 'rate limited', code: '429' },
+      });
+
+      const result = await sendOnboardingFirstEmail(baseArgs);
+      expect(result.delivered).toBe(false);
+      expect(result.reason).toBe('email_failed');
+      expect(result.error).toBe('rate limited');
+      // User row not updated when send fails.
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('returns internal_error when the fallback template throws', async () => {
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([]);
+      mockPrisma.ticker.count.mockResolvedValue(1);
+      mockGetEmailTemplate.mockRejectedValue(new Error('template explosion'));
+
+      const result = await sendOnboardingFirstEmail(baseArgs);
+      expect(result.delivered).toBe(false);
+      expect(result.reason).toBe('internal_error');
+      expect(result.error).toContain('template explosion');
+    });
+  });
+
+  describe('idempotency', () => {
+    it('returns already_sent from the cached path without invoking fallback', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        onboardingFirstEmailSentAt: new Date('2026-01-01'),
+      });
+      const result = await sendOnboardingFirstEmail(baseArgs);
+      expect(result.delivered).toBe(false);
+      expect(result.reason).toBe('already_sent');
+      expect(mockSendEmail).not.toHaveBeenCalled();
+      expect(mockSendFilingSummaryEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('passthrough of non-fallback failures', () => {
+    it('propagates email_failed from the cached path without falling back', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        onboardingFirstEmailSentAt: null,
+      });
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([
+        {
+          id: 'sum_a',
+          filingType: '10-K',
+          filingDate: new Date(),
+          importance: null,
+          smartSubject: null,
+          summaryText: 's',
+          summaryJSON: null,
+        },
+      ]);
+      mockPrisma.summary.findUnique.mockResolvedValue({
+        id: 'sum_a',
+        filingType: '10-K',
+        filingDate: new Date(),
+        filingUrl: 'u',
+        url: null,
+        summaryText: 's',
+        summaryJSON: null,
+        importance: null,
+        smartSubject: null,
+        ticker: { symbol: 'AAPL', companyName: 'Apple' },
+      });
+      mockSendFilingSummaryEmail.mockResolvedValue({
+        success: false,
+        error: 'resend down',
+      });
+
+      const result = await sendOnboardingFirstEmail(baseArgs);
+      expect(result.delivered).toBe(false);
+      expect(result.reason).toBe('email_failed');
+      // Fallback NOT triggered — email_failed is not in the fallback-eligible set.
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
+
+    it('propagates internal_error from the cached path without falling back', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        onboardingFirstEmailSentAt: null,
+      });
+      mockPrisma.ticker.findMany.mockResolvedValue([{ symbol: 'AAPL' }]);
+      mockPrisma.summary.findMany.mockResolvedValue([
+        {
+          id: 'sum_a',
+          filingType: '10-K',
+          filingDate: new Date(),
+          importance: null,
+          smartSubject: null,
+          summaryText: 's',
+          summaryJSON: null,
+        },
+      ]);
+      mockPrisma.summary.findUnique.mockResolvedValue({
+        id: 'sum_a',
+        filingType: '10-K',
+        filingDate: new Date(),
+        filingUrl: 'u',
+        url: null,
+        summaryText: 's',
+        summaryJSON: null,
+        importance: null,
+        smartSubject: null,
+        ticker: { symbol: 'AAPL', companyName: 'Apple' },
+      });
+      mockSendFilingSummaryEmail.mockRejectedValue(new Error('boom'));
+
+      const result = await sendOnboardingFirstEmail(baseArgs);
+      expect(result.delivered).toBe(false);
+      expect(result.reason).toBe('internal_error');
+      expect(mockSendEmail).not.toHaveBeenCalled();
+    });
   });
 });

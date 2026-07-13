@@ -458,15 +458,17 @@ export async function completeOnboardingBatched(input: {
     // User.onboardingFirstEmailSentAt.
     after(async () => {
       try {
-        const { deliverFirstOnboardingEmail } = await import(
+        const { sendOnboardingFirstEmail } = await import(
           '@/lib/onboarding/cached-summary-delivery'
         );
-        const deliveryResult = await deliverFirstOnboardingEmail(
-          result.id,
-          primaryEmail
-        );
+        const deliveryResult = await sendOnboardingFirstEmail({
+          userId: result.id,
+          email: primaryEmail,
+          recipientName: userName,
+          trackedTickers: input.tickers.map((t) => t.symbol),
+        });
         console.log(
-          '[Onboarding] Cached-summary delivery:',
+          '[Onboarding] First-email delivery:',
           JSON.stringify({
             userId: result.id,
             delivered: deliveryResult.delivered,
@@ -476,31 +478,12 @@ export async function completeOnboardingBatched(input: {
           })
         );
 
-        // Long-tail fallback: no cached summaries available across the user's
-        // tickers (unique-ticker case). Send the dedicated fallback notice so
-        // the "you'll receive an email shortly" promise isn't broken silently.
-        if (
-          !deliveryResult.delivered &&
-          (deliveryResult.reason === 'no_cached_summaries' ||
-            deliveryResult.reason === 'no_tickers')
-        ) {
-          const { sendOnboardingFallbackNotice } = await import(
-            '@/lib/email/onboarding-fallback-service'
-          );
-          await sendOnboardingFallbackNotice({
-            userId: result.id,
-            email: primaryEmail,
-            recipientName: userName,
-            trackedTickers: input.tickers.map((t) => t.symbol),
-          });
-        }
-
         // TODO: if reason === 'no_cached_summaries', enqueue
         // ASYNC_DISCOVER_FILINGS for the user's tickers to shorten the wait
         // for their first real filing email. Requires understanding cron auth
         // + idempotency-key pattern. Deferred to follow-up — see TODOS.md.
       } catch (err) {
-        console.error('[Onboarding] Cached-summary delivery threw:', err);
+        console.error('[Onboarding] First-email delivery threw:', err);
       }
     });
 

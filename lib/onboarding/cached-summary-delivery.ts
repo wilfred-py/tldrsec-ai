@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { sendFilingSummaryEmail } from '@/lib/email/summary-service';
+import { sendEmail } from '@/lib/email';
+import { getEmailTemplate } from '@/lib/email/templates';
+import { EmailType } from '@/lib/email/types';
 import { SUCCESS_STATUSES } from '@/lib/db/summary-status';
 
 // ---------------------------------------------------------------------------
@@ -411,8 +414,115 @@ export async function deliverFirstOnboardingEmail(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Long-tail fallback notice — private helper. Sent when no cached summary
+// exists across the user's tickers (no_cached_summaries) or the user has
+// no tickers (no_tickers). Idempotent on the same `User.onboardingFirstEmailSentAt`
+// column as the cached-summary path, so re-running for the same user
+// after either branch is a no-op.
+// ---------------------------------------------------------------------------
+
+async function sendFallbackNotice(args: {
+  userId: string;
+  email: string;
+  recipientName: string;
+  trackedTickers: string[];
+}): Promise<DeliveryResult> {
+  const prisma = getPrismaClient();
+
+  // Defense-in-depth idempotency guard — the orchestrator already checked,
+  // but the column is the canonical write-once marker, so re-check here.
+  const user = await prisma.user.findUnique({
+    where: { id: args.userId },
+    select: { onboardingFirstEmailSentAt: true },
+  });
+  if (user?.onboardingFirstEmailSentAt) {
+    return { delivered: false, reason: 'already_sent' };
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app';
+  const dashboardUrl = `${appUrl}/dashboard`;
+  const unsubscribeUrl = `${appUrl}/dashboard/settings`;
+
+  try {
+    const { html, text } = await getEmailTemplate(
+      EmailType.ONBOARDING_FALLBACK_NOTICE,
+      {
+        recipientName: args.recipientName,
+        trackedTickers: args.trackedTickers,
+        dashboardUrl,
+        unsubscribeUrl,
+      } as Record<string, unknown>
+    );
+
+    const subject =
+      args.trackedTickers.length > 0
+        ? `We're watching ${args.trackedTickers.slice(0, 3).join(', ')}${args.trackedTickers.length > 3 ? ` +${args.trackedTickers.length - 3}` : ''}`
+        : "We're watching your tickers";
+
+    const result = await sendEmail({
+      to: args.email,
+      subject,
+      html,
+      text,
+      tags: ['type:onboarding-fallback-notice'],
+    });
+
+    if (!result.success) {
+      return {
+        delivered: false,
+        reason: 'email_failed',
+        error: result.error?.message,
+      };
+    }
+
+    // Mark the onboarding-first-email column so this user never gets the
+    // cached path or the fallback again. summaryId stays unset (no summary
+    // was sent).
+    await prisma.user.update({
+      where: { id: args.userId },
+      data: { onboardingFirstEmailSentAt: new Date() },
+    });
+
+    return { delivered: true };
+  } catch (err) {
+    return {
+      delivered: false,
+      reason: 'internal_error',
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 /**
- * @deprecated Use `deliverFirstOnboardingEmail` instead.
+ * Send the single Onboarding First Email to a freshly-onboarded user.
+ *
+ * Picks the best cached cross-user [Summary] across the user's tickers and
+ * sends it. If no usable cached summary exists (long-tail unique-ticker
+ * case, or no tickers at all), sends the dedicated "we're watching your
+ * tickers" fallback notice instead. Either path writes
+ * `User.onboardingFirstEmailSentAt`, so a single function call covers the
+ * full onboarding-first-email contract.
+ *
+ * Idempotent on `User.onboardingFirstEmailSentAt` — re-running for the
+ * same user is a no-op regardless of which branch sent the original email.
+ */
+export async function sendOnboardingFirstEmail(args: {
+  userId: string;
+  email: string;
+  recipientName: string;
+  trackedTickers: string[];
+}): Promise<DeliveryResult> {
+  const cached = await deliverFirstOnboardingEmail(args.userId, args.email);
+  if (cached.delivered) return cached;
+  if (cached.reason === 'no_cached_summaries' || cached.reason === 'no_tickers') {
+    return sendFallbackNotice(args);
+  }
+  return cached;
+}
+
+/**
+ * @deprecated Use `sendOnboardingFirstEmail` instead.
  *
  * Kept as a thin shim ONLY for the legacy `/api/onboarding?action=deliver-summaries`
  * route in `app/api/onboarding/route.ts`. Once that route is removed (follow-up
