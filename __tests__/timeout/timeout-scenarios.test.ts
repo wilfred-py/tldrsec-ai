@@ -43,13 +43,12 @@ jest.mock('../../lib/cron/user-processing-service', () => ({
   }
 }));
 
-jest.mock('../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    runSecFilingMonitoring: jest.fn().mockResolvedValue({
-      filingMonitoring: { checked: 0, found: 0 }
-    })
-  }
-}));
+// sec-filing-service mock removed (module dissolved into discovery-handler).
+// The per-ticker RSS read lives in lib/sec-edgar/ticker-monitoring now and
+// is not exercised by these timeout-edge-case tests; the four
+// runSecFilingMonitoring.mockResolvedValue/mockRejectedValue setups below
+// are dead — the method has not existed on the real module since
+// commit f946cb1 slimmed CronSecFilingService.
 
 describe('Timeout Handling Edge Cases', () => {
   let mockRequest: NextRequest;
@@ -152,7 +151,7 @@ describe('Timeout Handling Edge Cases', () => {
   describe('Timeout Race Conditions', () => {
     it('should cleanup timeout controllers properly on early completion', async () => {
       // Mock quick completion
-      const { CronSecFilingService } = require('../../lib/cron/sec-filing-service');
+      // CronSecFilingService require removed — module dissolved into discovery-handler.
       CronSecFilingService.runSecFilingMonitoring.mockResolvedValue({
         filingMonitoring: { checked: 1, found: 0 }
       });
@@ -167,7 +166,7 @@ describe('Timeout Handling Edge Cases', () => {
 
     it('should handle timeout during filing processing', async () => {
       // Mock timeout during SEC filing monitoring
-      const { CronSecFilingService } = require('../../lib/cron/sec-filing-service');
+      // CronSecFilingService require removed — module dissolved into discovery-handler.
       CronSecFilingService.runSecFilingMonitoring.mockImplementation(() => 
         new Promise((_, reject) => {
           setTimeout(() => reject(new Error('SEC filing monitoring aborted due to timeout')), 100);
@@ -269,7 +268,7 @@ describe('Timeout Handling Edge Cases', () => {
       });
 
       // Mock timeout scenario
-      const { CronSecFilingService } = require('../../lib/cron/sec-filing-service');
+      // CronSecFilingService require removed — module dissolved into discovery-handler.
       CronSecFilingService.runSecFilingMonitoring.mockRejectedValue(
         new Error('Timeout approaching')
       );
@@ -354,7 +353,7 @@ describe('Timeout Handling Edge Cases', () => {
   describe('Error Message Safety', () => {
     it('should not expose stack traces in error responses', async () => {
       // Mock an error that would normally expose stack trace
-      const { CronSecFilingService } = require('../../lib/cron/sec-filing-service');
+      // CronSecFilingService require removed — module dissolved into discovery-handler.
       CronSecFilingService.runSecFilingMonitoring.mockRejectedValue(
         new Error('Internal database connection failed with sensitive details')
       );
@@ -370,7 +369,7 @@ describe('Timeout Handling Edge Cases', () => {
     });
 
     it('should handle network errors safely', async () => {
-      const { CronSecFilingService } = require('../../lib/cron/sec-filing-service');
+      // CronSecFilingService require removed — module dissolved into discovery-handler.
       CronSecFilingService.runSecFilingMonitoring.mockRejectedValue(
         new Error('Network error: Connection refused to internal.server.local:5432')
       );
