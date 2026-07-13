@@ -9,10 +9,6 @@ import type {
   NotificationContentPreferences,
   UIPreferences
 } from '@/lib/user/preference-types';
-import {
-  DEFAULT_NOTIFICATION_PREFERENCES,
-  DEFAULT_UI_PREFERENCES
-} from '@/lib/user/preference-types';
 import { NotificationPreference } from '@/lib/email/notification-types';
 import { queueWelcomeEmail } from '@/lib/email/welcome-service';
 
@@ -158,140 +154,11 @@ export async function addTickerSubscription(subscription: {
 }
 
 /**
- * Complete the onboarding process and send welcome email
- */
-export async function completeOnboarding(): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Get auth user data
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return { success: false, error: 'User not authenticated' };
-    }
-    
-    // Get user details from Clerk
-    const user = await currentUser();
-    if (!user || !user.emailAddresses || user.emailAddresses.length === 0) {
-      return { success: false, error: 'User email not available' };
-    }
-    
-    const primaryEmail = user.emailAddresses[0].emailAddress;
-    const userName = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'User';
-    
-    // Check if user exists in database by both authProviderId and email
-    let dbUser = await getPrismaClient().user.findFirst({
-      where: {
-        OR: [
-          { authProviderId: userId },
-          { email: primaryEmail }
-        ]
-      }
-    });
-
-    // If user doesn't exist yet, create a new user record
-    if (!dbUser) {
-      console.log(`Creating new user during onboarding for ${primaryEmail}`);
-
-      // Convert preferences to plain JSON object for database storage
-      const defaultPreferences = {
-        notifications: JSON.parse(JSON.stringify(DEFAULT_NOTIFICATION_PREFERENCES)),
-        ui: JSON.parse(JSON.stringify(DEFAULT_UI_PREFERENCES))
-      };
-
-      try {
-        dbUser = await getPrismaClient().user.create({
-          data: {
-            email: primaryEmail,
-            authProvider: 'clerk',
-            authProviderId: userId,
-            name: userName,
-            preferences: defaultPreferences,
-            onboardingCompleted: true
-          }
-        });
-
-        console.log(`Created new user in database during onboarding: ${dbUser.id}`);
-      } catch (createError) {
-        console.error('Failed to create user in database:', createError);
-        return {
-          success: false,
-          error: createError instanceof Error ? createError.message : 'Failed to create user in database'
-        };
-      }
-    }
-
-    // Ensure onboardingCompleted is set to true in the database
-    if (dbUser && !dbUser.onboardingCompleted) {
-      await getPrismaClient().user.update({
-        where: { id: dbUser.id },
-        data: { onboardingCompleted: true }
-      });
-      console.log(`Set onboardingCompleted=true for user ${dbUser.id}`);
-    }
-
-    // Sync onboardingCompleted to Clerk publicMetadata
-    try {
-      const client = await clerkClient();
-      await client.users.updateUserMetadata(userId, {
-        publicMetadata: { onboardingCompleted: true }
-      });
-      console.log(`Synced onboardingCompleted=true to Clerk metadata for user ${userId}`);
-    } catch (metadataError) {
-      console.error('Failed to sync onboardingCompleted to Clerk:', metadataError);
-      // Continue even if Clerk sync fails - the database is the source of truth
-    }
-    
-    // Send welcome email with proper error handling
-    try {
-      const emailResult = await sendWelcomeEmail();
-
-      if (!emailResult.success) {
-        console.warn('Failed to send welcome email:', emailResult.error);
-        // Continue even if email fails - don't block the user
-      } else {
-        console.log(`Welcome email sent successfully to ${primaryEmail}`);
-      }
-    } catch (emailError) {
-      console.error('Exception when sending welcome email:', emailError);
-      // Continue even if email fails - don't block the user
-    }
-
-    // Reconcile Stripe subscription (fire-and-forget)
-    // Always attempt — handles re-onboarded users whose Stripe sub still exists
-    if (dbUser) {
-      import('@/lib/stripe/reconcile')
-        .then(({ reconcileStripeSubscription }) =>
-          reconcileStripeSubscription(dbUser.id, primaryEmail)
-        )
-        .then((reconcileResult) => {
-          if (reconcileResult.reconciled) {
-            console.log(`[Onboarding] Reconciled Stripe subscription: ${reconcileResult.planType}`);
-          }
-        })
-        .catch((reconcileError) => {
-          console.error('[Onboarding] Stripe reconciliation failed:', reconcileError);
-        });
-    }
-
-    revalidatePath('/onboarding');
-    revalidatePath('/dashboard');
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to complete onboarding:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to complete onboarding'
-    };
-  }
-}
-
-/**
- * OPTIMIZED: Complete onboarding in a single batched operation
+ * Complete onboarding in a single batched operation.
  *
- * This replaces the sequential calls to:
+ * Replaces the sequential calls to:
  * - saveUserPreferences()
  * - addTickerSubscription() x N
- * - completeOnboarding()
  *
  * With a single server action that:
  * 1. Gets auth once
