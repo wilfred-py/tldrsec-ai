@@ -148,15 +148,6 @@ jest.mock('../../lib/db/cost-validation', () => ({
     sanitizedCost: 0.5 
   })
 }));
-jest.mock('../../lib/db/transaction-manager', () => ({
-  FilingTransactionManager: {
-    processFilingWithTransaction: jest.fn().mockResolvedValue({
-      success: true,
-      data: { cost: 0.5 },
-      transactionId: 'test-transaction-id'
-    })
-  }
-}));
 jest.mock('../../lib/db/async-audit', () => ({
   createAsyncAuditLog: jest.fn().mockResolvedValue(undefined)
 }));
@@ -1257,20 +1248,6 @@ describe('Comprehensive Cron Integration Tests', () => {
         messageId: 'email-123'
       });
 
-      // Override FilingTransactionManager to actually call the callback for this test
-      const { FilingTransactionManager } = require('../../lib/db/transaction-manager');
-      (FilingTransactionManager.processFilingWithTransaction as jest.Mock).mockImplementation(
-        async (filingId: string, userId: string, callback: Function) => {
-          // Call the actual callback to trigger summarization
-          const result = await callback(mockPrismaInstance as any);
-          return {
-            success: true,
-            data: result,
-            transactionId: 'test-transaction-id'
-          };
-        }
-      );
-
       const request = createMockRequest({
         authorization: `Bearer ${process.env.CRON_SECRET}`
       });
@@ -1391,20 +1368,6 @@ describe('Comprehensive Cron Integration Tests', () => {
       });
 
       mockTickerMonitoring.markFilingAsProcessed.mockResolvedValue();
-
-      // Override FilingTransactionManager to actually call the callback for this test
-      const { FilingTransactionManager } = require('../../lib/db/transaction-manager');
-      (FilingTransactionManager.processFilingWithTransaction as jest.Mock).mockImplementation(
-        async (filingId: string, userId: string, callback: Function) => {
-          // Call the actual callback to trigger summarization
-          const result = await callback(mockPrismaInstance as any);
-          return {
-            success: true,
-            data: result,
-            transactionId: 'test-transaction-id'
-          };
-        }
-      );
 
       const request = createMockRequest({
         authorization: `Bearer ${process.env.CRON_SECRET}`
