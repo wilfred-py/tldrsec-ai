@@ -4,7 +4,7 @@ import { getPrismaClient } from '@/lib/db/prisma';
 import { dbRetry } from '@/lib/db/retry-wrapper';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { checkTierLimit, getTierLimitInfo } from '@/lib/subscription/three-tier-limits';
+import { isTickerLimitReached, getTickerLimitInfo } from '@/lib/auth/tier-eligibility';
 import { convertUserPrefsToTickerPrefs, getDefaultTickerPreferences } from '@/lib/user/preference-sync';
 import { UserPreferences } from '@/lib/user/preference-types';
 import { sendQuarterlyEarningsEmail } from '@/lib/email/quarterly-earnings-service';
@@ -279,8 +279,8 @@ export async function POST(request: Request) {
     const currentCount = dbUser.tickers.length;
     const tier = dbUser.subscriptionTier as 'FREE' | 'PRO' | 'MAX';
     
-    if (checkTierLimit(currentCount, tier)) {
-      const limitInfo = getTierLimitInfo(tier);
+    if (isTickerLimitReached(currentCount, tier)) {
+      const limitInfo = getTickerLimitInfo(tier);
       return NextResponse.json({
         error: `You've reached your ${currentCount} ticker limit for the ${tier} tier`,
         limitReached: true,

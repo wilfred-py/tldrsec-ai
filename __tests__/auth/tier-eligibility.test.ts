@@ -9,6 +9,9 @@ import {
   hasActiveAccess,
   getActiveTrialCutoffDate,
   isSubscriptionActive,
+  TICKER_LIMIT_BY_TIER,
+  isTickerLimitReached,
+  getTickerLimitInfo,
 } from '@/lib/auth/tier-eligibility';
 
 const future = () => new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -160,5 +163,59 @@ describe('isSubscriptionActive', () => {
     expect(
       isSubscriptionActive({ isActive: true, currentPeriodEnd: now })
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ticker-tracking limit — absorbed from lib/subscription/three-tier-limits.ts
+// ---------------------------------------------------------------------------
+
+describe('TICKER_LIMIT_BY_TIER', () => {
+  it('FREE is unlimited (sentinel -1)', () => {
+    expect(TICKER_LIMIT_BY_TIER.FREE).toBe(-1);
+  });
+
+  it('PRO caps at 25', () => {
+    expect(TICKER_LIMIT_BY_TIER.PRO).toBe(25);
+  });
+
+  it('MAX is unlimited (sentinel -1)', () => {
+    expect(TICKER_LIMIT_BY_TIER.MAX).toBe(-1);
+  });
+});
+
+describe('isTickerLimitReached', () => {
+  it('returns false for FREE regardless of count (unlimited)', () => {
+    expect(isTickerLimitReached(0, 'FREE')).toBe(false);
+    expect(isTickerLimitReached(1000, 'FREE')).toBe(false);
+  });
+
+  it('returns false for MAX regardless of count (unlimited)', () => {
+    expect(isTickerLimitReached(0, 'MAX')).toBe(false);
+    expect(isTickerLimitReached(1000, 'MAX')).toBe(false);
+  });
+
+  it('returns false below PRO cap', () => {
+    expect(isTickerLimitReached(0, 'PRO')).toBe(false);
+    expect(isTickerLimitReached(24, 'PRO')).toBe(false);
+  });
+
+  it('returns true at PRO cap (>=)', () => {
+    expect(isTickerLimitReached(25, 'PRO')).toBe(true);
+    expect(isTickerLimitReached(100, 'PRO')).toBe(true);
+  });
+});
+
+describe('getTickerLimitInfo', () => {
+  it('returns the unlimited triple for FREE', () => {
+    expect(getTickerLimitInfo('FREE')).toEqual({ limit: -1, tier: 'FREE', unlimited: true });
+  });
+
+  it('returns the 25-cap triple for PRO', () => {
+    expect(getTickerLimitInfo('PRO')).toEqual({ limit: 25, tier: 'PRO', unlimited: false });
+  });
+
+  it('returns the unlimited triple for MAX', () => {
+    expect(getTickerLimitInfo('MAX')).toEqual({ limit: -1, tier: 'MAX', unlimited: true });
   });
 });

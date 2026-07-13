@@ -3,12 +3,12 @@ import {
   Lightbulb, Layers, Factory, Megaphone, ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
-import { THREE_TIER_LIMITS } from "@/lib/subscription/three-tier-limits";
+import { TICKER_LIMIT_BY_TIER } from "@/lib/auth/tier-eligibility";
 
 // ---------------------------------------------------------------------------
 // Ticker limits
 // ---------------------------------------------------------------------------
-const TIER_LIMIT = THREE_TIER_LIMITS.FREE;
+const TIER_LIMIT = TICKER_LIMIT_BY_TIER.FREE;
 const isUnlimitedTier = TIER_LIMIT === -1;
 const ONBOARDING_SOFT_CAP = 15;
 export const MAX_TICKERS = isUnlimitedTier ? ONBOARDING_SOFT_CAP : TIER_LIMIT;
