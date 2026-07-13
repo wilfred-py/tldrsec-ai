@@ -55,9 +55,6 @@ jest.mock('../lib/security/rate-limiter', () => ({
 }));
 
 jest.mock('../lib/logging');
-jest.mock('../lib/db/cost-validation', () => ({
-  validateCostUpdate: jest.fn().mockReturnValue({ valid: true })
-}));
 jest.mock('../lib/db/transaction-manager', () => ({
   FilingTransactionManager: {
     processFilingWithTransaction: jest.fn().mockResolvedValue({
@@ -65,13 +62,6 @@ jest.mock('../lib/db/transaction-manager', () => ({
       data: { cost: 0 }
     })
   }
-}));
-jest.mock('../lib/db/concurrency', () => ({
-  updateUserBudgetWithLock: jest.fn().mockResolvedValue({
-    previousBudget: 0,
-    newBudget: 0,
-    updated: true
-  })
 }));
 jest.mock('../lib/db/async-audit', () => ({
   createAsyncAuditLog: jest.fn().mockResolvedValue(undefined)
