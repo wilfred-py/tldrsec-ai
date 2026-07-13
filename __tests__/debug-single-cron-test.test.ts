@@ -103,26 +103,6 @@ jest.mock('../lib/logging', () => ({
   }
 }));
 
-jest.mock('../lib/db/concurrency', () => ({
-  updateUserBudgetWithLock: jest.fn().mockResolvedValue({
-    previousBudget: 0,
-    newBudget: 0.02,
-    updated: true
-  })
-}));
-
-jest.mock('../lib/db/cost-validation', () => ({
-  validateCostUpdate: jest.fn().mockReturnValue({ valid: true })
-}));
-
-jest.mock('../lib/db/transaction-manager', () => ({
-  FilingTransactionManager: jest.fn()
-}));
-
-jest.mock('../lib/db/async-audit', () => ({
-  createAsyncAuditLog: jest.fn()
-}));
-
 describe('Debug Single Cron Test', () => {
   beforeEach(() => {
     process.env.CRON_SECRET = 'test-secret';
