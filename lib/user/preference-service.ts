@@ -1,12 +1,16 @@
 import { getPrismaClient } from '@/lib/db/prisma';
-import { DEFAULT_USER_PREFERENCES, NotificationPreferences, PreferenceUpdateResponse, TickerSubscription, UserPreferences, SubscriptionUpdateResponse } from './preference-types';
+import { DEFAULT_USER_PREFERENCES, PreferenceUpdateResponse, UserPreferences } from './preference-types';
 import { syncUserTickerPreferences } from './preference-sync';
 import { logger } from '../logging';
-// import { v4 as uuidv4 } from 'uuid';
 
 /**
- * User Preference Service
- * Handles CRUD operations for user preferences and subscriptions
+ * User Preference Service — behind the two-method interface production
+ * actually calls (getUserPreferences + updateUserPreferences). The former
+ * fanned-out subscription CRUD methods (getUserSubscriptions,
+ * addSubscription, updateSubscription, removeSubscription) were exported
+ * for a hypothetical `/api/user/subscriptions` seam that never shipped and
+ * had zero production callers; deleting them concentrates the surface on
+ * what the surviving `/api/user` route uses.
  */
 export class PreferenceService {
   /**
@@ -111,201 +115,6 @@ export class PreferenceService {
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error updating preferences'
-      };
-    }
-  }
-
-  /**
-   * Get user ticker subscriptions
-   * @param userId User ID
-   * @returns Array of ticker subscriptions
-   */
-  static async getUserSubscriptions(userId: string): Promise<TickerSubscription[]> {
-    try {
-      // Get user preferences which contain subscriptions
-      const preferences = await this.getUserPreferences(userId);
-      
-      // Return subscriptions or empty array if none exist
-      return preferences.subscriptions || [];
-    } catch (error) {
-      logger.error('Error getting user subscriptions', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Add a ticker subscription
-   * @param userId User ID
-   * @param symbol Ticker symbol
-   * @param companyName Company name
-   * @param overridePreferences Whether to override global preferences
-   * @param notificationPreferences Optional ticker-specific preferences
-   * @returns Response with updated subscriptions
-   */
-  static async addSubscription(
-    userId: string,
-    symbol: string,
-    companyName: string,
-    overridePreferences: boolean = false,
-    notificationPreferences?: NotificationPreferences
-  ): Promise<SubscriptionUpdateResponse> {
-    try {
-      // Normalize the symbol to uppercase
-      const normalizedSymbol = symbol.toUpperCase();
-      
-      // Get existing preferences
-      const preferences = await this.getUserPreferences(userId);
-      
-      // Check if subscription already exists
-      const existingIndex = (preferences.subscriptions || [])
-        .findIndex(s => s.symbol.toUpperCase() === normalizedSymbol);
-      
-      // Create subscription object
-      const subscription: TickerSubscription = {
-        symbol: normalizedSymbol,
-        companyName,
-        overridePreferences,
-        notificationPreferences: overridePreferences ? notificationPreferences : undefined
-      };
-      
-      // Clone subscriptions array or create if it doesn't exist
-      const subscriptions = [...(preferences.subscriptions || [])];
-      
-      // Update or add subscription
-      if (existingIndex >= 0) {
-        // Update existing subscription
-        subscriptions[existingIndex] = subscription;
-      } else {
-        // Add new subscription
-        subscriptions.push(subscription);
-      }
-      
-      // Update user preferences with new subscriptions
-      const result = await this.updateUserPreferences(userId, {
-        subscriptions
-      });
-      
-      return {
-        success: result.success,
-        message: result.success ? 'Subscription added successfully' : result.message,
-        subscriptions
-      };
-    } catch (error) {
-      logger.error('Error adding subscription', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error adding subscription'
-      };
-    }
-  }
-
-  /**
-   * Update a ticker subscription
-   * @param userId User ID
-   * @param symbol Ticker symbol
-   * @param overridePreferences Whether to override global preferences
-   * @param notificationPreferences Optional ticker-specific preferences
-   * @returns Response with updated subscriptions
-   */
-  static async updateSubscription(
-    userId: string,
-    symbol: string,
-    overridePreferences: boolean,
-    notificationPreferences?: NotificationPreferences
-  ): Promise<SubscriptionUpdateResponse> {
-    try {
-      // Normalize the symbol to uppercase
-      const normalizedSymbol = symbol.toUpperCase();
-      
-      // Get existing preferences
-      const preferences = await this.getUserPreferences(userId);
-      
-      // Check if subscription exists
-      const subscriptions = [...(preferences.subscriptions || [])];
-      const existingIndex = subscriptions
-        .findIndex(s => s.symbol.toUpperCase() === normalizedSymbol);
-      
-      // If subscription doesn't exist, return error
-      if (existingIndex < 0) {
-        return {
-          success: false,
-          message: `Subscription not found for symbol: ${symbol}`,
-          subscriptions
-        };
-      }
-      
-      // Update subscription
-      subscriptions[existingIndex] = {
-        ...subscriptions[existingIndex],
-        overridePreferences,
-        notificationPreferences: overridePreferences ? notificationPreferences : undefined
-      };
-      
-      // Update user preferences with updated subscriptions
-      const result = await this.updateUserPreferences(userId, {
-        subscriptions
-      });
-      
-      return {
-        success: result.success,
-        message: result.success ? 'Subscription updated successfully' : result.message,
-        subscriptions
-      };
-    } catch (error) {
-      logger.error('Error updating subscription', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error updating subscription'
-      };
-    }
-  }
-
-  /**
-   * Remove a ticker subscription
-   * @param userId User ID
-   * @param symbol Ticker symbol
-   * @returns Response with updated subscriptions
-   */
-  static async removeSubscription(
-    userId: string,
-    symbol: string
-  ): Promise<SubscriptionUpdateResponse> {
-    try {
-      // Normalize the symbol to uppercase
-      const normalizedSymbol = symbol.toUpperCase();
-      
-      // Get existing preferences
-      const preferences = await this.getUserPreferences(userId);
-      
-      // Filter out the subscription to remove
-      const existingSubscriptions = preferences.subscriptions || [];
-      const subscriptions = existingSubscriptions
-        .filter(s => s.symbol.toUpperCase() !== normalizedSymbol);
-      
-      // If no subscriptions were removed, return error
-      if (existingSubscriptions.length === subscriptions.length) {
-        return {
-          success: false,
-          message: `Subscription not found for symbol: ${symbol}`,
-          subscriptions
-        };
-      }
-      
-      // Update user preferences with filtered subscriptions
-      const result = await this.updateUserPreferences(userId, {
-        subscriptions
-      });
-      
-      return {
-        success: result.success,
-        message: result.success ? 'Subscription removed successfully' : result.message,
-        subscriptions
-      };
-    } catch (error) {
-      logger.error('Error removing subscription', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error removing subscription'
       };
     }
   }
