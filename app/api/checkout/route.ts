@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { stripe, SUBSCRIPTION_PLANS, getPriceIdForPlan, createCheckoutSession } from '@/lib/stripe';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
-import { PaymentLogger } from '@/lib/audit/payment-logger';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { TRIAL_CONFIG } from '@/lib/auth/trial-config';
 
@@ -12,6 +11,74 @@ const DirectCheckoutSchema = z.object({
   email: z.string().email(),
   planType: z.enum(['PRO', 'MAX']),
 });
+
+// Audit-log a checkout attempt to SecurityAuditLog. Failures are swallowed
+// so audit-write outages can't break the checkout flow.
+async function logCheckoutStarted(data: {
+  email: string;
+  planType: string;
+  amount?: number;
+  ipAddress?: string;
+  userAgent?: string;
+}): Promise<void> {
+  try {
+    console.log('[Payment Audit] checkout_started', {
+      timestamp: new Date().toISOString(),
+      email: data.email,
+      amount: data.amount,
+    });
+    await getPrismaClient().securityAuditLog.create({
+      data: {
+        eventType: 'checkout_started',
+        details: JSON.stringify({
+          email: data.email,
+          amount: data.amount,
+          currency: 'USD',
+          metadata: { planType: data.planType },
+          ipAddress: data.ipAddress,
+          userAgent: data.userAgent,
+        }),
+        severity: 'LOW',
+        source: 'PAYMENT_SYSTEM',
+        timestamp: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error('[Payment Audit] Failed to log checkout_started:', error);
+  }
+}
+
+async function logCheckoutFailed(data: {
+  email: string;
+  error: string;
+  amount?: number;
+  ipAddress?: string;
+}): Promise<void> {
+  try {
+    console.log('[Payment Audit] checkout_failed', {
+      timestamp: new Date().toISOString(),
+      email: data.email,
+      error: data.error,
+    });
+    await getPrismaClient().securityAuditLog.create({
+      data: {
+        eventType: 'checkout_failed',
+        details: JSON.stringify({
+          email: data.email,
+          amount: data.amount,
+          currency: 'USD',
+          ipAddress: data.ipAddress,
+          error: data.error,
+        }),
+        severity: 'HIGH',
+        source: 'PAYMENT_SYSTEM',
+        timestamp: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error('[Payment Audit] Failed to log checkout_failed:', error);
+  }
+}
 
 // Apply rate limiting wrapper
 const checkoutRateLimit = rateLimit(rateLimitConfigs.checkout);
@@ -31,7 +98,7 @@ export async function POST(request: NextRequest) {
     const userAgent = req.headers.get('user-agent') || 'unknown';
 
     // Log checkout attempt
-    await PaymentLogger.checkoutStarted({
+    await logCheckoutStarted({
       email,
       planType,
       amount: SUBSCRIPTION_PLANS[planType].monthlyPrice,
@@ -87,7 +154,7 @@ export async function POST(request: NextRequest) {
         stripe.subscriptions.list({ customer: customer.id, status: 'trialing', limit: 1 }),
       ]);
       if (activeSubs.data.length > 0 || trialingSubs.data.length > 0) {
-        await PaymentLogger.checkoutFailed({
+        await logCheckoutFailed({
           email,
           error: 'active_subscription_exists',
           ipAddress,
@@ -134,7 +201,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // Log checkout failure
     if (parsedEmail) {
-      await PaymentLogger.checkoutFailed({
+      await logCheckoutFailed({
         email: parsedEmail,
         error: error instanceof Error ? error.message : 'Unknown error',
       }).catch(() => {}); // Don't let logger failure mask the real error
