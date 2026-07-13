@@ -2,11 +2,69 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { stripe, SUBSCRIPTION_PLANS, getPriceIdForPlan, createCheckoutSession } from '@/lib/stripe';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
-import { PaymentLogger } from '@/lib/audit/payment-logger';
 import { getPrismaClient } from '@/lib/db/prisma';
 import { TRIAL_CONFIG } from '@/lib/auth/trial-config';
 
 export const dynamic = 'force-dynamic';
+
+// Private audit-log writer for the checkout route. Replaces the
+// lib/audit/payment-logger.ts orbital, which exported a PaymentLogger
+// const with 6 helpers, an unused PaymentEventType enum, and an unused raw
+// logPaymentEvent — only checkoutStarted/checkoutFailed had production
+// callers and both lived here. Each call writes one SecurityAuditLog row
+// tagged PAYMENT_SYSTEM and swallows audit-write failures so the real
+// checkout flow is never masked.
+type PaymentAuditEvent =
+  | {
+      type: 'checkout_started';
+      email: string;
+      planType: string;
+      amount?: number;
+      ipAddress?: string;
+      userAgent?: string;
+    }
+  | {
+      type: 'checkout_failed';
+      email: string;
+      error: string;
+      amount?: number;
+      ipAddress?: string;
+    };
+
+async function logPaymentAudit(event: PaymentAuditEvent): Promise<void> {
+  try {
+    console.log(`[Payment Audit] ${event.type}`, {
+      timestamp: new Date().toISOString(),
+      email: event.email,
+      amount: 'amount' in event ? event.amount : undefined,
+      error: 'error' in event ? event.error : undefined,
+    });
+    await getPrismaClient().securityAuditLog.create({
+      data: {
+        eventType: event.type,
+        details: JSON.stringify({
+          email: event.email,
+          amount: 'amount' in event ? event.amount : undefined,
+          currency: 'USD',
+          metadata: event.type === 'checkout_started' ? { planType: event.planType } : undefined,
+          ipAddress: 'ipAddress' in event ? event.ipAddress : undefined,
+          userAgent: 'userAgent' in event ? event.userAgent : undefined,
+          error: 'error' in event ? event.error : undefined,
+        }),
+        severity:
+          event.type === 'checkout_failed'
+            ? 'error' in event && event.error
+              ? 'HIGH'
+              : 'MEDIUM'
+            : 'LOW',
+        source: 'PAYMENT_SYSTEM',
+        timestamp: new Date(),
+      },
+    });
+  } catch (err) {
+    console.error('[Payment Audit] Failed to log event:', err);
+  }
+}
 
 const DirectCheckoutSchema = z.object({
   email: z.string().email(),
@@ -31,7 +89,8 @@ export async function POST(request: NextRequest) {
     const userAgent = req.headers.get('user-agent') || 'unknown';
 
     // Log checkout attempt
-    await PaymentLogger.checkoutStarted({
+    await logPaymentAudit({
+      type: 'checkout_started',
       email,
       planType,
       amount: SUBSCRIPTION_PLANS[planType].monthlyPrice,
@@ -87,7 +146,8 @@ export async function POST(request: NextRequest) {
         stripe.subscriptions.list({ customer: customer.id, status: 'trialing', limit: 1 }),
       ]);
       if (activeSubs.data.length > 0 || trialingSubs.data.length > 0) {
-        await PaymentLogger.checkoutFailed({
+        await logPaymentAudit({
+          type: 'checkout_failed',
           email,
           error: 'active_subscription_exists',
           ipAddress,
@@ -134,7 +194,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     // Log checkout failure
     if (parsedEmail) {
-      await PaymentLogger.checkoutFailed({
+      await logPaymentAudit({
+        type: 'checkout_failed',
         email: parsedEmail,
         error: error instanceof Error ? error.message : 'Unknown error',
       }).catch(() => {}); // Don't let logger failure mask the real error
