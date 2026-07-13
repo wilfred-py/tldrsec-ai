@@ -1,49 +1,59 @@
+/**
+ * Payment Audit Logger.
+ *
+ * Deep module behind two helpers — `PaymentLogger.checkoutStarted` and
+ * `PaymentLogger.checkoutFailed` — that the checkout API
+ * (`app/api/checkout/route.ts`) calls to persist Stripe Checkout
+ * lifecycle events to the `SecurityAuditLog` table. The helpers carry
+ * the per-event-type shape (severity, source, metadata layout) so
+ * callers never assemble those fields by hand.
+ *
+ * Previously the same namespace exported six additional helpers —
+ * `checkoutCompleted`, `webhookReceived`, `subscriptionUpdated`,
+ * `rateLimitExceeded` — plus six unused `PaymentEventType` enum entries
+ * (`CHECKOUT_COMPLETED`, `SUBSCRIPTION_CREATED`, `SUBSCRIPTION_UPDATED`,
+ * `SUBSCRIPTION_CANCELLED`, `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED`,
+ * `WEBHOOK_RECEIVED`, `RATE_LIMIT_EXCEEDED`). None had a production
+ * caller; they were a speculative "common events" catalogue. Stripe
+ * webhook handlers and rate-limit middleware in this repo do not funnel
+ * through this module. Removing them concentrates the seam on the
+ * checkout-lifecycle events the system actually ships.
+ *
+ * Per LANGUAGE.md "one adapter = hypothetical seam": each removed
+ * helper had zero adapters. The remaining surface is the real seam.
+ */
+
 import { getPrismaClient } from '@/lib/db/prisma';
 
 export enum PaymentEventType {
   CHECKOUT_STARTED = 'checkout_started',
-  CHECKOUT_COMPLETED = 'checkout_completed', 
   CHECKOUT_FAILED = 'checkout_failed',
-  SUBSCRIPTION_CREATED = 'subscription_created',
-  SUBSCRIPTION_UPDATED = 'subscription_updated',
-  SUBSCRIPTION_CANCELLED = 'subscription_cancelled',
-  PAYMENT_SUCCEEDED = 'payment_succeeded',
-  PAYMENT_FAILED = 'payment_failed',
-  WEBHOOK_RECEIVED = 'webhook_received',
-  RATE_LIMIT_EXCEEDED = 'rate_limit_exceeded',
 }
 
-export interface PaymentEvent {
+interface PaymentEvent {
   type: PaymentEventType;
   userId?: string;
   email?: string;
   amount?: number;
   currency?: string;
-  stripeEventId?: string;
-  subscriptionId?: string;
-  customerId?: string;
   metadata?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
   error?: string;
 }
 
-export async function logPaymentEvent(event: PaymentEvent): Promise<void> {
+async function logPaymentEvent(event: PaymentEvent): Promise<void> {
   const prisma = getPrismaClient();
-  
+
   try {
-    // Log to console for immediate monitoring
     console.log(`[Payment Audit] ${event.type}`, {
       timestamp: new Date().toISOString(),
       userId: event.userId,
       email: event.email,
       amount: event.amount,
-      stripeEventId: event.stripeEventId,
-      subscriptionId: event.subscriptionId,
       error: event.error,
     });
-    
-    // Store in database for audit trail
+
     await prisma.securityAuditLog.create({
       data: {
         eventType: event.type,
@@ -52,9 +62,6 @@ export async function logPaymentEvent(event: PaymentEvent): Promise<void> {
           email: event.email,
           amount: event.amount,
           currency: event.currency,
-          stripeEventId: event.stripeEventId,
-          subscriptionId: event.subscriptionId,
-          customerId: event.customerId,
           metadata: event.metadata,
           ipAddress: event.ipAddress,
           userAgent: event.userAgent,
@@ -66,14 +73,19 @@ export async function logPaymentEvent(event: PaymentEvent): Promise<void> {
       },
     });
   } catch (error) {
-    // Don't let audit logging failures break the main flow
+    // Audit logging failures must never break the checkout flow.
     console.error('[Payment Audit] Failed to log event:', error);
   }
 }
 
-// Helper functions for common events
 export const PaymentLogger = {
-  async checkoutStarted(data: { email: string; planType: string; amount?: number; ipAddress?: string; userAgent?: string }) {
+  async checkoutStarted(data: {
+    email: string;
+    planType: string;
+    amount?: number;
+    ipAddress?: string;
+    userAgent?: string;
+  }) {
     await logPaymentEvent({
       type: PaymentEventType.CHECKOUT_STARTED,
       email: data.email,
@@ -85,54 +97,18 @@ export const PaymentLogger = {
     });
   },
 
-  async checkoutCompleted(data: { userId?: string; email: string; amount: number; subscriptionId?: string; customerId?: string }) {
-    await logPaymentEvent({
-      type: PaymentEventType.CHECKOUT_COMPLETED,
-      userId: data.userId,
-      email: data.email,
-      amount: data.amount,
-      currency: 'USD',
-      subscriptionId: data.subscriptionId,
-      customerId: data.customerId,
-    });
-  },
-
-  async checkoutFailed(data: { email: string; error: string; amount?: number; ipAddress?: string }) {
+  async checkoutFailed(data: {
+    email: string;
+    error: string;
+    amount?: number;
+    ipAddress?: string;
+  }) {
     await logPaymentEvent({
       type: PaymentEventType.CHECKOUT_FAILED,
       email: data.email,
       amount: data.amount,
       error: data.error,
       ipAddress: data.ipAddress,
-    });
-  },
-
-  async webhookReceived(data: { stripeEventId: string; type: string; customerId?: string; subscriptionId?: string }) {
-    await logPaymentEvent({
-      type: PaymentEventType.WEBHOOK_RECEIVED,
-      stripeEventId: data.stripeEventId,
-      customerId: data.customerId,
-      subscriptionId: data.subscriptionId,
-      metadata: { webhookType: data.type },
-    });
-  },
-
-  async subscriptionUpdated(data: { userId: string; subscriptionId: string; oldTier?: string; newTier: string }) {
-    await logPaymentEvent({
-      type: PaymentEventType.SUBSCRIPTION_UPDATED,
-      userId: data.userId,
-      subscriptionId: data.subscriptionId,
-      metadata: { oldTier: data.oldTier, newTier: data.newTier },
-    });
-  },
-
-  async rateLimitExceeded(data: { ipAddress: string; endpoint: string; userAgent?: string }) {
-    await logPaymentEvent({
-      type: PaymentEventType.RATE_LIMIT_EXCEEDED,
-      ipAddress: data.ipAddress,
-      userAgent: data.userAgent,
-      metadata: { endpoint: data.endpoint },
-      error: 'Rate limit exceeded',
     });
   },
 };
