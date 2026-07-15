@@ -1,9 +1,17 @@
 "use client";
 
-import { EMAIL_NOTICE_PROMISE, SETTINGS_HELPER } from "@/lib/onboarding/email-notice-constants";
-
 interface InlineEmailNoticeProps {
   tickers: string[];
+}
+
+const SETTINGS_HELPER = "Change anytime in Settings.";
+
+function pluralize(n: number, singular: string, plural: string): string {
+  return n === 1 ? singular : plural;
+}
+
+function emailNoticePromise(companyCount: number): string {
+  return `We'll email you when new filings are posted for ${companyCount} ${pluralize(companyCount, "company", "companies")}.`;
 }
 
 /**
@@ -32,7 +40,7 @@ export function InlineEmailNotice({ tickers }: InlineEmailNoticeProps) {
         Email notice
       </h3>
       <p className="text-[13px] leading-snug text-foreground">
-        {EMAIL_NOTICE_PROMISE(count)}
+        {emailNoticePromise(count)}
       </p>
       {tickerLine && (
         <p
