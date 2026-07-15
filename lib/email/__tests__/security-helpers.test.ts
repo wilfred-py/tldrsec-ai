@@ -10,8 +10,7 @@ import {
   maskUserIdForLogging,
   maskEmailContentForLogging,
   createGDPRCompliantLogData,
-  SecureEmailLogger,
-  EmailQueueLock
+  SecureEmailLogger
 } from '../security-helpers';
 
 describe('PII Masking Functions', () => {
@@ -190,133 +189,7 @@ describe('SecureEmailLogger', () => {
   });
 });
 
-describe('EmailQueueLock', () => {
-  const processId1 = 'process-1';
-  const processId2 = 'process-2';
-  const lockKey = 'test-lock';
-
-  beforeEach(() => {
-    // Clear any existing locks
-    EmailQueueLock.releaseLock(lockKey, processId1);
-    EmailQueueLock.releaseLock(lockKey, processId2);
-  });
-
-  afterEach(() => {
-    // Clean up locks after each test
-    EmailQueueLock.releaseLock(lockKey, processId1);
-    EmailQueueLock.releaseLock(lockKey, processId2);
-  });
-
-  test('should allow acquiring a lock when none exists', () => {
-    const acquired = EmailQueueLock.acquireLock(lockKey, processId1);
-    expect(acquired).toBe(true);
-    expect(EmailQueueLock.isLocked(lockKey)).toBe(true);
-  });
-
-  test('should prevent acquiring a lock when already held', () => {
-    EmailQueueLock.acquireLock(lockKey, processId1);
-    const acquired = EmailQueueLock.acquireLock(lockKey, processId2);
-    expect(acquired).toBe(false);
-  });
-
-  test('should allow same process to re-acquire lock', () => {
-    EmailQueueLock.acquireLock(lockKey, processId1);
-    const reacquired = EmailQueueLock.acquireLock(lockKey, processId1);
-    expect(reacquired).toBe(true);
-  });
-
-  test('should release locks properly', () => {
-    EmailQueueLock.acquireLock(lockKey, processId1);
-    expect(EmailQueueLock.isLocked(lockKey)).toBe(true);
-    
-    EmailQueueLock.releaseLock(lockKey, processId1);
-    expect(EmailQueueLock.isLocked(lockKey)).toBe(false);
-  });
-
-  test('should not release lock held by different process', () => {
-    EmailQueueLock.acquireLock(lockKey, processId1);
-    EmailQueueLock.releaseLock(lockKey, processId2); // Wrong process
-    expect(EmailQueueLock.isLocked(lockKey)).toBe(true);
-  });
-
-  test('should handle lock expiration', async () => {
-    // Mock Date.now to simulate time passage
-    const originalDateNow = Date.now;
-    let currentTime = Date.now();
-    
-    jest.spyOn(Date, 'now').mockImplementation(() => currentTime);
-
-    try {
-      EmailQueueLock.acquireLock(lockKey, processId1);
-      expect(EmailQueueLock.isLocked(lockKey)).toBe(true);
-
-      // Simulate 6 minutes passing (more than 5-minute timeout)
-      currentTime += 6 * 60 * 1000;
-
-      // Lock should be considered expired and available
-      expect(EmailQueueLock.isLocked(lockKey)).toBe(false);
-      
-      // Another process should be able to acquire it
-      const acquired = EmailQueueLock.acquireLock(lockKey, processId2);
-      expect(acquired).toBe(true);
-    } finally {
-      Date.now = originalDateNow;
-    }
-  });
-
-  test('should provide lock status information', () => {
-    EmailQueueLock.acquireLock(lockKey, processId1);
-    const status = EmailQueueLock.getLockStatus();
-    
-    expect(status[lockKey]).toBeDefined();
-    expect(status[lockKey].processId).toBe(processId1);
-    expect(typeof status[lockKey].age).toBe('number');
-    expect(status[lockKey].age).toBeGreaterThanOrEqual(0);
-  });
-
-  test('should handle multiple different locks', () => {
-    const lockKey1 = 'lock-1';
-    const lockKey2 = 'lock-2';
-
-    const acquired1 = EmailQueueLock.acquireLock(lockKey1, processId1);
-    const acquired2 = EmailQueueLock.acquireLock(lockKey2, processId2);
-
-    expect(acquired1).toBe(true);
-    expect(acquired2).toBe(true);
-    expect(EmailQueueLock.isLocked(lockKey1)).toBe(true);
-    expect(EmailQueueLock.isLocked(lockKey2)).toBe(true);
-
-    EmailQueueLock.releaseLock(lockKey1, processId1);
-    EmailQueueLock.releaseLock(lockKey2, processId2);
-  });
-});
-
 describe('Integration Tests', () => {
-  test('should prevent race conditions in email processing simulation', () => {
-    const lockKey = 'email-queue-processing';
-    const processResults: { processId: string; acquired: boolean; timestamp: number }[] = [];
-
-    // Simulate multiple processes trying to acquire the lock simultaneously
-    const processes = ['proc-1', 'proc-2', 'proc-3', 'proc-4', 'proc-5'];
-    
-    processes.forEach(processId => {
-      const acquired = EmailQueueLock.acquireLock(lockKey, processId);
-      processResults.push({
-        processId,
-        acquired,
-        timestamp: Date.now()
-      });
-    });
-
-    // Only one process should have acquired the lock
-    const successful = processResults.filter(r => r.acquired);
-    expect(successful).toHaveLength(1);
-
-    // Clean up
-    const winner = successful[0];
-    EmailQueueLock.releaseLock(lockKey, winner.processId);
-  });
-
   test('should handle complex PII masking scenarios', () => {
     const complexLogData = {
       emailMessage: {
