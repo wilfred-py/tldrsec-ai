@@ -10,7 +10,7 @@ import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPrismaClient } from '@/lib/db/prisma';
-import { TRIAL_CONFIG } from '@/lib/auth/trial-config';
+import { TRIAL_CONFIG } from '@/lib/auth/trial-service';
 import { validateWebhookSignature, getPlanTypeFromPriceId, isFoundingLifetimePriceId, stripe } from '@/lib/stripe';
 import { syncUserSubscriptionTier, syncSubscriptionFromStripeData, getSubscriptionPeriod, syncLifetimeSeat, revokeLifetimeSeat } from '@/lib/stripe/sync-subscription';
 import { isLifetimeSentinel } from '@/lib/stripe/constants';

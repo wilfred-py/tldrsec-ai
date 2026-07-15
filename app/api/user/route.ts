@@ -616,7 +616,7 @@ async function handlePostSubscription(request: NextRequest) {
       : `${appUrl}/dashboard/billing?canceled=true`;
 
     const { createCheckoutSession } = await import('@/lib/stripe');
-    const { TRIAL_CONFIG } = await import('@/lib/auth/trial-config');
+    const { TRIAL_CONFIG } = await import('@/lib/auth/trial-service');
 
     // Only grant trial to users who have never had a paid subscription.
     // Prevents trial cycling: cancel → resubscribe → free trial again.
