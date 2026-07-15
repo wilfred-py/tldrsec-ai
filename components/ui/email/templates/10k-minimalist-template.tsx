@@ -11,8 +11,8 @@ import {
   extractMaterialitySignal,
   materialityToBadge,
   buildMaterialityFeedbackMailto,
-} from '../../../../lib/email/materiality';
-import { wrapPercentsInPills } from '../../../../lib/email/pill-pct';
+  wrapPercentsInPills,
+} from './financial-render-helpers';
 
 interface Form10KMinimalistTemplateProps {
   filing: FilingTemplateData;
