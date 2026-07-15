@@ -11,8 +11,8 @@ import {
   extractMaterialitySignal,
   materialityToBadge,
   buildMaterialityFeedbackMailto,
-} from '../../../../lib/email/materiality';
-import { wrapPercentsInPills } from '../../../../lib/email/pill-pct';
+  wrapPercentsInPills,
+} from './financial-render-helpers';
 import { getSecFilingViewerUrl } from '../../../../lib/email/url-utils';
 
 /**
