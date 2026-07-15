@@ -5,7 +5,6 @@ import { ArrowLeft, ArrowRight, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { NotificationPreference } from "@/lib/email/notification-types";
-import { SETTINGS_HELPER } from "@/lib/onboarding/email-notice-constants";
 
 interface ConfirmStepProps {
   tickers: string[];
@@ -171,7 +170,7 @@ export function ConfirmStep({
                 })}
               </div>
             )}
-            <p className="mt-2 text-[11px] text-muted-foreground">{SETTINGS_HELPER}</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">Change anytime in Settings.</p>
           </div>
         </div>
 
