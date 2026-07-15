@@ -15,8 +15,23 @@
  */
 
 import { getPrismaClient } from '@/lib/db/prisma';
-import { TRIAL_CONFIG } from './trial-config';
 import { isActiveTrial } from './tier-eligibility';
+
+/**
+ * Single source of truth for trial-related configuration.
+ * Referenced by: Clerk webhook (IP abuse gate), checkout route (Stripe
+ * trial_period_days), and this module's own calculateTrialEnd.
+ */
+export const TRIAL_CONFIG = {
+  /** Duration of trial period in days */
+  TRIAL_DURATION_DAYS: 7,
+
+  /** Maximum trial signups allowed per IP address within the window */
+  MAX_TRIALS_PER_IP: 3,
+
+  /** IP abuse prevention window in days */
+  IP_WINDOW_DAYS: 30,
+} as const;
 
 export interface TrialStatus {
   isActive: boolean;

@@ -4,7 +4,7 @@ import { stripe, SUBSCRIPTION_PLANS, getPriceIdForPlan, createCheckoutSession } 
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { PaymentLogger } from '@/lib/audit/payment-logger';
 import { getPrismaClient } from '@/lib/db/prisma';
-import { TRIAL_CONFIG } from '@/lib/auth/trial-config';
+import { TRIAL_CONFIG } from '@/lib/auth/trial-service';
 
 export const dynamic = 'force-dynamic';
 
