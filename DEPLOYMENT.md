@@ -35,20 +35,6 @@ SEC_USER_AGENT=YourCompany contact@yourcompany.com
 RESEND_API_KEY=re_your_resend_key
 ```
 
-#### Optional Configuration
-
-```bash
-# Enhanced Processing
-ENABLE_ENHANCED_SUMMARIZATION=true
-ENHANCED_CHUNK_SIZE=50000
-ENHANCED_MAX_CHUNKS=10
-ENHANCED_MAX_RETRIES=3
-
-# Rate Limiting
-ENHANCED_CHUNKING_STRATEGY=CONSERVATIVE
-ENHANCED_SINGLE_LIMIT=75000
-```
-
 ### Admin Access Configuration
 
 Admin access is now managed through:

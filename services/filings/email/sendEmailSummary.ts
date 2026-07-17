@@ -5,11 +5,19 @@ import { getFilingSummary } from '../summaries/filingSummaryService';
 import { sendSummaryEmail } from './emailGenerator';
 import { logger } from '../../../lib/logging';
 import { monitoring } from '@/lib/monitoring';
-import { RateLimitError } from '../enhanced/rateLimiter';
 import { checkIfFilingProcessed } from '../utils/filingProcessingStatus';
 import { trackEmailDelivery, StoreSummaryOptions } from '../database/filingDatabase';
 
 const emailSummaryLogger = logger.child('email-summary');
+
+// Shape of the rate-limit errors this classifier detects. Kept local to the
+// only caller now that the former services/filings/enhanced/rateLimiter.ts
+// orbital has been deleted; classifyError is duck-typed on `.type`.
+type RateLimitError = Error & {
+  type: 'RATE_LIMIT' | 'DAILY_LIMIT' | 'QUOTA_EXCEEDED';
+  retryAfter?: number;
+  resetTime?: Date;
+};
 
 /**
  * Enhanced error classification types

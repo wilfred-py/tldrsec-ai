@@ -30,8 +30,6 @@
     "test:extraction": "node scripts/parsers/test-content-extraction.js",
     "test:extraction:simple": "node scripts/parsers/test-extraction-simple.js",
     "test:onboarding": "node scripts/test-onboarding.js",
-    "test:enhanced": "node --loader ts-node/esm scripts/test-enhanced-summarization.ts",
-    "test:enhanced:performance": "node --loader ts-node/esm scripts/test-enhanced-summarization.ts --performance",
     "create-pdf": "node scripts/pdf/create-sample-pdf.js",
     "scripts:verify": "node scripts/parsers/verify-organization.js",
     "db:generate": "prisma generate",

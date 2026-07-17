@@ -210,46 +210,6 @@ export async function getFilingSummary(
   formType: FilingType,
   fetchOptions: { bypassCache?: boolean; fromCron?: boolean; storageOptions?: StoreSummaryOptions } = {}
 ): Promise<{ data: FilingSummaryResult | null, error?: string }> {
-  // Feature flag for enhanced filing service (Unified Flow)
-  const useEnhancedSummarization = process.env.ENABLE_ENHANCED_SUMMARIZATION === 'true';
-  
-  if (useEnhancedSummarization) {
-    try {
-      const { getEnhancedFilingSummary } = await import('../enhanced/enhancedFilingSummaryService');
-      console.log(`[INFO][FilingSummaryService] 🚀 Using enhanced summarization for ${ticker} - ${formType}`);
-      const result = await getEnhancedFilingSummary(ticker, formType, {
-        useEnhancedFetch: true,
-        enableFallbacks: true,
-        saveToDatabase: true,
-        chunkingOptions: {
-          maxTokensPerChunk: parseInt(process.env.ENHANCED_CHUNK_SIZE || '50000'),
-          preserveStructure: true
-        },
-        summarizationOptions: {
-          model: getDefaultModel(),
-          maxRetries: 2,
-          enableFallback: true
-        }
-      });
-      
-      // Log enhanced processing metadata for monitoring
-      if (result.metadata) {
-        console.log(`[INFO][FilingSummaryService] Enhanced processing completed`, {
-          strategy: result.metadata.processingStrategy,
-          cacheHit: result.metadata.cacheHit,
-          chunksProcessed: result.metadata.chunkingResult?.totalChunks,
-          totalTokens: result.metadata.summarizationResult.metadata.totalTokens,
-          cost: result.metadata.summarizationResult.metadata.cost,
-          processingTimeMs: result.metadata.totalProcessingTimeMs
-        });
-      }
-      
-      return result;
-    } catch (enhancedError) {
-      console.warn(`[WARN][FilingSummaryService] Enhanced summarization failed, falling back to legacy: ${enhancedError}`);
-      // Fall through to legacy implementation
-    }
-  }
   try {
     console.log(`[DEBUG][FilingSummaryService] 🔍 Generating summary for ${ticker} - ${formType}`);
     
