@@ -1,8 +1,9 @@
 /**
- * Enhanced Filing Retrieval Tests
- * 
- * Tests for the improved filing content retrieval system with specific focus on
- * Form 4 and Form 144 filings to ensure we never return directory listings
+ * Filing Retrieval Tests
+ *
+ * Tests for services/filings/filingRetrieval.ts — the filing content
+ * retrieval interface with fallback strategies, with specific focus on
+ * Form 4 and Form 144 filings to ensure we never return directory listings.
  */
 
 import axios from 'axios';
