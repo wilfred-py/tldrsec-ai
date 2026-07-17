@@ -12,7 +12,3 @@ export {
   estimateTokenUsage,
   type TickerSubscriptionInfo
 } from './tickerSubscriptionInfo';
-
-// Note: Existing subscription service exports are available separately
-// from '../../services/filings/enhanced/subscriptionService' to avoid
-// server-only import conflicts in client components
