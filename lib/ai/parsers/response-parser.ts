@@ -32,10 +32,10 @@ import {
   isCharacterIndexedObject,
   CURRENT_FORM4_SCHEMA_VERSION,
   derivePreviousStake,
+  deriveNewStake,
   formatNumberWithCommas,
   NormalizedTransaction,
 } from '../../email/form4-field-normalizer';
-import { deriveNewStake } from '../utils/derive-stake';
 
 // ── Field normalizers (formerly lib/ai/parsers/normalizers.ts) ──────────────
 // Inlined here because the only caller is normalizeFields below — the prior
