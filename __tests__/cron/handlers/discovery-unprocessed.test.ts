@@ -47,13 +47,7 @@ jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({
   markFilingAsProcessed: jest.fn(async (id: string) => {
     markFilingAsProcessedCalls.push({ id });
   }),
-}));
-
-// Mock the CronSecFilingService
-jest.mock('../../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    checkForNewFilings: jest.fn(),
-  },
+  checkTickerForNewFilings: jest.fn().mockResolvedValue([]),
 }));
 
 // Mock logging to avoid console noise
@@ -126,11 +120,10 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     ]);
 
     // Mock: RSS returns empty (no new filings in RSS feed)
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
+    const { checkTickerForNewFilings, getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
+    (checkTickerForNewFilings as jest.Mock).mockResolvedValue([]);
 
     // Mock: getUnprocessedFilings returns orphaned filings
-    const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce(unprocessedFilings);
 
     // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
@@ -203,11 +196,10 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     ]);
 
     // Mock: RSS returns empty
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
+    const { checkTickerForNewFilings, getUnprocessedFilings, markFilingAsProcessed } = await import('../../../lib/sec-edgar/ticker-monitoring');
+    (checkTickerForNewFilings as jest.Mock).mockResolvedValue([]);
 
     // Mock: getUnprocessedFilings returns the filing
-    const { getUnprocessedFilings, markFilingAsProcessed } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce(unprocessedFilings);
 
     // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
@@ -282,12 +274,45 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'NVDA', companyName: 'NVIDIA Corporation' },
     ]);
 
-    // Mock: RSS returns one new filing
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
+    // Mock: TickerMonitoring exists for both AAPL and NVDA so the RSS walk can query it
+    mockPrisma.tickerMonitoring.findFirst.mockResolvedValue({
+      id: 'monitoring-any',
+      cik: '',
+      symbol: '',
+      companyName: null,
+      rssUrl: null,
+      lastChecked: null,
+      lastAccessionSeen: null,
+    });
+
+    // Mock: RSS returns one new filing for NVDA, empty for AAPL
+    const { checkTickerForNewFilings, getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
+    (checkTickerForNewFilings as jest.Mock).mockImplementation(async (activeTicker: { symbol: string }) => {
+      if (activeTicker.symbol === 'NVDA') {
+        return [{
+          accessionNumber: rssNewFiling.accessionNumber,
+          filingType: rssNewFiling.formType,
+          filingDate: new Date(rssNewFiling.filingDate),
+          filingUrl: rssNewFiling.url,
+          title: rssNewFiling.title,
+        }];
+      }
+      return [];
+    });
+
+    // Discovery-handler calls findFirst(cik: NVDA_cik) with NVDA's activeTicker.symbol,
+    // so seed symbol via mockImplementation for the two tickers
+    mockPrisma.tickerMonitoring.findFirst.mockImplementation(async ({ where }: { where: { cik: string } }) => {
+      if (where.cik === '0001045810') {
+        return { id: 'monitoring-nvda', cik: '0001045810', symbol: 'NVDA', companyName: 'NVIDIA Corporation', rssUrl: null, lastChecked: null, lastAccessionSeen: null };
+      }
+      if (where.cik === '0000320193') {
+        return { id: 'monitoring-aapl', cik: '0000320193', symbol: 'AAPL', companyName: 'Apple Inc.', rssUrl: null, lastChecked: null, lastAccessionSeen: null };
+      }
+      return null;
+    });
 
     // Mock: getUnprocessedFilings returns one backlog filing
-    const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce([unprocessedFiling]);
 
     // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
@@ -366,12 +391,25 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'AAPL', companyName: 'Apple Inc.' },
     ]);
 
-    // Mock: RSS returns the filing
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
+    // Mock: TickerMonitoring exists for AAPL so RSS walk queries succeed
+    mockPrisma.tickerMonitoring.findFirst.mockImplementation(async ({ where }: { where: { cik: string } }) => {
+      if (where.cik === '0000320193') {
+        return { id: 'monitoring-aapl', cik: '0000320193', symbol: 'AAPL', companyName: 'Apple Inc.', rssUrl: null, lastChecked: null, lastAccessionSeen: null };
+      }
+      return null;
+    });
+
+    // Mock: RSS returns the filing for AAPL
+    const { checkTickerForNewFilings, getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
+    (checkTickerForNewFilings as jest.Mock).mockResolvedValueOnce([{
+      accessionNumber: rssNewFiling.accessionNumber,
+      filingType: rssNewFiling.formType,
+      filingDate: new Date(rssNewFiling.filingDate),
+      filingUrl: rssNewFiling.url,
+      title: rssNewFiling.title,
+    }]);
 
     // Mock: getUnprocessedFilings also returns the same filing
-    const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce([unprocessedFiling]);
 
     // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
