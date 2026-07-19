@@ -6,7 +6,7 @@ import type { ResendConfig } from './types';
 /**
  * Founder reply-to address. Single source of truth — referenced from:
  *   - resendConfig.defaultReplyTo fallback
- *   - lib/email/welcome-service.ts (explicit override on welcome emails)
+ *   - app/(auth)/onboarding/actions.ts (explicit override on the welcome email)
  *   - app/api/admin/campaign/send/route.ts (reply_to on every batch send)
  */
 export const FOUNDER_REPLY_TO = 'wilf@tldrsec.app';
