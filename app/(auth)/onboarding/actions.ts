@@ -14,7 +14,90 @@ import {
   DEFAULT_UI_PREFERENCES
 } from '@/lib/user/preference-types';
 import { NotificationPreference } from '@/lib/email/notification-types';
-import { queueWelcomeEmail } from '@/lib/email/welcome-service';
+import { getEmailTemplate } from '@/lib/email/templates';
+import { EmailType, type EmailMessage } from '@/lib/email/types';
+import { sendEmail } from '@/lib/email';
+import { FOUNDER_REPLY_TO } from '@/lib/email/config';
+import { SecureEmailLogger } from '@/lib/email/security-helpers';
+import { logger } from '@/lib/logging';
+
+const welcomeEmailLogger = new SecureEmailLogger(logger.child('onboarding-welcome-email'));
+
+/**
+ * Queue a welcome email to be sent asynchronously (fire-and-forget). Runs the
+ * send in a `setImmediate` so the onboarding action returns before the email
+ * dispatch completes. The single caller is `completeOnboardingBatched`
+ * below — this used to be the entire body of `lib/email/welcome-service.ts`
+ * before that shallow module was inlined.
+ *
+ * Uses an explicit `replyTo` (not just the config default) so replies route to
+ * the founder inbox even if `EMAIL_DEFAULT_REPLY_TO` is unset or accidentally
+ * rolled back.
+ */
+function queueWelcomeEmail(
+  userId: string,
+  email: string,
+  name: string
+): Promise<void> {
+  setImmediate(async () => {
+    try {
+      const dbUser = await getPrismaClient().user.findUnique({
+        where: { id: userId },
+        include: { tickers: true },
+      });
+
+      if (!dbUser) {
+        welcomeEmailLogger.error('User not found for welcome email', { userId });
+        return;
+      }
+
+      const selectedTickers = dbUser.tickers.map((ticker) => ticker.symbol);
+
+      const { html, text } = await getEmailTemplate(EmailType.WELCOME, {
+        recipientName: name || 'there',
+        recipientEmail: email,
+        selectedTickers,
+        unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
+        preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`,
+      });
+
+      const message: EmailMessage = {
+        to: email,
+        subject: 'Welcome to tldrSEC!',
+        replyTo: FOUNDER_REPLY_TO,
+        html,
+        text,
+        tags: ['type:welcome', 'onboarding:complete'],
+        metadata: {
+          userId,
+          type: 'welcome',
+          tickerCount: selectedTickers.length,
+          summaryCount: 0,
+        },
+      };
+
+      const result = await sendEmail(message);
+
+      if (!result.success) {
+        welcomeEmailLogger.warn('Welcome email failed to send', {
+          userId,
+          error: result.error?.message,
+        });
+      } else {
+        welcomeEmailLogger.info('Welcome email sent successfully', {
+          userId,
+          emailId: result.id,
+        });
+      }
+    } catch (error) {
+      welcomeEmailLogger.error('Exception in queueWelcomeEmail', {
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+  return Promise.resolve();
+}
 
 // Environment check for API vs mock mode
 const API_ENABLED = process.env.NEXT_PUBLIC_API_ENABLED === 'true';
