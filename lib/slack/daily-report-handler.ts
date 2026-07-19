@@ -22,13 +22,166 @@ import type {
   CacheHealthMetrics
 } from './types';
 import { formatDailySummaryMessage, formatIntervalSummaryMessage } from './message-formatter';
-import {
-  getOpenRouterCreditStatus,
-  formatCreditStatusForSlack,
-  type CreditStatus
-} from '../ai/openrouter-credit-monitor';
 
 const dailyReportLogger = logger.child('slack-daily-report');
+
+// =============================================================================
+// OpenRouter Credit Monitor (inlined from lib/ai/openrouter-credit-monitor.ts
+// as a private module — the only caller was `generateHourlySummary` below,
+// which reads credit status and folds it into the Slack report.)
+// =============================================================================
+
+/** OpenRouter credit status snapshot returned by `getOpenRouterCreditStatus`. */
+interface CreditStatus {
+  /** Credits remaining in dollars */
+  credits: number;
+  /** Credit limit (if set) */
+  limit: number;
+  /** Credits used */
+  usage: number;
+  /** True if below the warning threshold */
+  isLow: boolean;
+  /** True if the credit limit has been reached */
+  limitReached: boolean;
+  /** Error message if fetch failed */
+  error?: string;
+}
+
+/** Warning threshold in dollars — alert when credits fall below this. */
+const OPENROUTER_CREDIT_WARNING_THRESHOLD = parseInt(
+  process.env.OPENROUTER_CREDIT_WARNING_THRESHOLD || '50',
+  10,
+);
+
+const creditLogger = logger.child('openrouter-credit-monitor');
+
+/**
+ * Fetch the current credit status from OpenRouter's `/api/v1/auth/key`
+ * endpoint. Never throws — every failure mode returns a `CreditStatus`
+ * with `error` populated and `isLow=true` so the Slack report always
+ * surfaces the problem instead of silently succeeding.
+ */
+async function getOpenRouterCreditStatus(): Promise<CreditStatus> {
+  const apiKey = process.env.TLDRSEC_AI_SUMMARIZER || process.env.OPENROUTER_API_KEY;
+
+  if (!apiKey) {
+    creditLogger.error('No OpenRouter API key configured');
+    return {
+      credits: 0,
+      limit: 0,
+      usage: 0,
+      isLow: true,
+      limitReached: true,
+      error: 'No OpenRouter API key configured',
+    };
+  }
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      creditLogger.error('Failed to fetch OpenRouter credit status', {
+        status: response.status,
+        error: errorText,
+      });
+      return {
+        credits: 0,
+        limit: 0,
+        usage: 0,
+        isLow: true,
+        limitReached: response.status === 402,
+        error: `API error: ${response.status} - ${errorText}`,
+      };
+    }
+
+    const data = (await response.json()) as {
+      data?: {
+        limit?: number;
+        usage?: number;
+        limit_remaining?: number;
+        is_free_tier?: boolean;
+        rate_limit?: { requests?: number; interval?: string };
+      };
+    };
+
+    const limit = data.data?.limit ?? 0;
+    const usage = data.data?.usage ?? 0;
+    const credits = data.data?.limit_remaining ?? limit - usage;
+
+    const isLow = credits < OPENROUTER_CREDIT_WARNING_THRESHOLD;
+    const limitReached = limit > 0 && usage >= limit;
+
+    creditLogger.info('OpenRouter credit status retrieved', {
+      credits,
+      limit,
+      usage,
+      isLow,
+      limitReached,
+      warningThreshold: OPENROUTER_CREDIT_WARNING_THRESHOLD,
+      isFree: data.data?.is_free_tier,
+    });
+
+    return { credits, limit, usage, isLow, limitReached };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    creditLogger.error('Exception fetching OpenRouter credit status', { error: errorMessage });
+    return {
+      credits: 0,
+      limit: 0,
+      usage: 0,
+      isLow: true,
+      limitReached: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * Render a `CreditStatus` snapshot for the Slack report — one line of text
+ * plus an emoji and an accent colour, selected by severity.
+ */
+function formatCreditStatusForSlack(status: CreditStatus): {
+  text: string;
+  emoji: string;
+  color: string;
+} {
+  if (status.error) {
+    return {
+      text: `⚠️ Credit Status: Error - ${status.error}`,
+      emoji: '⚠️',
+      color: '#ff9800',
+    };
+  }
+
+  if (status.limitReached) {
+    return {
+      text: `🚨 *Credit Limit Reached!* Usage: $${status.usage.toFixed(2)} / Limit: $${status.limit.toFixed(2)}`,
+      emoji: '🚨',
+      color: '#dc3545',
+    };
+  }
+
+  if (status.isLow) {
+    return {
+      text: `⚠️ *Low Credits Warning!* Remaining: $${status.credits.toFixed(2)} (below $${OPENROUTER_CREDIT_WARNING_THRESHOLD} threshold)`,
+      emoji: '⚠️',
+      color: '#ffc107',
+    };
+  }
+
+  return {
+    text: `✅ Credits: $${status.credits.toFixed(2)} remaining`,
+    emoji: '✅',
+    color: '#28a745',
+  };
+}
 
 // =============================================================================
 // Database Queries using Raw SQL (app and pipeline schemas)
