@@ -904,8 +904,9 @@ async function handleAutoRecover(request: NextRequest) {
     if (cleanupResults.total > 0 || cleanupResults.errors.length > 0) {
       console.log('[AutoRecover] Immediate cleanup completed:', cleanupResults);
       await sendSlackCleanupNotification(cleanupResults);
-      if (cleanupResults.total > 0) await RecoveryStateService.recordCleanup();
-      const updatedState = await RecoveryStateService.getState();
+      const updatedState = cleanupResults.total > 0
+        ? await RecoveryStateService.recordCleanup()
+        : await RecoveryStateService.getState();
       const duration = Date.now() - startTime;
       return NextResponse.json({
         action: cleanupResults.errors.length > 0 ? 'cleanup-with-errors' : 'immediate-cleanup',
@@ -931,8 +932,7 @@ async function handleAutoRecover(request: NextRequest) {
     let result: Record<string, unknown> = {};
 
     if (health.status === 'HEALTHY') {
-      await RecoveryStateService.resetOnHealthy();
-      const healthyState = await RecoveryStateService.getState();
+      const healthyState = await RecoveryStateService.resetOnHealthy();
       return NextResponse.json({
         action: 'none',
         reason: 'Pipeline is healthy',
@@ -954,8 +954,7 @@ async function handleAutoRecover(request: NextRequest) {
       reason = `${health.locks.staleCount} stale locks detected`;
       const cleanupResult = await triggerForceCleanup();
       result = cleanupResult;
-      await RecoveryStateService.recordCleanup();
-      const cleanupState = await RecoveryStateService.getState();
+      const cleanupState = await RecoveryStateService.recordCleanup();
       console.log('[AutoRecover] Lock cleanup triggered:', {
         reason,
         locksCleared: cleanupResult.locksCleared,
@@ -1009,22 +1008,19 @@ async function handleAutoRecover(request: NextRequest) {
       reason = `Pipeline stalled for ${health.minutesSinceLastCompletion} minutes`;
       const redeployResult = await triggerRedeploy(reason);
       result = redeployResult;
-      await RecoveryStateService.recordRedeploy();
-      const redeployState = await RecoveryStateService.getState();
+      const redeployState = await RecoveryStateService.recordRedeploy();
       console.log('[AutoRecover] Redeploy triggered:', {
         reason,
         deploymentId: redeployResult.deploymentId,
         consecutiveRedeploys: redeployState.consecutiveRedeploys,
       });
     } else if (health.status === 'DEGRADED') {
-      await RecoveryStateService.incrementConsecutiveDegraded();
-      const degradedState = await RecoveryStateService.getState();
+      const degradedState = await RecoveryStateService.incrementConsecutiveDegraded();
 
       if (degradedState.consecutiveDegraded >= DEGRADED_ACTION_THRESHOLD) {
         action = 'proactive-investigation';
         reason = `Pipeline degraded for ${degradedState.consecutiveDegraded * 5} minutes`;
-        await RecoveryStateService.resetOnHealthy();
-        const resetState = await RecoveryStateService.getState();
+        const resetState = await RecoveryStateService.resetOnHealthy();
         console.log('[AutoRecover] Proactive investigation triggered:', {
           reason,
           previousConsecutiveDegraded: DEGRADED_ACTION_THRESHOLD,

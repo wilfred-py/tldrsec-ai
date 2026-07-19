@@ -1,34 +1,76 @@
 /**
- * Tests for RecoveryStateService
+ * Tests for RecoveryStateService — the deep persistent-recovery module.
  *
- * Unit tests for RecoveryStateService that verify the service correctly
- * interacts with the database to persist recovery state.
+ * These tests assert on observable outcomes through the module's
+ * interface: after a mutation, the returned RecoveryState reflects the
+ * new counters and timestamps. The pre-deepening suite asserted on the
+ * shape of Prisma `upsert` calls (past the interface) and on the
+ * behaviour of an in-memory cache that no longer exists.
  *
  * @see docs/plans/2026-01-09-eliminate-manual-pipeline-intervention.md Phase 1
  */
 
 import { getPrismaClient } from '@/lib/db/prisma';
-import { RecoveryStateService } from '@/lib/cron/recovery-state-service';
+import {
+  RecoveryStateService,
+  type RecoveryState,
+} from '@/lib/cron/recovery-state-service';
 
-// Get mocked Prisma client
 const mockPrisma = getPrismaClient();
+
+interface RecoveryRow {
+  id: string;
+  consecutiveDegraded: number;
+  consecutiveCleanups: number;
+  consecutiveRedeploys: number;
+  lastCleanupTime: Date | null;
+  lastRedeployTime: Date | null;
+  lastHealthyTime: Date | null;
+  lastDegradedTime: Date | null;
+}
+
+const emptyRow: RecoveryRow = {
+  id: 'singleton',
+  consecutiveDegraded: 0,
+  consecutiveCleanups: 0,
+  consecutiveRedeploys: 0,
+  lastCleanupTime: null,
+  lastRedeployTime: null,
+  lastHealthyTime: null,
+  lastDegradedTime: null,
+};
+
+function mockUpsertReturns(row: Partial<RecoveryRow>): void {
+  (mockPrisma.recoveryState.upsert as jest.Mock).mockResolvedValueOnce({
+    ...emptyRow,
+    ...row,
+  });
+}
+
+function mockFindUniqueReturns(row: Partial<RecoveryRow> | null): void {
+  if (row === null) {
+    (mockPrisma.recoveryState.findUnique as jest.Mock).mockResolvedValueOnce(null);
+  } else {
+    (mockPrisma.recoveryState.findUnique as jest.Mock).mockResolvedValueOnce({
+      ...emptyRow,
+      ...row,
+    });
+  }
+}
 
 describe('RecoveryStateService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    RecoveryStateService.clearCache();
   });
 
   describe('getState', () => {
-    it('should return default state when no state exists in database', async () => {
-      // Mock findUnique to return null (no existing state)
-      (mockPrisma.recoveryState.findUnique as jest.Mock).mockResolvedValueOnce(null);
-      // Mock create for initial state
-      (mockPrisma.recoveryState.create as jest.Mock).mockResolvedValueOnce({ id: 'singleton' });
+    it('creates and returns the default state when no row exists', async () => {
+      mockFindUniqueReturns(null);
+      (mockPrisma.recoveryState.create as jest.Mock).mockResolvedValueOnce(emptyRow);
 
       const state = await RecoveryStateService.getState();
 
-      expect(state).toEqual({
+      expect(state).toEqual<RecoveryState>({
         consecutiveDegraded: 0,
         consecutiveCleanups: 0,
         consecutiveRedeploys: 0,
@@ -37,14 +79,10 @@ describe('RecoveryStateService', () => {
         lastHealthyTime: null,
         lastDegradedTime: null,
       });
-      expect(mockPrisma.recoveryState.findUnique).toHaveBeenCalledWith({
-        where: { id: 'singleton' },
-      });
     });
 
-    it('should return persisted state from database', async () => {
-      const mockDbState = {
-        id: 'singleton',
+    it('returns the persisted state when a row exists', async () => {
+      const persisted = {
         consecutiveDegraded: 2,
         consecutiveCleanups: 1,
         consecutiveRedeploys: 0,
@@ -53,136 +91,124 @@ describe('RecoveryStateService', () => {
         lastHealthyTime: new Date('2026-01-09T09:00:00Z'),
         lastDegradedTime: new Date('2026-01-09T10:30:00Z'),
       };
-      (mockPrisma.recoveryState.findUnique as jest.Mock).mockResolvedValueOnce(mockDbState);
+      mockFindUniqueReturns(persisted);
 
       const state = await RecoveryStateService.getState();
 
       expect(state.consecutiveDegraded).toBe(2);
       expect(state.consecutiveCleanups).toBe(1);
       expect(state.lastCleanupTime).toEqual(new Date('2026-01-09T10:00:00Z'));
+      expect(state.lastHealthyTime).toEqual(new Date('2026-01-09T09:00:00Z'));
     });
   });
 
   describe('incrementConsecutiveDegraded', () => {
-    it('should call upsert with increment operation', async () => {
-      (mockPrisma.recoveryState.upsert as jest.Mock).mockResolvedValueOnce({ id: 'singleton' });
+    it('returns the fresh state with the incremented degraded counter', async () => {
+      const nowIsh = new Date('2026-01-09T11:00:00Z');
+      mockUpsertReturns({
+        consecutiveDegraded: 3,
+        lastDegradedTime: nowIsh,
+      });
 
-      await RecoveryStateService.incrementConsecutiveDegraded();
+      const state = await RecoveryStateService.incrementConsecutiveDegraded();
 
-      expect(mockPrisma.recoveryState.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'singleton' },
-          create: expect.objectContaining({
-            id: 'singleton',
-            consecutiveDegraded: 1,
-          }),
-          update: expect.objectContaining({
-            consecutiveDegraded: { increment: 1 },
-          }),
-        })
-      );
+      expect(state.consecutiveDegraded).toBe(3);
+      expect(state.lastDegradedTime).toEqual(nowIsh);
     });
   });
 
   describe('recordCleanup', () => {
-    it('should call upsert with cleanup increment', async () => {
-      (mockPrisma.recoveryState.upsert as jest.Mock).mockResolvedValueOnce({ id: 'singleton' });
+    it('returns the fresh state with the incremented cleanup counter', async () => {
+      const cleanupTime = new Date('2026-01-09T11:05:00Z');
+      mockUpsertReturns({
+        consecutiveCleanups: 4,
+        lastCleanupTime: cleanupTime,
+      });
 
-      await RecoveryStateService.recordCleanup();
+      const state = await RecoveryStateService.recordCleanup();
 
-      expect(mockPrisma.recoveryState.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'singleton' },
-          update: expect.objectContaining({
-            consecutiveCleanups: { increment: 1 },
-          }),
-        })
-      );
+      expect(state.consecutiveCleanups).toBe(4);
+      expect(state.lastCleanupTime).toEqual(cleanupTime);
     });
   });
 
   describe('recordRedeploy', () => {
-    it('should call upsert with redeploy increment', async () => {
-      (mockPrisma.recoveryState.upsert as jest.Mock).mockResolvedValueOnce({ id: 'singleton' });
+    it('returns the fresh state with the incremented redeploy counter', async () => {
+      const redeployTime = new Date('2026-01-09T11:10:00Z');
+      mockUpsertReturns({
+        consecutiveRedeploys: 2,
+        lastRedeployTime: redeployTime,
+      });
 
-      await RecoveryStateService.recordRedeploy();
+      const state = await RecoveryStateService.recordRedeploy();
 
-      expect(mockPrisma.recoveryState.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'singleton' },
-          update: expect.objectContaining({
-            consecutiveRedeploys: { increment: 1 },
-          }),
-        })
-      );
+      expect(state.consecutiveRedeploys).toBe(2);
+      expect(state.lastRedeployTime).toEqual(redeployTime);
     });
   });
 
   describe('resetOnHealthy', () => {
-    it('should reset degraded counter to zero', async () => {
-      (mockPrisma.recoveryState.upsert as jest.Mock).mockResolvedValueOnce({ id: 'singleton' });
+    it('returns the fresh state with degraded counter cleared and healthy timestamp set', async () => {
+      const healthyTime = new Date('2026-01-09T11:15:00Z');
+      mockUpsertReturns({
+        consecutiveDegraded: 0,
+        consecutiveCleanups: 5,
+        consecutiveRedeploys: 1,
+        lastHealthyTime: healthyTime,
+      });
 
-      await RecoveryStateService.resetOnHealthy();
+      const state = await RecoveryStateService.resetOnHealthy();
 
-      expect(mockPrisma.recoveryState.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'singleton' },
-          update: expect.objectContaining({
-            consecutiveDegraded: 0,
-          }),
-        })
-      );
+      expect(state.consecutiveDegraded).toBe(0);
+      expect(state.consecutiveCleanups).toBe(5);
+      expect(state.consecutiveRedeploys).toBe(1);
+      expect(state.lastHealthyTime).toEqual(healthyTime);
     });
   });
 
   describe('reset', () => {
-    it('should reset all counters to default values', async () => {
-      (mockPrisma.recoveryState.upsert as jest.Mock).mockResolvedValueOnce({ id: 'singleton' });
+    it('returns the fully-defaulted state', async () => {
+      mockUpsertReturns(emptyRow);
 
-      await RecoveryStateService.reset();
+      const state = await RecoveryStateService.reset();
 
-      expect(mockPrisma.recoveryState.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'singleton' },
-          update: expect.objectContaining({
-            consecutiveDegraded: 0,
-            consecutiveCleanups: 0,
-            consecutiveRedeploys: 0,
-            lastCleanupTime: null,
-            lastRedeployTime: null,
-            lastHealthyTime: null,
-            lastDegradedTime: null,
-          }),
-        })
-      );
-    });
-  });
-
-  describe('clearCache', () => {
-    it('should clear the in-memory cache', async () => {
-      // First load state into cache
-      const mockDbState = {
-        id: 'singleton',
-        consecutiveDegraded: 5,
+      expect(state).toEqual<RecoveryState>({
+        consecutiveDegraded: 0,
         consecutiveCleanups: 0,
         consecutiveRedeploys: 0,
         lastCleanupTime: null,
         lastRedeployTime: null,
         lastHealthyTime: null,
         lastDegradedTime: null,
-      };
-      (mockPrisma.recoveryState.findUnique as jest.Mock).mockResolvedValue(mockDbState);
+      });
+    });
+  });
 
-      await RecoveryStateService.getState();
+  describe('mutation-then-caller pattern', () => {
+    it('lets a caller drive a full cleanup+healthy sequence without a follow-up getState', async () => {
+      const cleanupTime = new Date('2026-01-09T12:00:00Z');
+      mockUpsertReturns({
+        consecutiveCleanups: 1,
+        lastCleanupTime: cleanupTime,
+      });
+      const healthyTime = new Date('2026-01-09T12:05:00Z');
+      mockUpsertReturns({
+        consecutiveCleanups: 1,
+        lastCleanupTime: cleanupTime,
+        consecutiveDegraded: 0,
+        lastHealthyTime: healthyTime,
+      });
 
-      // Clear cache
-      RecoveryStateService.clearCache();
+      const afterCleanup = await RecoveryStateService.recordCleanup();
+      const afterHealthy = await RecoveryStateService.resetOnHealthy();
 
-      // Next getState should query DB again
-      await RecoveryStateService.getState();
+      expect(afterCleanup.consecutiveCleanups).toBe(1);
+      expect(afterHealthy.consecutiveDegraded).toBe(0);
+      expect(afterHealthy.lastCleanupTime).toEqual(cleanupTime);
+      expect(afterHealthy.lastHealthyTime).toEqual(healthyTime);
 
-      // findUnique should be called twice (once before clear, once after)
-      expect(mockPrisma.recoveryState.findUnique).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.recoveryState.upsert).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.recoveryState.findUnique).not.toHaveBeenCalled();
     });
   });
 });

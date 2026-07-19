@@ -128,24 +128,27 @@ jest.mock('@/lib/cron/orphaned-filing-detector', () => ({
   },
 }));
 
-jest.mock('@/lib/cron/recovery-state-service', () => ({
-  RecoveryStateService: {
-    getState: jest.fn().mockResolvedValue({
-      consecutiveDegraded: 0,
-      consecutiveCleanups: 0,
-      consecutiveRedeploys: 0,
-      lastCleanupTime: null,
-      lastRedeployTime: null,
-      lastHealthyTime: null,
-      lastDegradedTime: null,
-    }),
-    incrementConsecutiveDegraded: jest.fn().mockResolvedValue(undefined),
-    resetOnHealthy: jest.fn().mockResolvedValue(undefined),
-    recordCleanup: jest.fn().mockResolvedValue(undefined),
-    clearCache: jest.fn(),
-    reset: jest.fn().mockResolvedValue(undefined),
-  },
-}));
+jest.mock('@/lib/cron/recovery-state-service', () => {
+  const defaultState = {
+    consecutiveDegraded: 0,
+    consecutiveCleanups: 0,
+    consecutiveRedeploys: 0,
+    lastCleanupTime: null,
+    lastRedeployTime: null,
+    lastHealthyTime: null,
+    lastDegradedTime: null,
+  };
+  return {
+    RecoveryStateService: {
+      getState: jest.fn().mockResolvedValue({ ...defaultState }),
+      incrementConsecutiveDegraded: jest.fn().mockResolvedValue({ ...defaultState }),
+      resetOnHealthy: jest.fn().mockResolvedValue({ ...defaultState }),
+      recordCleanup: jest.fn().mockResolvedValue({ ...defaultState }),
+      recordRedeploy: jest.fn().mockResolvedValue({ ...defaultState }),
+      reset: jest.fn().mockResolvedValue({ ...defaultState }),
+    },
+  };
+});
 
 // Import after mocks
 import { GET } from '@/app/api/cron/route';
@@ -160,7 +163,6 @@ const mockGetState = RecoveryStateService.getState as jest.MockedFunction<typeof
 const mockIncrementConsecutiveDegraded = RecoveryStateService.incrementConsecutiveDegraded as jest.MockedFunction<typeof RecoveryStateService.incrementConsecutiveDegraded>;
 const mockResetOnHealthy = RecoveryStateService.resetOnHealthy as jest.MockedFunction<typeof RecoveryStateService.resetOnHealthy>;
 const mockRecordCleanup = RecoveryStateService.recordCleanup as jest.MockedFunction<typeof RecoveryStateService.recordCleanup>;
-const mockClearCache = RecoveryStateService.clearCache as jest.MockedFunction<typeof RecoveryStateService.clearCache>;
 const mockResetState = RecoveryStateService.reset as jest.MockedFunction<typeof RecoveryStateService.reset>;
 
 function createMockRequest(url = 'http://localhost:3000/api/cron?action=auto-recover'): NextRequest {
@@ -238,24 +240,24 @@ describe('Comprehensive Auto-Recovery - Phase 6', () => {
       lastDegradedTime: null,
     };
 
-    // Configure recovery state service mocks
+    // Configure recovery state service mocks — mutations return the fresh state
+    // so callers never chain `await mutate(); await getState()`.
     mockGetState.mockImplementation(() => Promise.resolve({ ...mockRecoveryStateData }));
     mockIncrementConsecutiveDegraded.mockImplementation(() => {
       mockRecoveryStateData.consecutiveDegraded++;
       mockRecoveryStateData.lastDegradedTime = new Date();
-      return Promise.resolve();
+      return Promise.resolve({ ...mockRecoveryStateData });
     });
     mockResetOnHealthy.mockImplementation(() => {
       mockRecoveryStateData.consecutiveDegraded = 0;
       mockRecoveryStateData.lastHealthyTime = new Date();
-      return Promise.resolve();
+      return Promise.resolve({ ...mockRecoveryStateData });
     });
     mockRecordCleanup.mockImplementation(() => {
       mockRecoveryStateData.consecutiveCleanups++;
       mockRecoveryStateData.lastCleanupTime = new Date();
-      return Promise.resolve();
+      return Promise.resolve({ ...mockRecoveryStateData });
     });
-    mockClearCache.mockImplementation(() => Promise.resolve());
     mockResetState.mockImplementation(() => {
       mockRecoveryStateData = {
         consecutiveDegraded: 0,
@@ -266,7 +268,7 @@ describe('Comprehensive Auto-Recovery - Phase 6', () => {
         lastHealthyTime: null,
         lastDegradedTime: null,
       };
-      return Promise.resolve();
+      return Promise.resolve({ ...mockRecoveryStateData });
     });
 
     // Reset detectors to no issues found
@@ -401,11 +403,10 @@ describe('Comprehensive Auto-Recovery - Phase 6', () => {
     });
 
     it('should maintain state across simulated deploys', async () => {
-      // First call - simulate DEGRADED state that's been accumulating
+      // First call - simulate DEGRADED state that's been accumulating.
+      // A deploy is transparent to the caller — the module always reads from
+      // the persisted RecoveryState row, so we just seed the shared mock.
       mockRecoveryStateData.consecutiveDegraded = 2;
-
-      // Simulate deploy by clearing cache
-      mockClearCache();
 
       // Override fetch to return DEGRADED status so the state is maintained (not reset)
       mockFetch.mockImplementation((url: string) => {
