@@ -4,7 +4,7 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { getSummaryShellMetadata } from '@/lib/db/get-summary-shell-metadata';
+import { getPrismaClient } from '@/lib/db/prisma';
 import { ResourceNotFoundError } from '@/lib/auth/access-control';
 import { SummaryBody } from '@/components/summary/summary-body';
 import { SummaryContentSkeleton } from '@/components/summary/summary-content-skeleton';
@@ -57,6 +57,36 @@ interface SummaryPageProps {
   params: Promise<{ id: string }>;
 }
 
+// Cheap projection for the summary-page shell (breadcrumb + H1 + filing-date +
+// "View Original Filing" link) so the shell can flush before the heavy
+// summaryText fetch + auth gate runs inside the Suspense'd <SummaryBody>.
+// Primary-key lookup, small projection — ~50ms warm.
+//
+// Auth is NOT checked here. Middleware (middleware.ts:380) already gates
+// /summary/* with auth.protect(), and the Suspense'd <SummaryBody> runs
+// checkSummaryAccess for defense-in-depth before flushing the actual content.
+// The fields returned here are non-sensitive metadata already visible in the
+// user's dashboard activity feed and email.
+async function fetchShellMetadata(id: string) {
+  const prisma = getPrismaClient();
+  const summary = await prisma.summary.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      filingType: true,
+      filingDate: true,
+      filingUrl: true,
+      ticker: { select: { symbol: true } },
+    },
+  });
+
+  if (!summary || !summary.ticker) {
+    throw new ResourceNotFoundError('Summary not found');
+  }
+
+  return summary;
+}
+
 // Streaming layout: shell (breadcrumb + H1 + filing-date + View-Original link)
 // flushes after the cheap shell-query (~50ms warm), then <SummaryBody> streams
 // in once checkSummaryAccess resolves (auth + full summaryText fetch).
@@ -72,7 +102,7 @@ export default async function SummaryPage({ params }: SummaryPageProps) {
 
   let shell;
   try {
-    shell = await getSummaryShellMetadata(id);
+    shell = await fetchShellMetadata(id);
   } catch (error) {
     if (error instanceof ResourceNotFoundError) notFound();
     throw error;
