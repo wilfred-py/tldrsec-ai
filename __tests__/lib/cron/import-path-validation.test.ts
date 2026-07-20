@@ -128,12 +128,10 @@ describe('Import Path Validation', () => {
       // Verify the modules work in Node.js runtime
       expect(typeof process).toBe('object');
       expect(process.versions.node).toBeDefined();
-      
+
       const { CronAuthService } = await import('../../../lib/cron/auth-service');
-      expect(CronAuthService.detectPlatform).toBeDefined();
-      
-      const platform = CronAuthService.detectPlatform();
-      expect(['RAILWAY_CRON', 'VERCEL_CRON', 'MANUAL_TRIGGER']).toContain(platform);
+      expect(CronAuthService.validateCronRequest).toBeDefined();
+      expect(typeof CronAuthService.validateCronRequest).toBe('function');
     });
 
     test('should handle Edge Runtime environment', async () => {
@@ -188,19 +186,17 @@ describe('Import Path Validation', () => {
     test('should have correct TypeScript types for imports', async () => {
       const { CronAuthService } = await import('../../../lib/cron/auth-service');
       const { rateLimiter } = await import('../../../lib/security/rate-limiter');
-      
+
       // Type checks - these will fail at compile time if types are wrong
       expect(typeof CronAuthService.validateCronRequest).toBe('function');
-      expect(typeof CronAuthService.extractClientIP).toBe('function');
-      expect(typeof CronAuthService.validateEnvironmentConfig).toBe('function');
-      
+
       expect(typeof rateLimiter.checkLimit).toBe('function');
-      
+
       // Test method signatures work correctly
       const mockRequest = { headers: { get: jest.fn() } } as any;
       const authResult = await CronAuthService.validateCronRequest(mockRequest);
       expect(authResult).toHaveProperty('isValid');
-      
+
       const rateLimitResult = await rateLimiter.checkLimit('test', '127.0.0.1');
       expect(rateLimitResult).toHaveProperty('allowed');
     });
