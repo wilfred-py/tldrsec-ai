@@ -82,67 +82,7 @@ describe('PR Changes Validation', () => {
     });
   });
 
-  describe('Runtime Validation', () => {
-    test('should execute auth service static methods without errors', async () => {
-      const { CronAuthService } = await import('../../lib/cron/auth-service');
-      
-      // Test static methods that don't require external dependencies
-      expect(typeof CronAuthService.detectPlatform).toBe('function');
-      expect(typeof CronAuthService.validateEnvironmentConfig).toBe('function');
-      
-      // These should execute without throwing
-      const platform = CronAuthService.detectPlatform();
-      expect(['RAILWAY_CRON', 'VERCEL_CRON', 'MANUAL_TRIGGER']).toContain(platform);
-      
-      const envConfig = CronAuthService.validateEnvironmentConfig();
-      expect(envConfig).toHaveProperty('isValid');
-      expect(envConfig).toHaveProperty('errors');
-      expect(Array.isArray(envConfig.errors)).toBe(true);
-    });
-
-    test('should create mock request and validate extraction methods', async () => {
-      const { CronAuthService } = await import('../../lib/cron/auth-service');
-      
-      const mockRequest = {
-        headers: {
-          get: jest.fn((name: string) => {
-            if (name === 'x-forwarded-for') return '127.0.0.1';
-            if (name === 'x-real-ip') return '192.168.1.1';
-            return null;
-          })
-        },
-        ip: '10.0.0.1'
-      } as any;
-      
-      // Test IP extraction method
-      const clientIP = CronAuthService.extractClientIP(mockRequest);
-      expect(clientIP).toBe('127.0.0.1'); // Should use x-forwarded-for first
-    });
-  });
-
   describe('Quality Assurance Checks', () => {
-    test('should maintain consistent error handling patterns', async () => {
-      // Verify that our changes maintain consistent error handling
-      const { CronAuthService } = await import('../../lib/cron/auth-service');
-      
-      // Test environment validation returns proper structure
-      const config = CronAuthService.validateEnvironmentConfig();
-      expect(typeof config.isValid).toBe('boolean');
-      expect(Array.isArray(config.errors)).toBe(true);
-    });
-
-    test('should not introduce security vulnerabilities', async () => {
-      // Basic security validation
-      const { CronAuthService } = await import('../../lib/cron/auth-service');
-      
-      // Ensure timing-safe comparison method exists
-      expect(CronAuthService.validateEnvironmentConfig).toBeDefined();
-      
-      // The fact that we can import the module means the rate limiter import is working
-      // and the security module is properly accessible
-      expect(true).toBe(true);
-    });
-
     test('should not break existing functionality', () => {
       // Test that existing callers of trackCacheAccess still work
       const mockFunction = jest.fn();

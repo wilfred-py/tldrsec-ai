@@ -123,16 +123,9 @@ export interface AuthValidationResult {
   error?: string;
   clientIP?: string;
   hmacValidated?: boolean;
+  vercelCron?: boolean;
   timestamp?: number;
   skew?: number;
-}
-
-export interface AuthHeaders {
-  authorization?: string;
-  'x-cron-auth'?: string;
-  'x-forwarded-for'?: string;
-  'x-real-ip'?: string;
-  'x-security-validated'?: string;
 }
 
 // ===== CONSTANTS =====
