@@ -5,7 +5,19 @@
  * and alert configurations for the pipeline monitoring bot.
  */
 
-import type { QueueMetrics } from '../cron/queue-monitoring';
+// The `lib/cron/queue-monitoring` module was deleted; `QueueMetrics` is inlined
+// here so `QueueHealthStatus.metrics` continues to typecheck. The shape reflects
+// the fields the surviving Slack Webhook code actually reads.
+interface QueueMetrics {
+  pendingJobs: number;
+  processingJobs: number;
+  completedLast24h: number;
+  failedLast24h: number;
+  queueDepth: number;
+  averageProcessingTime: number;
+  estimatedProcessingTime: number;
+  oldestPendingJob?: Date;
+}
 
 // =============================================================================
 // Cron Results Types (from tier-aware cron endpoint)
