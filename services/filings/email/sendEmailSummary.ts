@@ -5,9 +5,16 @@ import { getFilingSummary } from '../summaries/filingSummaryService';
 import { sendSummaryEmail } from './emailGenerator';
 import { logger } from '../../../lib/logging';
 import { monitoring } from '@/lib/monitoring';
-import { RateLimitError } from '../enhanced/rateLimiter';
 import { checkIfFilingProcessed } from '../utils/filingProcessingStatus';
 import { trackEmailDelivery, StoreSummaryOptions } from '../database/filingDatabase';
+
+type RateLimitErrorType = 'RATE_LIMIT' | 'DAILY_LIMIT' | 'QUOTA_EXCEEDED';
+
+interface RateLimitError extends Error {
+  type: RateLimitErrorType;
+  retryAfter?: number;
+  resetTime?: Date;
+}
 
 const emailSummaryLogger = logger.child('email-summary');
 
