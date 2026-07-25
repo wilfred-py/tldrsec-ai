@@ -32,10 +32,6 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Mock the components used by the page
-jest.mock('@/components/layout/sidebar', () => ({
-  Sidebar: () => <div data-testid="sidebar">Sidebar</div>,
-}));
-
 jest.mock('@/components/summary/summary-content', () => ({
   SummaryContent: ({ summary }: { summary: any }) => (
     <div data-testid="summary-content">
