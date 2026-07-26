@@ -110,7 +110,7 @@ export const costConfig = {
   // Per-call cost cap. Bumped from $0.75 (grok-4.1-fast era) because grok-4.3
   // input/output costs are 4-5x higher; same per-call token budget would otherwise
   // hit the cap. This value IS now wired through to per-call costLimit args
-  // (see services/filing/{enhancedSummaryGeneration,summaryGenerationService}).
+  // (see lib/ai/summarize.ts and lib/ai/summarize-with-validation.ts).
   maxCostPerRequest: parseFloat(getEnv('MAX_COST_PER_REQUEST', '3.00'))
 };
 

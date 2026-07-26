@@ -47,22 +47,6 @@ jest.mock('../../../lib/logging', () => ({
   }
 }));
 
-jest.mock('../../../services/filing/summaryGenerationService', () => ({
-  generateAISummary: jest.fn().mockImplementation(async () => {
-    // Add a small delay to ensure summarizeDuration > 0
-    await new Promise(resolve => setTimeout(resolve, 15));
-    return {
-      processingStatus: 'SUCCESS',
-      summary: 'Test summary',
-      cost: 0.001,
-      inputTokens: 100,
-      outputTokens: 50,
-      model: 'test-model',
-      data: { test: 'data' }
-    };
-  })
-}));
-
 jest.mock('../../../lib/ai/summarize-with-validation', () => ({
   summarizeFilingWithValidation: jest.fn().mockImplementation(async () => {
     await new Promise(resolve => setTimeout(resolve, 15));

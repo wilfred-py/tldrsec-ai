@@ -13,7 +13,7 @@
 
 // Import types
 import { FilingType } from '../types/sec/filing';
-import { FilingSummaryResult } from './filings/summaries/types';
+import { FilingSummaryResult } from './filings/shared-types';
 import { StoreSummaryOptions } from './filings/database/filingDatabase';
 
 // Import modular components

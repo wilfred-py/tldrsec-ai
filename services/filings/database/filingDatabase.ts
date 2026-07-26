@@ -1,5 +1,5 @@
 import { getPrismaClient } from '../../../lib/db/prisma';
-import { FilingSummaryResult } from '../../filing/types';
+import { FilingSummaryResult } from '../shared-types';
 import { FilingType } from '../../../types/sec/filing';
 
 /**

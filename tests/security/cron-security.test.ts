@@ -115,24 +115,6 @@ jest.mock('../../lib/security/security-monitoring', () => ({
   }
 }));
 
-jest.mock('../../services/filing/summaryGenerationService', () => ({
-  generateAISummaryWithRetry: jest.fn().mockResolvedValue({
-    summary: 'Test summary',
-    cost: 0.02,
-    keyPoints: [],
-    tokensUsed: 800,
-    inputTokens: 600,
-    outputTokens: 200
-  })
-}));
-
-jest.mock('../../services/filing/sendEmailSummary', () => ({
-  sendEmailSummary: jest.fn().mockResolvedValue({
-    success: true,
-    messageId: 'email-123'
-  })
-}));
-
 // Mock EDGAR schedule so production tests don't hit quiet-hours early return
 jest.mock('../../lib/cron/edgar-schedule', () => ({
   isEdgarOpen: jest.fn().mockReturnValue(true)
