@@ -23,11 +23,6 @@
  */
 
 import { logger } from '../logging';
-// Circular import: derive-stake.ts imports formatNumberWithCommas from this file.
-// Safe only because formatNumberWithCommas (line ~625) is a `function` declaration
-// and gets hoisted. Do NOT convert it to `const fn = () => ...` or the cycle crashes
-// at module init.
-import { deriveNewStake, detectNewStakeNarrativeMismatch } from '../ai/utils/derive-stake';
 
 const componentLogger = logger.child('form4-normalizer');
 
@@ -667,4 +662,231 @@ function titleCase(str: string): string {
 export function truncateWithEllipsis(str: string, maxLen: number): string {
   if (!str || str.length <= maxLen) return str || '';
   return str.substring(0, maxLen - 1) + '\u2026';
+}
+
+// \u2500\u2500 Post-transaction holdings (newStake) derivation \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Deterministic five-tier precedence over the LLM-emitted `transactions[]` and
+// `postTransactionCommonShares` fields. Previously lived in
+// `lib/ai/utils/derive-stake.ts`; inlined here because both production callers
+// (this module's `normalizeForm4Data` and `lib/ai/parsers/response-parser.ts`'s
+// Form 4 branch) already sit next to `formatNumberWithCommas` and
+// `NormalizedTransaction`, and the split forced a circular import that only
+// worked by accident of function-declaration hoisting. Same shape as ADR-0002.
+//
+// Five-tier precedence:
+//   1. Authoritative LLM field (`postTransactionCommonShares`)
+//   2. Derived from transactions: filter by Common Stock + Direct,
+//      sort by date, pick last `sharesOwnedFollowing`
+//   3. Fallback derivation: any transaction with `sharesOwnedFollowing`
+//      (preserves existing derivative-only filing behavior)
+//   4. LLM's legacy top-level `newStake` string (pass-through)
+//   5. Narrative regex over `summaryText` (last resort)
+//
+// Background: the LLM's top-level `newStake` is unreliable. Observed failure:
+// AAPL Parekh 2026-04-15, where `newStake` was populated from a Table II
+// (derivative) row's `sharesOwnedFollowing` instead of the Table I Column 5
+// Common Stock row. See .claude/tasks/form4-holdings-mismatch.md.
+
+export type DeriveNewStakeSource =
+  | 'authoritative'
+  | 'derived-common-direct'
+  | 'derived-fallback'
+  | 'llm-legacy'
+  | 'narrative'
+  | 'none';
+
+export interface DeriveNewStakeOptions {
+  transactions?: NormalizedTransaction[] | null;
+  postTransactionCommonShares?: unknown;
+  llmNewStake?: string;
+  summaryText?: string;
+}
+
+export interface DeriveNewStakeResult {
+  formattedNumber: string;
+  numericValue: number | null;
+  isDerivative: boolean;
+  source: DeriveNewStakeSource;
+  llmLegacyRaw?: string;
+}
+
+const COMMON_STOCK_VARIANTS = new Set([
+  'common stock',
+  'class a common stock',
+  'class b common stock',
+  'class c common stock',
+  'class a ordinary shares',
+  'class b ordinary shares',
+  'ordinary shares',
+]);
+
+const DERIVATIVE_CODES = new Set(['M', 'C', 'X', 'O', 'E', 'H']);
+
+function isCommonStock(securityType: string | undefined): boolean {
+  if (!securityType) return false;
+  return COMMON_STOCK_VARIANTS.has(securityType.trim().toLowerCase());
+}
+
+function isDirectOwnership(ownershipForm: string | undefined): boolean {
+  if (!ownershipForm) return false; // require explicit 'D'; missing metadata falls through to Tier 3
+  return ownershipForm.trim().toUpperCase() === 'D';
+}
+
+function isAllDerivative(txns: NormalizedTransaction[]): boolean {
+  if (txns.length === 0) return false;
+  return txns.every(t => {
+    const code = String(t.code || '').toUpperCase();
+    if (DERIVATIVE_CODES.has(code)) return true;
+    if (code === 'A') {
+      const price = parseFloat(String(t.pricePerShare || '0').replace(/[$,]/g, '')) || 0;
+      return price === 0;
+    }
+    return false;
+  });
+}
+
+function parseStakeNumber(val: unknown): number | null {
+  if (val === undefined || val === null || val === '') return null;
+  const cleaned = String(val).replace(/[$,\[\]]/g, '').trim();
+  if (!/\d/.test(cleaned)) return null;
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sortTxsChronologically<T extends NormalizedTransaction>(txns: T[]): T[] {
+  return txns
+    .map((tx, idx) => ({ tx, idx }))
+    .sort((a, b) => {
+      if (a.tx.date && b.tx.date) {
+        const cmp = a.tx.date.localeCompare(b.tx.date);
+        if (cmp !== 0) return cmp;
+      }
+      return a.idx - b.idx;
+    })
+    .map(({ tx }) => tx);
+}
+
+export function deriveNewStake(opts: DeriveNewStakeOptions): DeriveNewStakeResult {
+  const { transactions, postTransactionCommonShares, llmNewStake, summaryText } = opts;
+
+  const authNum = parseStakeNumber(postTransactionCommonShares);
+  if (authNum !== null) {
+    return {
+      formattedNumber: formatNumberWithCommas(authNum),
+      numericValue: authNum,
+      isDerivative: false,
+      source: 'authoritative',
+    };
+  }
+
+  const txArr = Array.isArray(transactions) ? transactions : [];
+  if (txArr.length > 0) {
+    const commonDirect = txArr.filter(
+      t =>
+        isCommonStock(t.securityType) &&
+        isDirectOwnership(t.ownershipForm) &&
+        parseStakeNumber(t.sharesOwnedFollowing) !== null,
+    );
+
+    if (commonDirect.length > 0) {
+      const sorted = sortTxsChronologically(commonDirect);
+      const last = sorted[sorted.length - 1];
+      const n = parseStakeNumber(last.sharesOwnedFollowing)!;
+      return {
+        formattedNumber: formatNumberWithCommas(n),
+        numericValue: n,
+        isDerivative: false,
+        source: 'derived-common-direct',
+      };
+    }
+
+    const anyWithSof = txArr.filter(t => parseStakeNumber(t.sharesOwnedFollowing) !== null);
+    if (anyWithSof.length > 0) {
+      const sorted = sortTxsChronologically(anyWithSof);
+      const last = sorted[sorted.length - 1];
+      const n = parseStakeNumber(last.sharesOwnedFollowing)!;
+      return {
+        formattedNumber: formatNumberWithCommas(n),
+        numericValue: n,
+        isDerivative: isAllDerivative(txArr),
+        source: 'derived-fallback',
+      };
+    }
+  }
+
+  if (typeof llmNewStake === 'string' && /\d/.test(llmNewStake)) {
+    const num = parseStakeNumber(llmNewStake);
+    return {
+      formattedNumber: num !== null ? formatNumberWithCommas(num) : '',
+      numericValue: num,
+      isDerivative: /derivative/i.test(llmNewStake),
+      source: 'llm-legacy',
+      llmLegacyRaw: llmNewStake,
+    };
+  }
+
+  if (summaryText) {
+    const stakePatterns = [
+      /(?:holdings?|position|stake)\s+(?:\w+\s+)*?(?:to|at|of)\s+([\d,]+(?:\.\d+)?)\s+(?:shares|units|common|class)/i,
+      /(?:dropped|fell|rose|climbed|reached|unchanged)\s+(?:\w+\s+)*?(?:to|at)\s+([\d,]+(?:\.\d+)?)\s+(?:shares|units)/i,
+      /(?:totale?d?|reached)\s+([\d,]+(?:\.\d+)?)\s+(?:shares|units)/i,
+      /(?:holds?|owns?|holding)\s+([\d,]+(?:\.\d+)?)\s+(?:shares|units)/i,
+    ];
+    for (const pattern of stakePatterns) {
+      const match = summaryText.match(pattern);
+      if (match) {
+        const n = parseStakeNumber(match[1]);
+        if (n !== null) {
+          return {
+            formattedNumber: formatNumberWithCommas(n),
+            numericValue: n,
+            isDerivative: false,
+            source: 'narrative',
+          };
+        }
+      }
+    }
+  }
+
+  return { formattedNumber: '', numericValue: null, isDerivative: false, source: 'none' };
+}
+
+/**
+ * Detect a >5% disagreement between a derived newStake number and numbers in
+ * the `summaryText` narrative. Returns mismatch details, or null when the
+ * narrative agrees within tolerance, uses hedge words (signalling intentional
+ * imprecision), or contains no comparable number.
+ *
+ * Narrative patterns require "shares" / "holdings" / "common" context to avoid
+ * false positives on dollar amounts, percentages, or transaction share counts.
+ */
+export function detectNewStakeNarrativeMismatch(
+  derivedNumber: number,
+  summaryText: string | undefined,
+): { narrativeNumber: number; derivedNumber: number; diffPct: number } | null {
+  if (!summaryText) return null;
+
+  const hedgeWords = /\b(?:roughly|approximately|around|about|nearly|almost|~)\b/i;
+  if (hedgeWords.test(summaryText)) return null;
+
+  const narrativePatterns = [
+    /\b([\d,]+(?:\.\d+)?)\s+common\s+shares?\b/i,
+    /(?:holdings?|position|stake)\s+(?:\w+\s+){0,3}?(?:to|at|of)\s+([\d,]+(?:\.\d+)?)\s+shares?/i,
+    /(?:totale?d?|reached|holds?|owns?)\s+([\d,]+(?:\.\d+)?)\s+(?:common\s+)?shares?/i,
+    /\b([\d,]+(?:\.\d+)?)\s+shares?\s+(?:remaining|held|after|of\s+common)/i,
+  ];
+  for (const p of narrativePatterns) {
+    const m = summaryText.match(p);
+    if (m) {
+      const n = parseStakeNumber(m[1]);
+      if (n !== null && n > 0) {
+        const diffPct = Math.abs((derivedNumber - n) / n) * 100;
+        if (diffPct > 5) {
+          return { narrativeNumber: n, derivedNumber, diffPct };
+        }
+        return null;
+      }
+    }
+  }
+  return null;
 }
