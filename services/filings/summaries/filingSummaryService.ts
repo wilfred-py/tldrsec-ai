@@ -1,5 +1,5 @@
 import { FilingType } from '../../../types/sec/filing';
-import { FilingSummaryResult, SECFiling, Company } from '../../filing/types';
+import { FilingSummaryResult, SECFiling, Company } from '../shared-types';
 import { summarizeFiling, SummarizationOptions } from '../../../lib/ai/summarize';
 import type { XSentiment } from '../../../lib/ai/parsers/x-sentiment-validator';
 import * as secService from '../../secService';

@@ -1,4 +1,4 @@
-import { FilingSummaryResult, FilingError } from '../../filing/types';
+import { FilingSummaryResult, FilingError } from '../shared-types';
 import { FilingType } from '../../../types/sec/filing';
 import * as secService from '../../secService';
 import { getFilingSummary } from '../summaries/filingSummaryService';

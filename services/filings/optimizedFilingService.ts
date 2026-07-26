@@ -6,7 +6,7 @@
  */
 
 import { FilingType } from '../../types/sec/filing';
-import { FilingSummaryResult } from '../filing/types';
+import { FilingSummaryResult } from './shared-types';
 import { openRouterClient } from '../../lib/ai/openrouter-client';
 import { getDefaultModel } from '../../lib/ai/config';
 import { fetchEnhancedDocumentContent } from './extractors/enhancedDocumentScraper';

@@ -1,5 +1,5 @@
 import { FilingType } from '../../../types/sec/filing';
-import { FilingSummaryResult } from '../../filing/types';
+import { FilingSummaryResult } from '../shared-types';
 import { parseFormContentEnhanced } from '../../../lib/parsers/form-parser';
 import { estimateTokenCount } from '../../../lib/ai/token-counter';
 import { logger } from '../../../lib/logging';

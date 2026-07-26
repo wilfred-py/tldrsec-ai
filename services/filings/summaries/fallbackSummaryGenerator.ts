@@ -1,4 +1,4 @@
-import { SECFiling, Company } from '../../filing/types';
+import { SECFiling, Company } from '../shared-types';
 import { getFormTypeDescription } from '../utils/formTypeUtils';
 
 /**

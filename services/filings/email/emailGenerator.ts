@@ -1,4 +1,4 @@
-import { FilingSummaryResult, FilingError } from '../../filing/types';
+import { FilingSummaryResult, FilingError } from '../shared-types';
 import { getFormMetadata } from '../../../lib/sec-edgar/form-registry';
 import { emailClient } from '../../../lib/email';
 import { getPrismaClient } from '../../../lib/db/index';

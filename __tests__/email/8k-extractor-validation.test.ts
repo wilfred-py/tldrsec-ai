@@ -1,7 +1,7 @@
 /**
  * 8-K service-layer Zod validation tests (E1-E5)
  *
- * Tests the validation block in services/filing/summaryGenerationService.ts
+ * Tests the validation block in lib/ai/summarize-with-validation.ts
  * that strips invalid tranches/dealTerms and logs structured warnings.
  *
  * Directly tests the Zod schemas + extractor fallback, not the OpenRouter call.
