@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { NotificationPreference } from "@/lib/email/notification-types";
+import { NotificationPreference } from "@/lib/user/preference-types";
 import { SETTINGS_HELPER } from "@/lib/onboarding/email-notice-constants";
 
 interface ConfirmStepProps {

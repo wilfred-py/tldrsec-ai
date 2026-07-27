@@ -5,7 +5,7 @@ import { useSession } from "@clerk/nextjs";
 import { useAuthContext } from "@/lib/context/auth-context";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { NotificationPreference } from "@/lib/email/notification-types";
+import { NotificationPreference } from "@/lib/user/preference-types";
 import {
   FilingTypePreferences,
   NotificationContentPreferences,

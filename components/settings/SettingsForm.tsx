@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } fro
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { NotificationPreference } from '@/lib/email/notification-types';
+import { NotificationPreference } from '@/lib/user/preference-types';
 import { 
   UserPreferences, 
   FilingTypePreferences, 

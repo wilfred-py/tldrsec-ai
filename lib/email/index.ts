@@ -31,4 +31,3 @@ export { ResendClient };
 
 export * from './types';
 export { resendConfig } from './config';
-export { NotificationPreference } from './notification-types';

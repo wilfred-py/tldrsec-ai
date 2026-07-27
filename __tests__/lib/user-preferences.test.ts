@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { NotificationPreference } from '@/lib/email/notification-types';
+import { NotificationPreference } from '@/lib/user/preference-types';
 
 // Mock PrismaClient
 jest.mock('@prisma/client', () => {

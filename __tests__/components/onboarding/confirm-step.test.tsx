@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConfirmStep } from '@/components/onboarding/confirm-step';
-import { NotificationPreference } from '@/lib/email/notification-types';
+import { NotificationPreference } from '@/lib/user/preference-types';
 
 function defaults() {
   return {
