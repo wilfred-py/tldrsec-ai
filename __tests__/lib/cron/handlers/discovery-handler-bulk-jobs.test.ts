@@ -48,13 +48,6 @@ jest.mock('../../../../lib/logging', () => ({
   },
 }));
 
-// Mock the SEC filing service
-jest.mock('../../../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    checkForNewFilings: jest.fn().mockResolvedValue([]),
-  },
-}));
-
 describe('Discovery Handler Bulk Job Creation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
