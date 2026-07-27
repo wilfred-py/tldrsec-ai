@@ -1,4 +1,16 @@
-import { NotificationPreference } from '@/lib/email/notification-types';
+/**
+ * Email delivery cadence for [Subscription] notifications. Absorbed from
+ * the deleted `lib/email/notification-types.ts` — its sole role was to
+ * carry this enum, and the enum's real owner is the user-preferences
+ * module that persists it on `User.preferences.notifications.emailFrequency`.
+ * The prior location produced an inverted dependency (`lib/user` → `lib/email`)
+ * for a value that describes the [Subscription] shape, not email plumbing.
+ */
+export enum NotificationPreference {
+  IMMEDIATE = 'immediate',
+  DAILY = 'daily',
+  NONE = 'none',
+}
 
 /**
  * Notification preferences for annual report filings

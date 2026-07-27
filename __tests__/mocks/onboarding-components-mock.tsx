@@ -1,5 +1,5 @@
 import React from 'react';
-import { NotificationPreference } from '@/lib/email/notification-types';
+import { NotificationPreference } from '@/lib/user/preference-types';
 
 // Mock implementation of MultiStepForm
 export const MultiStepForm = ({ steps, onComplete }: any) => (
