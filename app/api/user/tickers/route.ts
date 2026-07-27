@@ -4,7 +4,7 @@ import { getPrismaClient } from '@/lib/db/prisma';
 import { dbRetry } from '@/lib/db/retry-wrapper';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { checkTierLimit, getTierLimitInfo } from '@/lib/subscription/three-tier-limits';
+import { THREE_TIER_LIMITS } from '@/lib/subscription/three-tier-limits';
 import { convertUserPrefsToTickerPrefs, getDefaultTickerPreferences } from '@/lib/user/preference-sync';
 import { UserPreferences } from '@/lib/user/preference-types';
 import { sendQuarterlyEarningsEmail } from '@/lib/email/quarterly-earnings-service';
@@ -275,17 +275,18 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3-tier limit check with MAX unlimited
+    // 3-tier limit check. THREE_TIER_LIMITS values of -1 mean unlimited
+    // (FREE and MAX today); PRO caps at 25. See lib/subscription/three-tier-limits.ts.
     const currentCount = dbUser.tickers.length;
     const tier = dbUser.subscriptionTier as 'FREE' | 'PRO' | 'MAX';
-    
-    if (checkTierLimit(currentCount, tier)) {
-      const limitInfo = getTierLimitInfo(tier);
+    const tickerLimit = THREE_TIER_LIMITS[tier];
+
+    if (tickerLimit !== -1 && currentCount >= tickerLimit) {
       return NextResponse.json({
         error: `You've reached your ${currentCount} ticker limit for the ${tier} tier`,
         limitReached: true,
         currentTier: tier,
-        maxTickers: limitInfo.limit,
+        maxTickers: tickerLimit,
         currentCount,
         upgradeRequired: tier !== 'MAX' // FREE can upgrade to PRO, PRO can upgrade to MAX
       }, { status: 403 });
