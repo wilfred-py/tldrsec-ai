@@ -49,11 +49,9 @@ jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({
   }),
 }));
 
-// Mock the CronSecFilingService
+// Mock the SEC filing discovery module
 jest.mock('../../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    checkForNewFilings: jest.fn(),
-  },
+  checkForNewFilings: jest.fn(),
 }));
 
 // Mock logging to avoid console noise
@@ -126,8 +124,8 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     ]);
 
     // Mock: RSS returns empty (no new filings in RSS feed)
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
+    const { checkForNewFilings } = await import('../../../lib/cron/sec-filing-service');
+    (checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
 
     // Mock: getUnprocessedFilings returns orphaned filings
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
@@ -203,8 +201,8 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     ]);
 
     // Mock: RSS returns empty
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
+    const { checkForNewFilings } = await import('../../../lib/cron/sec-filing-service');
+    (checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
 
     // Mock: getUnprocessedFilings returns the filing
     const { getUnprocessedFilings, markFilingAsProcessed } = await import('../../../lib/sec-edgar/ticker-monitoring');
@@ -283,8 +281,8 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     ]);
 
     // Mock: RSS returns one new filing
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
+    const { checkForNewFilings } = await import('../../../lib/cron/sec-filing-service');
+    (checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
 
     // Mock: getUnprocessedFilings returns one backlog filing
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
@@ -367,8 +365,8 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
     ]);
 
     // Mock: RSS returns the filing
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
+    const { checkForNewFilings } = await import('../../../lib/cron/sec-filing-service');
+    (checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
 
     // Mock: getUnprocessedFilings also returns the same filing
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
