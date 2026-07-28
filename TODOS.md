@@ -51,31 +51,6 @@ identical signature). Not caused by the X sentiment email integration.
 infra` PR that addresses all three — they're cheap individually but each one
 on its own is too small to ship.
 
-## P2 — onboarding A/B variant cleanup (deferred from #495 / v0.0.25.9)
-
-**Priority:** P2
-
-The "tell-us-about-yourself" reminder was moved into a dedicated final step in
-v0.0.25.9, which de facto retired the `inline` variant of `useOnboardingVariant`.
-We chose D1=B (force flag fallback to `step4` and emit `variant: "step4-polished"`
-for analytics) over D1=A (delete the variant code) so the experiment
-infrastructure stays available for measurement comparison.
-
-Once the PostHog flag `onboarding-email-notice-variant` is concluded server-side
-and you're confident no returning users still hold an `inline` sessionStorage/
-cookie bucket (~30 days post-rollout), delete:
-
-- `lib/hooks/use-onboarding-variant.ts`
-- `components/onboarding/inline-email-notice.tsx`
-- `__tests__/components/onboarding/inline-email-notice.test.tsx`
-- `inlineDisclosure` prop + render in `components/onboarding/profile-step.tsx`
-- Variant fork branches in `app/(auth)/onboarding/onboarding-client.tsx`
-- The `'inline'` member of the `variant` union in `lib/analytics/events.ts`
-- `ONBOARDING_STEPS_BASE` / `getOnboardingSteps(variant)` in `app/(auth)/onboarding/types.ts`
-
-**Smallest next action**: ~30 min cleanup PR after the variant assignment cookie
-TTL has elapsed. Scheduled remote agent `trig_01EFRvBRh139BG16wHpt8vYz` will
-auto-open the PR on 2026-06-04.
 
 ## P3 — auth pages backlog (surfaced by /autoplan + /ship for v0.0.26.1)
 
@@ -210,3 +185,15 @@ worth doing next:
   single-pass for production. If it does retry/render twice in any code path,
   counter doubles silently. Move to call-site or guard with a render-time
   marker.
+
+## Completed
+
+### P2 — onboarding A/B variant cleanup (deferred from #495 / v0.0.25.9)
+
+The `inline` variant of the onboarding email-notice A/B was retired once the
+30-day `ob_variant` cookie TTL elapsed (2026-06-04). Deleted
+`use-onboarding-variant.ts`, `inline-email-notice.tsx`, and all related
+branching logic from `onboarding-client.tsx`, `profile-step.tsx`, `types.ts`,
+and `analytics/events.ts`.
+
+**Completed:** v0.0.40.1 (2026-06-04)

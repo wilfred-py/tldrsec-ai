@@ -2,14 +2,14 @@
 
 import { CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ONBOARDING_STEPS_BASE } from "@/app/(auth)/onboarding/types";
+import { ONBOARDING_STEPS } from "@/app/(auth)/onboarding/types";
 
 interface VerticalProgressProps {
   currentStep: number; // 1-indexed
   steps?: ReadonlyArray<{ readonly label: string; readonly key: string }>;
 }
 
-export function VerticalProgress({ currentStep, steps = ONBOARDING_STEPS_BASE }: VerticalProgressProps) {
+export function VerticalProgress({ currentStep, steps = ONBOARDING_STEPS }: VerticalProgressProps) {
   return (
     <nav
       aria-label="Onboarding progress"
