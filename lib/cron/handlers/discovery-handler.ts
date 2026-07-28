@@ -15,7 +15,7 @@
 
 import { logger } from '../../logging';
 import type { JobPayload } from '../../job-queue';
-import { CronSecFilingService } from '../sec-filing-service';
+import { checkForNewFilings } from '../sec-filing-service';
 import { getPriorityForTier } from '../tier-eligibility';
 
 const discoveryLogger = logger.child('discovery-handler');
@@ -284,7 +284,7 @@ export async function handleDiscovery(
 
     // STEP 3: Check RSS feeds for new filings (ONCE per ticker, not per user)
     // We pass null for userId since we're doing ticker-centric discovery
-    const allNewFilings = await CronSecFilingService.checkForNewFilings(
+    const allNewFilings = await checkForNewFilings(
       tickersWithCik.map(t => ({ id: t.symbol, symbol: t.symbol, companyName: t.companyName, cik: t.cik })),
       null // No specific user - ticker-centric discovery
     );
