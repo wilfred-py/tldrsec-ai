@@ -14,7 +14,86 @@ import {
   DEFAULT_UI_PREFERENCES
 } from '@/lib/user/preference-types';
 import { NotificationPreference } from '@/lib/email/notification-types';
-import { queueWelcomeEmail } from '@/lib/email/welcome-service';
+import { getEmailTemplate } from '@/lib/email/templates';
+import { EmailType, type EmailMessage } from '@/lib/email/types';
+import { sendEmail } from '@/lib/email';
+import { FOUNDER_REPLY_TO } from '@/lib/email/config';
+import { logger } from '@/lib/logging';
+import { SecureEmailLogger } from '@/lib/email/security-helpers';
+
+const welcomeLogger = new SecureEmailLogger(logger.child('welcome-service'));
+
+/**
+ * Fire-and-forget welcome email. `setImmediate` returns before the send
+ * completes so `saveUserPreferences` can respond fast; errors are caught
+ * inside the callback and logged, never thrown. Explicit `replyTo`
+ * (FOUNDER_REPLY_TO, not the config default) guards against a future
+ * `EMAIL_DEFAULT_REPLY_TO` regression silently dropping user replies —
+ * locked in by `__tests__/email/reply-to-regression.test.ts`.
+ */
+async function queueWelcomeEmail(
+  userId: string,
+  email: string,
+  name: string,
+): Promise<void> {
+  setImmediate(async () => {
+    try {
+      const dbUser = await getPrismaClient().user.findUnique({
+        where: { id: userId },
+        include: { tickers: true },
+      });
+
+      if (!dbUser) {
+        welcomeLogger.error('User not found for welcome email', { userId });
+        return;
+      }
+
+      const selectedTickers = dbUser.tickers.map((ticker) => ticker.symbol);
+
+      const { html, text } = await getEmailTemplate(EmailType.WELCOME, {
+        recipientName: name || 'there',
+        recipientEmail: email,
+        selectedTickers,
+        unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://tldrsec.app'}/dashboard/settings`,
+        preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/settings`,
+      });
+
+      const message: EmailMessage = {
+        to: email,
+        subject: 'Welcome to tldrSEC!',
+        replyTo: FOUNDER_REPLY_TO,
+        html,
+        text,
+        tags: ['type:welcome', 'onboarding:complete'],
+        metadata: {
+          userId,
+          type: 'welcome',
+          tickerCount: selectedTickers.length,
+          summaryCount: 0,
+        },
+      };
+
+      const result = await sendEmail(message);
+
+      if (!result.success) {
+        welcomeLogger.warn('Welcome email failed to send', {
+          userId,
+          error: result.error?.message,
+        });
+      } else {
+        welcomeLogger.info('Welcome email sent successfully', {
+          userId,
+          emailId: result.id,
+        });
+      }
+    } catch (error) {
+      welcomeLogger.error('Exception in queueWelcomeEmail', {
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+}
 
 // Environment check for API vs mock mode
 const API_ENABLED = process.env.NEXT_PUBLIC_API_ENABLED === 'true';
