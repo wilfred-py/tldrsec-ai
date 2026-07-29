@@ -8,9 +8,10 @@
  *   1. The config default falls back to 'wilf@tldrsec.app' (not 'no-reply').
  *      Env override (EMAIL_DEFAULT_REPLY_TO) still works for staging.
  *
- *   2. queueWelcomeEmail (the welcome-service code path) sets replyTo
- *      EXPLICITLY on the EmailMessage, so a future config rollback can't
- *      silently re-break replies. Belt-and-braces.
+ *   2. queueWelcomeEmail (now inlined into app/(auth)/onboarding/actions.ts,
+ *      formerly lib/email/welcome-service.ts) sets replyTo EXPLICITLY on the
+ *      EmailMessage, so a future config rollback can't silently re-break
+ *      replies. Belt-and-braces.
  *
  * The source-grep style is intentional: it catches the specific regression
  * pattern (sending without explicit replyTo) without booting prisma/clerk/resend.
@@ -47,9 +48,9 @@ describe('reply-to regression', () => {
     });
   });
 
-  describe('lib/email/welcome-service.ts', () => {
+  describe('app/(auth)/onboarding/actions.ts', () => {
     const source = readFileSync(
-      resolve(process.cwd(), 'lib/email/welcome-service.ts'),
+      resolve(process.cwd(), 'app/(auth)/onboarding/actions.ts'),
       'utf-8'
     );
 
@@ -59,13 +60,13 @@ describe('reply-to regression', () => {
     const REPLY_TO_PATTERN = /replyTo:\s*(FOUNDER_REPLY_TO|['"]wilf@tldrsec\.app['"])/;
 
     it('queueWelcomeEmail sets an explicit replyTo on the EmailMessage', () => {
-      const queueFnIdx = source.indexOf('export async function queueWelcomeEmail');
+      const queueFnIdx = source.indexOf('async function queueWelcomeEmail');
       expect(queueFnIdx).toBeGreaterThan(-1);
       const queueBody = source.slice(queueFnIdx);
       expect(queueBody).toMatch(REPLY_TO_PATTERN);
     });
 
-    it('contains no remaining no-reply@ literal in welcome-service', () => {
+    it('contains no remaining no-reply@ literal in the welcome-email code path', () => {
       // Sanity check that earlier no-reply default isn't accidentally hard-coded.
       expect(source).not.toMatch(/no-reply@tldrsec/);
     });
