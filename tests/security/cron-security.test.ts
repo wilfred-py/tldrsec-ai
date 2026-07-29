@@ -141,17 +141,10 @@ jest.mock('../../lib/cron/edgar-schedule', () => ({
 // Mock cron service layer to prevent database access
 // user-processing-service mock removed (module deleted in dead code cleanup)
 
-jest.mock('../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    discoverNewFilings: jest.fn().mockResolvedValue([]),
-    processFilingsForUser: jest.fn().mockResolvedValue({ processed: 0, errors: [] }),
-    runSecFilingMonitoring: jest.fn().mockResolvedValue({
-      tickersChecked: 0,
-      newFilingsFound: 0,
-      errors: 0
-    })
-  }
-}));
+// sec-filing-service mock removed (module deleted; CronSecFilingService.checkForNewFilings
+// was inlined into lib/cron/handlers/discovery-handler.ts as discoverFilingsFromRss,
+// and none of the three methods this test previously stubbed actually existed on the
+// real module — they were drift symptoms).
 
 // queue-monitoring and async-filing-queue mocks removed (modules deleted in pipeline simplification)
 
