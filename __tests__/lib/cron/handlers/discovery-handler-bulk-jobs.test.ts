@@ -48,11 +48,15 @@ jest.mock('../../../../lib/logging', () => ({
   },
 }));
 
-// Mock the SEC filing service
-jest.mock('../../../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    checkForNewFilings: jest.fn().mockResolvedValue([]),
-  },
+// Mock the RSS walk. Previously wrapped by CronSecFilingService.checkForNewFilings
+// (since inlined into discovery-handler.ts as discoverFilingsFromRss); tests here
+// only exercise the bulk-jobs path, so returning [] from the underlying RSS seam
+// is sufficient.
+jest.mock('../../../../lib/sec-edgar/ticker-monitoring', () => ({
+  getActiveTickersForMonitoring: jest.fn().mockResolvedValue([]),
+  getUnprocessedFilings: jest.fn().mockResolvedValue([]),
+  markFilingAsProcessed: jest.fn(),
+  checkTickerForNewFilings: jest.fn().mockResolvedValue([]),
 }));
 
 describe('Discovery Handler Bulk Job Creation', () => {

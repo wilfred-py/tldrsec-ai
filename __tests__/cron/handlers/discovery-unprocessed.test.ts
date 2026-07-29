@@ -40,20 +40,18 @@ jest.mock('../../../lib/db/prisma', () => ({
   getPrismaClient: jest.fn(() => mockPrisma),
 }));
 
-// Mock ticker-monitoring module
+// Mock ticker-monitoring module. `checkTickerForNewFilings` is what the
+// discovery handler now calls internally (previously wrapped by
+// CronSecFilingService.checkForNewFilings, since deleted). Tests drive the
+// RSS-side of the discovery interface by returning `RSSFilingEntry[]` here,
+// then observing `handleDiscovery`'s reshaped `FilingWithTicker[]` output.
 jest.mock('../../../lib/sec-edgar/ticker-monitoring', () => ({
   getActiveTickersForMonitoring: jest.fn().mockResolvedValue([]),
   getUnprocessedFilings: jest.fn(),
   markFilingAsProcessed: jest.fn(async (id: string) => {
     markFilingAsProcessedCalls.push({ id });
   }),
-}));
-
-// Mock the CronSecFilingService
-jest.mock('../../../lib/cron/sec-filing-service', () => ({
-  CronSecFilingService: {
-    checkForNewFilings: jest.fn(),
-  },
+  checkTickerForNewFilings: jest.fn().mockResolvedValue([]),
 }));
 
 // Mock logging to avoid console noise
@@ -125,9 +123,10 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'TSLA', companyName: 'Tesla, Inc.' },
     ]);
 
-    // Mock: RSS returns empty (no new filings in RSS feed)
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
+    // Mock: RSS returns empty (no new filings in RSS feed). Handler's RSS
+    // walk short-circuits when no TickerMonitoring row is found for a ticker.
+    // Leaving tickerMonitoring.findFirst unmocked (returns undefined) is
+    // sufficient to return [] from discoverFilingsFromRss.
 
     // Mock: getUnprocessedFilings returns orphaned filings
     const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
@@ -202,9 +201,7 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'AAPL', companyName: 'Apple Inc.' },
     ]);
 
-    // Mock: RSS returns empty
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([]);
+    // Mock: RSS returns empty (no TickerMonitoring row → walk yields []).
 
     // Mock: getUnprocessedFilings returns the filing
     const { getUnprocessedFilings, markFilingAsProcessed } = await import('../../../lib/sec-edgar/ticker-monitoring');
@@ -282,12 +279,39 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'NVDA', companyName: 'NVIDIA Corporation' },
     ]);
 
-    // Mock: RSS returns one new filing
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
+    // Mock: RSS returns one new filing for NVDA. Handler walks each ticker's
+    // TickerMonitoring row then calls checkTickerForNewFilings; provide a
+    // findFirst row for NVDA and a raw RSS entry for that ticker only.
+    mockPrisma.tickerMonitoring.findFirst.mockImplementation(async (args: any) => {
+      if (args?.where?.cik === '0001045810') {
+        return {
+          id: 'tm-nvda',
+          cik: '0001045810',
+          symbol: 'NVDA',
+          companyName: 'NVIDIA Corporation',
+          rssUrl: '',
+          lastChecked: new Date(),
+          lastAccessionSeen: null,
+        };
+      }
+      return null;
+    });
+    const { checkTickerForNewFilings, getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
+    (checkTickerForNewFilings as jest.Mock).mockImplementation(async (t: { symbol: string }) => {
+      if (t.symbol === 'NVDA') {
+        return [{
+          accessionNumber: rssNewFiling.accessionNumber,
+          filingType: rssNewFiling.formType,
+          filingDate: new Date(rssNewFiling.filingDate),
+          filingUrl: rssNewFiling.url,
+          rssEntryDate: new Date(rssNewFiling.filingDate),
+          title: rssNewFiling.title,
+        }];
+      }
+      return [];
+    });
 
     // Mock: getUnprocessedFilings returns one backlog filing
-    const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce([unprocessedFiling]);
 
     // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
@@ -366,12 +390,28 @@ describe('Discovery Handler - Unprocessed Filing Recovery', () => {
       { symbol: 'AAPL', companyName: 'Apple Inc.' },
     ]);
 
-    // Mock: RSS returns the filing
-    const { CronSecFilingService } = await import('../../../lib/cron/sec-filing-service');
-    (CronSecFilingService.checkForNewFilings as jest.Mock).mockResolvedValueOnce([rssNewFiling]);
+    // Mock: RSS returns the filing (raw RSS shape → handler reshapes into
+    // the FilingWithTicker[] form the rest of the pipeline consumes).
+    mockPrisma.tickerMonitoring.findFirst.mockResolvedValueOnce({
+      id: 'tm-aapl',
+      cik: '0000320193',
+      symbol: 'AAPL',
+      companyName: 'Apple Inc.',
+      rssUrl: '',
+      lastChecked: new Date(),
+      lastAccessionSeen: null,
+    });
+    const { checkTickerForNewFilings, getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
+    (checkTickerForNewFilings as jest.Mock).mockResolvedValueOnce([{
+      accessionNumber: rssNewFiling.accessionNumber,
+      filingType: rssNewFiling.formType,
+      filingDate: new Date(rssNewFiling.filingDate),
+      filingUrl: rssNewFiling.url,
+      rssEntryDate: new Date(rssNewFiling.filingDate),
+      title: rssNewFiling.title,
+    }]);
 
     // Mock: getUnprocessedFilings also returns the same filing
-    const { getUnprocessedFilings } = await import('../../../lib/sec-edgar/ticker-monitoring');
     (getUnprocessedFilings as jest.Mock).mockResolvedValueOnce([unprocessedFiling]);
 
     // Mock: Pre-fetch ALL users for all discovered tickers (single bulk query)
